@@ -59,8 +59,22 @@ export async function POST(req: Request) {
     return Response.json({ extractedData: object })
   } catch (error) {
     console.error('[v0] Gemini API error:', error)
+    try {
+      console.error('[v0] error stack:', (error as any)?.stack)
+      if ((error as any)?.response) {
+        try {
+          console.error('[v0] response body:', JSON.stringify((error as any).response))
+        } catch (e) {
+          console.error('[v0] response (non-serializable):', (error as any).response)
+        }
+      }
+    } catch (e) {
+      console.error('[v0] failed to log error details', e)
+    }
+
+    const message = (error as any)?.message || 'データの抽出に失敗しました'
     return Response.json(
-      { error: 'データの抽出に失敗しました' },
+      { error: message },
       { status: 500 }
     )
   }
