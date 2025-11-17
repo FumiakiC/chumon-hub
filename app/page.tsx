@@ -160,7 +160,12 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
-      setFormData(result.extractedData)
+      // APIから返される抽出テキストをフォームに反映
+      const extractedText = result.extractedText || ''
+      setFormData(prev => ({
+        ...prev,
+        description: extractedText
+      }))
       setProcessingStatus('complete')
       setProgressMessage('抽出完了しました')
     } catch (err) {
