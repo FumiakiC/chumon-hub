@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     // gemini-pro-vision を使用（PDF Vision対応）
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
 
-    async function safeGenerate(model, payload, retries = 5) {
+    async function safeGenerate(model: any, payload: any, retries = 5) {
       for (let i = 0; i < retries; i++) {
         try {
           return await model.generateContent(payload)
