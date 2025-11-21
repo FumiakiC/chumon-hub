@@ -160,12 +160,30 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
-      // APIから返される抽出テキストをフォームに反映
+      // APIから返される抽出テキストをサーバーに送り、構造化JSONを取得してフォームに反映
       const extractedText = result.extractedText || ''
-      setFormData(prev => ({
-        ...prev,
-        description: extractedText
-      }))
+
+      try {
+        const parseResp = await fetch('/api/parse-extracted', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: extractedText }),
+        })
+
+        if (parseResp.ok) {
+          const parsed = await parseResp.json()
+          if (!parsed.error && parsed.extractedData) {
+            setFormData(parsed.extractedData)
+          } else {
+            // 解析に失敗したら説明欄に生テキストを入れる
+            setFormData(prev => ({ ...prev, description: extractedText }))
+          }
+        } else {
+          setFormData(prev => ({ ...prev, description: extractedText }))
+        }
+      } catch (e) {
+        setFormData(prev => ({ ...prev, description: extractedText }))
+      }
       setProcessingStatus('complete')
       setProgressMessage('抽出完了しました')
     } catch (err) {
