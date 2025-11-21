@@ -106,6 +106,20 @@ export default function QuoteToOrderPage() {
     setError(null)
     setProcessingStatus('idle')
     setProgressMessage('')
+    // also clear the underlying input so selecting the same file again triggers onChange
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Clear the hidden file input so the same or another file can be selected again
+  // (browsers may not fire `onChange` if the input's value remains the same)
+  const clearFileInput = () => {
+    if (fileInputRef.current) {
+      try {
+        fileInputRef.current.value = ''
+      } catch (e) {
+        // ignore
+      }
+    }
   }
 
   const handleTranscription = async () => {
