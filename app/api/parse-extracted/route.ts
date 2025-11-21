@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     if (!text) return Response.json({ error: 'text is required' }, { status: 400 })
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `以下の見積書テキストから、JSONオブジェクトで次のキーのみを返してください。\n${Object.keys(orderFormSchema.shape).join(', ')}\n値が見つからない場合は空文字にしてください。\nJSONのみを返し、余計な説明を付けないでください。\n\nテキスト:\n${text}`
 
