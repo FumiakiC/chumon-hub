@@ -32,13 +32,25 @@ export async function POST(req: Request) {
   try {
     const { fileBase64, mimeType } = await req.json()
 
-    const google = createGoogleGenerativeAI({
-      apiKey: process.env.geminitest,
-    })
+    const apiKey = process.env.GOOGLE_API_KEY
+    if (!apiKey) {
+      console.error('[v0] GOOGLE_API_KEY is not set')
+      return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
+    }
+
+    if (!fileBase64 || !mimeType) {
+      return Response.json({ error: 'fileBase64 and mimeType are required' }, { status: 400 })
+    }
+
+    // normalize to data URL for image input
+    const dataUrl = `data:${mimeType};base64,${fileBase64}`
+    console.log('[v0] extract-order request:', { mimeType, dataUrlLength: dataUrl.length })
+
+    const google = createGoogleGenerativeAI({ apiKey })
 
     // Use Gemini 1.5 Pro for high-accuracy extraction
     const result = await generateObject({
-      model: google("gemini-1.5-pro"),
+      model: google("gemini-2.5-pro"),
       schema: orderSchema,
       messages: [
         {
@@ -50,7 +62,7 @@ export async function POST(req: Request) {
             },
             {
               type: "image",
-              image: fileBase64,
+              image: dataUrl,
             },
           ],
         },
