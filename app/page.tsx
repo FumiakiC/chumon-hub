@@ -628,34 +628,13 @@ export default function QuoteToOrderPage() {
                           </div>
 
                           <div className="space-y-3">
-                            <div>
-                              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
-                              <Input
-                                value={item.productName}
-                                onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
-                                placeholder="品目名を入力"
-                                className="elevation-1 border-0 bg-muted/30"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
-                              <Textarea
-                                value={item.description}
-                                onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
-                                className="elevation-1 border-0 bg-muted/30"
-                                rows={2}
-                              />
-                            </div>
-
-                            <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="grid gap-3 sm:grid-cols-4">
                               <div>
-                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
                                 <Input
-                                  type="number"
-                                  value={item.quantity}
-                                  onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
-                                  placeholder="1"
+                                  value={item.productName}
+                                  onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
+                                  placeholder="品目名を入力"
                                   className="elevation-1 border-0 bg-muted/30"
                                 />
                               </div>
@@ -670,11 +649,31 @@ export default function QuoteToOrderPage() {
                                 />
                               </div>
                               <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
+                                  placeholder="1"
+                                  className="elevation-1 border-0 bg-muted/30"
+                                />
+                              </div>
+                              <div>
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
                                 <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
                                   ¥{(Number.parseFloat(item.amount) || 0).toLocaleString("ja-JP")}
                                 </div>
                               </div>
+                            </div>
+
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
+                              <Textarea
+                                value={item.description}
+                                onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                                className="elevation-1 border-0 bg-muted/30"
+                                rows={2}
+                              />
                             </div>
                           </div>
                         </Card>
