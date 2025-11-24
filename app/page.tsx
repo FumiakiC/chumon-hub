@@ -23,7 +23,6 @@ interface OrderFormData {
   orderNo: string
   quoteNo: string
   items: ProductItem[]
-  totalAmount: string
   desiredDeliveryDate: string
   requestedDeliveryDate: string
   paymentTerms: string
@@ -61,7 +60,6 @@ export default function QuoteToOrderPage() {
         amount: "",
       },
     ],
-    totalAmount: "",
     desiredDeliveryDate: "",
     requestedDeliveryDate: "",
     paymentTerms: "",
@@ -270,7 +268,9 @@ export default function QuoteToOrderPage() {
       // helpers: separate logic for names (split on comma) and numeric lists
       const splitNames = (s: any) => {
         if (!s && s !== 0) return []
-        return String(s).split(/,\s*/).map((p) => p.trim())
+        return String(s)
+          .split(/,\s*/)
+          .map((p) => p.trim())
       }
 
       const splitNumbers = (s: any) => {
@@ -278,7 +278,10 @@ export default function QuoteToOrderPage() {
         const str = String(s).trim()
         // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
         if (/\s+/.test(str) && !/,/.test(str)) {
-          return str.split(/\s+/).map((part) => part.trim()).filter(Boolean)
+          return str
+            .split(/\s+/)
+            .map((part) => part.trim())
+            .filter(Boolean)
         }
         // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
         if (/,\s+/.test(str)) {
@@ -289,7 +292,10 @@ export default function QuoteToOrderPage() {
           return [str.replace(/,/g, "").trim()]
         }
         // Fallback: split on comma and strip commas
-        return str.split(/,\s*/).map((part) => part.replace(/,/g, "").trim()).filter(Boolean)
+        return str
+          .split(/,\s*/)
+          .map((part) => part.replace(/,/g, "").trim())
+          .filter(Boolean)
       }
 
       const names = splitNames(extracted.productName)
@@ -306,7 +312,7 @@ export default function QuoteToOrderPage() {
         const qtyNum = Number.parseFloat(qty) || 0
         const priceNum = Number.parseFloat(price) || 0
         const calculatedAmount = qtyNum * priceNum
-        
+
         mappedItems.push({
           id: crypto.randomUUID(),
           productName: (names[i] ?? "").trim(),
@@ -335,7 +341,6 @@ export default function QuoteToOrderPage() {
         inspectionDeadline: extracted.inspectionDeadline ?? prev.inspectionDeadline,
         phone: extracted.phone ?? prev.phone,
         fax: extracted.fax ?? prev.fax,
-        totalAmount: extracted.totalAmount ? String(extracted.totalAmount).replace(/,/g, "").trim() : prev.totalAmount,
         items: mappedItems.length > 0 ? mappedItems : prev.items,
       }))
 
@@ -401,7 +406,7 @@ export default function QuoteToOrderPage() {
                         クリックまたはドラッグ＆ドロップでPDFを選択
                       </p>
                       <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-                        ※デモ仕様: 見積書と注文書をアップロードすると成功します  
+                        ※デモ仕様: 見積書と注文書をアップロードすると成功します
                       </p>
                     </div>
                   ) : (
@@ -777,27 +782,6 @@ export default function QuoteToOrderPage() {
                             className="elevation-1 border-0 bg-background"
                           />
                         </div>
-                      </div>
-
-                      <div className="elevation-2 rounded-lg bg-accent/20 p-4">
-                        <label className="mb-2 block text-sm font-semibold text-accent-foreground">合計（税抜）</label>
-                        <Input
-                          value={formData.totalAmount}
-                          onChange={(e) => handleFormChange("totalAmount", e.target.value)}
-                          className="border-0 bg-accent text-lg font-bold text-accent-foreground"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
-                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-accent-foreground">
-                      <div className="h-1 w-1 rounded-full bg-accent" />
-                      納期・条件
-                    </h3>
-
-                    <div className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
                           <Input
@@ -814,7 +798,7 @@ export default function QuoteToOrderPage() {
                         <Input
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
-                          className="elevation-1 border-0 bg-background"
+                          className="border-accent/30 bg-white/50 focus:border-accent focus:ring-accent dark:bg-slate-900/50"
                         />
                       </div>
 
