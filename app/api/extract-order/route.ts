@@ -1,67 +1,86 @@
-import { generateObject } from 'ai'
-import { z } from 'zod'
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { generateObject } from "ai"
+import { z } from "zod"
 
-const orderFormSchema = z.object({
-  orderNo: z.string().describe('注文番号'),
-  quoteNo: z.string().describe('見積書番号'),
-  productName: z.string().describe('商品名'),
-  description: z.string().describe('商品の説明や摘要'),
-  quantity: z.string().describe('数量'),
-  unitPrice: z.string().describe('単価'),
-  amount: z.string().describe('金額'),
-  totalAmount: z.string().describe('合計金額（税抜）'),
-  desiredDeliveryDate: z.string().describe('希望納期'),
-  requestedDeliveryDate: z.string().describe('請納期'),
-  paymentTerms: z.string().describe('支払条件'),
-  deliveryLocation: z.string().describe('受渡場所'),
-  inspectionDeadline: z.string().describe('検査完了期日'),
-  recipientCompany: z.string().describe('宛先企業名'),
-  issuerCompany: z.string().describe('発注元企業名（自社名）'),
-  issuerAddress: z.string().describe('発注元住所'),
-  phone: z.string().describe('電話番号'),
-  fax: z.string().describe('FAX番号'),
-  manager: z.string().describe('担当者名'),
-  approver: z.string().describe('承認者名'),
+export const maxDuration = 60
+
+// Define the schema for the order form extraction
+const orderSchema = z.object({
+  orderNo: z.string().describe("Order Number (注番/注文番号)"),
+  quoteNo: z.string().describe("Quotation Number (見積No)"),
+  productName: z.string().describe("Main Product Name (品名) - if multiple, combine or list main one"),
+  description: z.string().describe("Description or Summary (摘要)"),
+  quantity: z.string().describe("Quantity (数量)"),
+  unitPrice: z.string().describe("Unit Price (単価)"),
+  amount: z.string().describe("Amount (金額)"),
+  totalAmount: z.string().describe("Total Amount (合計金額)"),
+  desiredDeliveryDate: z.string().describe("Desired Delivery Date (希望納期)"),
+  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期)"),
+  paymentTerms: z.string().describe("Payment Terms (支払条件)"),
+  deliveryLocation: z.string().describe("Delivery Location (受渡場所)"),
+  inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日)"),
+  recipientCompany: z.string().describe("Recipient Company Name (宛先会社名/殿)"),
+  issuerCompany: z.string().describe("Issuer Company Name (発注元/自社名)"),
+  issuerAddress: z.string().describe("Issuer Address (自社住所)"),
+  phone: z.string().describe("Phone Number (電話番号)"),
+  fax: z.string().describe("FAX Number"),
+  manager: z.string().describe("Manager Name (担当)"),
+  approver: z.string().describe("Approver Name (承認)"),
 })
 
 export async function POST(req: Request) {
   try {
-    const { file } = await req.json()
+    const { fileBase64, mimeType } = await req.json()
 
-    if (!file || !file.data) {
-      return Response.json(
-        { error: 'ファイルデータが必要です' },
-        { status: 400 }
-      )
+    const apiKey = process.env.GOOGLE_API_KEY
+    if (!apiKey) {
+      console.error('[v0] GOOGLE_API_KEY is not set')
+      return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
     }
 
-    const { object } = await generateObject({
-      model: 'google/gemini-2.5-flash-image',
-      schema: orderFormSchema,
+    if (!fileBase64 || !mimeType) {
+      return Response.json({ error: 'fileBase64 and mimeType are required' }, { status: 400 })
+    }
+
+    // normalize to data URL for image input
+    const dataUrl = `data:${mimeType};base64,${fileBase64}`
+    console.log('[v0] extract-order request:', { mimeType, dataUrlLength: dataUrl.length })
+
+    const google = createGoogleGenerativeAI({ apiKey })
+
+    // Use Gemini 1.5 Pro for high-accuracy extraction
+    const result = await generateObject({
+      model: google("gemini-2.5-pro"),
+      schema: orderSchema,
       messages: [
         {
-          role: 'user',
-          content: [
+          role: "user",
+            content: [
             {
-              type: 'text',
-              text: '以下の見積書または注文書から発注フォームの情報を抽出してください。すべてのフィールドを埋めてください。情報が見つからない場合は空文字を返してください。',
+              type: "text",
+              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string. Important: For numeric fields such as quantity, unitPrice, amount, and totalAmount, do NOT include thousand-separator commas (e.g. \"1,234\" -> \"1234\"). Do not include currency symbols. Return only the JSON fields matching the schema.",
             },
             {
-              type: 'file',
-              data: file.data,
-              mediaType: file.mediaType || 'application/pdf',
+              type: "image",
+              image: dataUrl,
             },
           ],
         },
       ],
     })
 
-    return Response.json({ extractedData: object })
+    // result.object should match the schema, but sanitize numeric-like fields server-side as a safety net
+    const numericKeys = ['quantity', 'unitPrice', 'amount', 'totalAmount']
+    const obj: any = result.object ?? {}
+    for (const k of numericKeys) {
+      if (obj && obj[k] != null) {
+        obj[k] = String(obj[k]).replace(/,/g, '').replace(/[¥$]/g, '').trim()
+      }
+    }
+
+    return Response.json(obj)
   } catch (error) {
-    console.error('[v0] Gemini API error:', error)
-    return Response.json(
-      { error: 'データの抽出に失敗しました' },
-      { status: 500 }
-    )
+    console.error("Extraction error:", error)
+    return Response.json({ error: "Failed to extract order details" }, { status: 500 })
   }
 }
