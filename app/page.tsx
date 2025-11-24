@@ -366,20 +366,32 @@ export default function QuoteToOrderPage() {
                       <div className="flex flex-col items-center gap-2">
                         <div
                           className={`relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-500 shadow-lg ${
-                            ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
-                              : "border-slate-200 bg-white text-slate-300"
+                            processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌"))
+                              ? "border-red-500 bg-red-50 text-red-600 scale-110 shadow-red-200 animate-shake"
+                              : ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
+                                ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
+                                : "border-slate-200 bg-white text-slate-300"
                           }`}
                         >
                           {processingStatus === "flash_check" && (
                             <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
                           )}
-                          <ShieldCheck
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "flash_check" ? "animate-pulse scale-110" : ""}`}
-                          />
+                          {processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌")) ? (
+                            <X className="h-7 w-7 animate-pulse" />
+                          ) : (
+                            <ShieldCheck
+                              className={`h-7 w-7 transition-all duration-500 ${processingStatus === "flash_check" ? "animate-pulse scale-110" : ""}`}
+                            />
+                          )}
                         </div>
                         <span
-                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${["flash_check", "pro_extraction", "complete"].includes(processingStatus) ? "text-slate-800" : "text-slate-400"}`}
+                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${
+                            processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌"))
+                              ? "text-red-600"
+                              : ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
+                                ? "text-slate-800"
+                                : "text-slate-400"
+                          }`}
                         >
                           Flash判定
                         </span>
