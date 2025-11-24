@@ -214,7 +214,7 @@ export default function QuoteToOrderPage() {
       addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
 
       setProcessingStatus("flash_check")
-      addLog("Step 1: Gemini 1.5 Flash で書類タイプを判定中...", "info")
+      addLog("Step 1: Gemini 2.5 Flash で書類タイプを判定中...", "info")
 
       const checkResponse = await fetch("/api/check-document-type", {
         method: "POST",
@@ -239,7 +239,7 @@ export default function QuoteToOrderPage() {
       addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
 
       setProcessingStatus("pro_extraction")
-      addLog("Step 2: Gemini 1.5 Pro で詳細データを抽出中...", "info")
+      addLog("Step 2: Gemini 2.5 Flash で詳細データを抽出中...", "info")
 
       const response = await fetch("/api/extract-order", {
         method: "POST",
@@ -316,7 +316,7 @@ export default function QuoteToOrderPage() {
         mappedItems.push({
           id: crypto.randomUUID(),
           productName: (names[i] ?? "").trim(),
-          description: "",
+          description: extracted.description ? String(extracted.description).trim() : "",
           quantity: qty.replace(/,/g, "").trim(),
           unitPrice: price.replace(/,/g, "").trim(),
           // Auto-calculate amount from quantity * unitPrice
