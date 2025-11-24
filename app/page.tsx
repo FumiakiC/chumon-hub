@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck } from "lucide-react"
+import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck, Printer } from "lucide-react"
 import { useState, useRef } from "react"
+import { OrderDocument } from "@/components/order-document"
 
 interface OrderFormData {
   orderNo: string
@@ -227,6 +228,10 @@ export default function QuoteToOrderPage() {
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const handlePrint = () => {
+    window.print()
   }
 
   return (
@@ -487,6 +492,12 @@ export default function QuoteToOrderPage() {
                     <FileText className="h-5 w-5 text-secondary" />
                   </div>
                   <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
+                  {processingStatus === "complete" && (
+                    <Button onClick={handlePrint} variant="outline" size="sm" className="ml-auto gap-2 bg-transparent">
+                      <Printer className="h-4 w-4" />
+                      印刷プレビュー
+                    </Button>
+                  )}
                 </div>
 
                 <div className="space-y-6">
@@ -715,6 +726,14 @@ export default function QuoteToOrderPage() {
                   </Card>
                 </div>
               </Card>
+
+              {processingStatus === "complete" && (
+                <div className="print-only space-y-8">
+                  <OrderDocument data={formData} type="order" />
+                  <div className="page-break" />
+                  <OrderDocument data={formData} type="acceptance" />
+                </div>
+              )}
             </div>
           </div>
         </div>

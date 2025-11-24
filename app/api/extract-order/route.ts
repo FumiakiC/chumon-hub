@@ -14,11 +14,11 @@ const orderSchema = z.object({
   unitPrice: z.string().describe("Unit Price (単価)"),
   amount: z.string().describe("Amount (金額)"),
   totalAmount: z.string().describe("Total Amount (合計金額)"),
-  desiredDeliveryDate: z.string().describe("Desired Delivery Date (希望納期)"),
-  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期)"),
+  desiredDeliveryDate: z.string().describe("Desired Delivery Date (希望納期) - Format: YYYY年MM月DD日"),
+  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期) - Format: YYYY年MM月DD日"),
   paymentTerms: z.string().describe("Payment Terms (支払条件)"),
   deliveryLocation: z.string().describe("Delivery Location (受渡場所)"),
-  inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日)"),
+  inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日) - Format: YYYY年MM月DD日"),
   recipientCompany: z.string().describe("Recipient Company Name (宛先会社名/殿)"),
   issuerCompany: z.string().describe("Issuer Company Name (発注元/自社名)"),
   issuerAddress: z.string().describe("Issuer Address (自社住所)"),
@@ -34,17 +34,17 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      console.error('[v0] GOOGLE_API_KEY is not set')
-      return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
+      console.error("[v0] GOOGLE_API_KEY is not set")
+      return Response.json({ error: "Server misconfiguration: GOOGLE_API_KEY is not set" }, { status: 500 })
     }
 
     if (!fileBase64 || !mimeType) {
-      return Response.json({ error: 'fileBase64 and mimeType are required' }, { status: 400 })
+      return Response.json({ error: "fileBase64 and mimeType are required" }, { status: 400 })
     }
 
     // normalize to data URL for image input
     const dataUrl = `data:${mimeType};base64,${fileBase64}`
-    console.log('[v0] extract-order request:', { mimeType, dataUrlLength: dataUrl.length })
+    console.log("[v0] extract-order request:", { mimeType, dataUrlLength: dataUrl.length })
 
     const google = createGoogleGenerativeAI({ apiKey })
 
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
           content: [
             {
               type: "text",
-              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string.",
+              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string. For all date fields, convert them to Japanese format 'YYYY年MM月DD日' (e.g. 2025年8月8日).",
             },
             {
               type: "image",
