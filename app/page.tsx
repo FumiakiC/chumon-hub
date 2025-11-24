@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Brain, FileImage, X, ShieldCheck, Trash2, Plus } from "lucide-react"
+import { Upload, FileText, CheckCircle2, Brain, FileImage, X, ShieldCheck, Trash2, Plus, Copy } from "lucide-react"
 import { useState, useRef } from "react"
 
 interface ProductItem {
@@ -615,11 +615,69 @@ export default function QuoteToOrderPage() {
 
             <div className="flex-1 space-y-6 lg:min-w-[50%]">
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
-                <div className="mb-6 flex items-center gap-2">
-                  <div className="rounded-full bg-secondary/10 p-2">
-                    <FileText className="h-5 w-5 text-secondary" />
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-secondary/10 p-2">
+                      <FileText className="h-5 w-5 text-secondary" />
+                    </div>
+                    <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
                   </div>
-                  <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
+                  <Button
+                    onClick={() => {
+                      const formText = `
+注文書情報
+---------
+注 No: ${formData.orderNo}
+見積書 No.: ${formData.quoteNo}
+宛先（相手企業名）: ${formData.recipientCompany}
+発注元（自社名）: ${formData.issuerCompany}
+
+品目一覧
+---------
+${formData.items
+  .map(
+    (item, index) => `
+No. ${index + 1}
+品名: ${item.productName}
+数量: ${item.quantity}
+単位: ${item.description}
+単価: ${item.unitPrice}
+金額: ${item.amount}
+摘要: ${item.description}
+`,
+  )
+  .join("\n")}
+
+納期・条件
+---------
+希望納期: ${formData.desiredDeliveryDate}
+納品場所: ${formData.deliveryLocation}
+支払条件: ${formData.paymentTerms}
+備考: ${formData.inspectionDeadline}
+
+担当者情報
+---------
+担当者名: ${formData.manager}
+連絡先: ${formData.phone}, ${formData.fax}
+`.trim()
+
+                      navigator.clipboard
+                        .writeText(formText)
+                        .then(() => {
+                          // Show success feedback (you could add a toast notification here)
+                          console.log("[v0] Form data copied to clipboard")
+                        })
+                        .catch((err) => {
+                          console.error("[v0] Failed to copy:", err)
+                        })
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <Copy className="h-4 w-4" />
+                    コピー
+                  </Button>
                 </div>
 
                 <div className="space-y-6">
