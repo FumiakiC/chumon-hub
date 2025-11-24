@@ -434,9 +434,7 @@ export default function QuoteToOrderPage() {
                           {processingStatus === "complete" && (
                             <div className="absolute inset-0 animate-ping rounded-full bg-blue-200 opacity-20" />
                           )}
-                          <CheckCircle2
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "complete" ? "animate-bounce" : ""}`}
-                          />
+                          <CheckCircle2 className={`h-7 w-7 transition-all duration-500`} />
                         </div>
                         <span
                           className={`text-sm font-bold tracking-wide transition-colors duration-300 ${processingStatus === "complete" ? "text-blue-600" : "text-slate-400"}`}
