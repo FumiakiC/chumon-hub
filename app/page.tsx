@@ -601,7 +601,7 @@ export default function QuoteToOrderPage() {
                       <Button
                         onClick={addItem}
                         size="sm"
-                        className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                        className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         品目を追加
