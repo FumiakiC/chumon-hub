@@ -46,6 +46,7 @@ export default function QuoteToOrderPage() {
   const [error, setError] = useState<string | null>(null)
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [extractedJson, setExtractedJson] = useState<any>(null)
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -261,6 +262,9 @@ export default function QuoteToOrderPage() {
       if (result.error) {
         throw new Error(result.error)
       }
+
+      // Store the raw JSON response for copy functionality
+      setExtractedJson(result)
 
       // normalize extracted payload: some endpoints return { extractedData: {...} }
       const extracted = result.extractedData ?? result
@@ -624,56 +628,22 @@ export default function QuoteToOrderPage() {
                   </div>
                   <Button
                     onClick={() => {
-                      const formText = `
-注文書情報
----------
-注 No: ${formData.orderNo}
-見積書 No.: ${formData.quoteNo}
-宛先（相手企業名）: ${formData.recipientCompany}
-発注元（自社名）: ${formData.issuerCompany}
-
-品目一覧
----------
-${formData.items
-  .map(
-    (item, index) => `
-No. ${index + 1}
-品名: ${item.productName}
-数量: ${item.quantity}
-単位: ${item.description}
-単価: ${item.unitPrice}
-金額: ${item.amount}
-摘要: ${item.description}
-`,
-  )
-  .join("\n")}
-
-納期・条件
----------
-希望納期: ${formData.desiredDeliveryDate}
-納品場所: ${formData.deliveryLocation}
-支払条件: ${formData.paymentTerms}
-備考: ${formData.inspectionDeadline}
-
-担当者情報
----------
-担当者名: ${formData.manager}
-連絡先: ${formData.phone}, ${formData.fax}
-`.trim()
-
-                      navigator.clipboard
-                        .writeText(formText)
-                        .then(() => {
-                          // Show success feedback (you could add a toast notification here)
-                          console.log("[v0] Form data copied to clipboard")
-                        })
-                        .catch((err) => {
-                          console.error("[v0] Failed to copy:", err)
-                        })
+                      if (extractedJson) {
+                        const jsonString = JSON.stringify(extractedJson, null, 2)
+                        navigator.clipboard
+                          .writeText(jsonString)
+                          .then(() => {
+                            console.log("[v0] JSON response copied to clipboard")
+                          })
+                          .catch((err) => {
+                            console.error("[v0] Failed to copy:", err)
+                          })
+                      }
                     }}
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    disabled={!extractedJson}
                   >
                     <Copy className="h-4 w-4" />
                     コピー
