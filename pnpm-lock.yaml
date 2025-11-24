@@ -9,10 +9,10 @@ importers:
   .:
     dependencies:
       '@ai-sdk/google':
-        specifier: ^2.0.33
-        version: 2.0.33(zod@3.25.76)
+        specifier: latest
+        version: 2.0.42(zod@3.25.76)
       '@google/generative-ai':
-        specifier: ^0.24.1
+        specifier: latest
         version: 0.24.1
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -103,7 +103,7 @@ importers:
         version: 1.5.0(next@16.0.3(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
       ai:
         specifier: latest
-        version: 5.0.93(zod@3.25.76)
+        version: 5.0.101(zod@3.25.76)
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.0)
@@ -198,14 +198,14 @@ importers:
 
 packages:
 
-  '@ai-sdk/gateway@2.0.9':
-    resolution: {integrity: sha512-E6x4h5CPPPJ0za1r5HsLtHbeI+Tp3H+YFtcH8G3dSSPFE6w+PZINzB4NxLZmg1QqSeA5HTP3ZEzzsohp0o2GEw==}
+  '@ai-sdk/gateway@2.0.15':
+    resolution: {integrity: sha512-i1YVKzC1dg9LGvt+GthhD7NlRhz9J4+ZRj3KELU14IZ/MHPsOBiFeEoCCIDLR+3tqT8/+5nIsK3eZ7DFRfMfdw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google@2.0.33':
-    resolution: {integrity: sha512-Mi8GbW6hw7VFvyrghjP8JI7FQoXRs0w1MOS/shrksN+X8hMEcIF/+KXNFrjopOy7EA12NUpKAlJkWiTpjsLHGw==}
+  '@ai-sdk/google@2.0.42':
+    resolution: {integrity: sha512-Jdn+3TZm4iIt62CUjjUoIOshqFIXyzNmUDfkSVV4FcjlSo5+AuhzI1KC7QiNHlqPNejzR6NLIqGJx96VAES34g==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1439,12 +1439,12 @@ packages:
       vue-router:
         optional: true
 
-  '@vercel/oidc@3.0.3':
-    resolution: {integrity: sha512-yNEQvPcVrK9sIe637+I0jD6leluPxzwJKx/Haw6F4H77CdDsszUn5V3o96LPziXkSNE2B83+Z3mjqGKBK/R6Gg==}
+  '@vercel/oidc@3.0.5':
+    resolution: {integrity: sha512-fnYhv671l+eTTp48gB4zEsTW/YtRgRPnkI2nT7x6qw5rkI1Lq2hTmQIpHPgyThI0znLK+vX2n9XxKdXZ7BUbbw==}
     engines: {node: '>= 20'}
 
-  ai@5.0.93:
-    resolution: {integrity: sha512-9eGcu+1PJgPg4pRNV4L7tLjRR3wdJC9CXQoNMvtqvYNOLZHFCzjHtVIOr2SIkoJJeu2+sOy3hyiSuTmy2MA40g==}
+  ai@5.0.101:
+    resolution: {integrity: sha512-/P4fgs2PGYTBaZi192YkPikOudsl9vccA65F7J7LvoNTOoP5kh1yAsJPsKAy6FXU32bAngai7ft1UDyC3u7z5g==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1996,14 +1996,14 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@2.0.9(zod@3.25.76)':
+  '@ai-sdk/gateway@2.0.15(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.17(zod@3.25.76)
-      '@vercel/oidc': 3.0.3
+      '@vercel/oidc': 3.0.5
       zod: 3.25.76
 
-  '@ai-sdk/google@2.0.33(zod@3.25.76)':
+  '@ai-sdk/google@2.0.42(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.17(zod@3.25.76)
@@ -3091,11 +3091,11 @@ snapshots:
       next: 16.0.3(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react: 19.2.0
 
-  '@vercel/oidc@3.0.3': {}
+  '@vercel/oidc@3.0.5': {}
 
-  ai@5.0.93(zod@3.25.76):
+  ai@5.0.101(zod@3.25.76):
     dependencies:
-      '@ai-sdk/gateway': 2.0.9(zod@3.25.76)
+      '@ai-sdk/gateway': 2.0.15(zod@3.25.76)
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.17(zod@3.25.76)
       '@opentelemetry/api': 1.9.0

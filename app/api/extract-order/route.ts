@@ -1,46 +1,65 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { generateObject } from "ai"
+import { z } from "zod"
 
+export const maxDuration = 60
 
-
-
+// Define the schema for the order form extraction
+const orderSchema = z.object({
+  orderNo: z.string().describe("Order Number (注番/注文番号)"),
+  quoteNo: z.string().describe("Quotation Number (見積No)"),
+  productName: z.string().describe("Main Product Name (品名) - if multiple, combine or list main one"),
+  description: z.string().describe("Description or Summary (摘要)"),
+  quantity: z.string().describe("Quantity (数量)"),
+  unitPrice: z.string().describe("Unit Price (単価)"),
+  amount: z.string().describe("Amount (金額)"),
+  totalAmount: z.string().describe("Total Amount (合計金額)"),
+  desiredDeliveryDate: z.string().describe("Desired Delivery Date (希望納期)"),
+  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期)"),
+  paymentTerms: z.string().describe("Payment Terms (支払条件)"),
+  deliveryLocation: z.string().describe("Delivery Location (受渡場所)"),
+  inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日)"),
+  recipientCompany: z.string().describe("Recipient Company Name (宛先会社名/殿)"),
+  issuerCompany: z.string().describe("Issuer Company Name (発注元/自社名)"),
+  issuerAddress: z.string().describe("Issuer Address (自社住所)"),
+  phone: z.string().describe("Phone Number (電話番号)"),
+  fax: z.string().describe("FAX Number"),
+  manager: z.string().describe("Manager Name (担当)"),
+  approver: z.string().describe("Approver Name (承認)"),
+})
 
 export async function POST(req: Request) {
   try {
-    const { file } = await req.json()
-    if (!file || !file.data) {
-      return Response.json({ error: "ファイルデータが必要です" }, { status: 400 })
-    }
+    const { fileBase64, mimeType } = await req.json()
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-    
-    // gemini-pro-vision を使用（PDF Vision対応）
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+    const google = createGoogleGenerativeAI({
+      apiKey: process.env.geminitest,
+    })
 
-    async function safeGenerate(model: any, payload: any, retries = 5) {
-      for (let i = 0; i < retries; i++) {
-        try {
-          return await model.generateContent(payload)
-        } catch (error) {
-          if ((error as any)?.status === 503 && i < retries - 1) {
-            const waitTime = 5000 * (i + 1) // 5秒、10秒、15秒...指数バックオフ
-            console.log(`[v0] 503 Error: Retry ${i + 1}/${retries} after ${waitTime}ms`)
-            await new Promise(res => setTimeout(res, waitTime))
-            continue
-          }
-          throw error
-        }
-      }
-    }
+    // Use Gemini 1.5 Pro for high-accuracy extraction
+    const result = await generateObject({
+      model: google("gemini-1.5-pro"),
+      schema: orderSchema,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string.",
+            },
+            {
+              type: "image",
+              image: fileBase64,
+            },
+          ],
+        },
+      ],
+    })
 
-    const result = await safeGenerate(model, [
-      { text: "このPDFからテキストを抽出してください。" },
-      { inlineData: { data: file.data, mimeType: file.mediaType || "application/pdf" } }
-    ])
-
-    const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-    return Response.json({ extractedText: text })
+    return Response.json(result.object)
   } catch (error) {
-    console.error("[v0] Gemini API error:", error)
-    return Response.json({ error: "データの抽出に失敗しました" }, { status: 500 })
+    console.error("Extraction error:", error)
+    return Response.json({ error: "Failed to extract order details" }, { status: 500 })
   }
 }
