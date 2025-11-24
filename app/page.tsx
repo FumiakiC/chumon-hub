@@ -371,7 +371,7 @@ export default function QuoteToOrderPage() {
               Gemini API Quote to Order
             </h1>
             <p className="mt-2 text-slate-500 dark:text-slate-400">
-              アップロードされた見積書をAIが自動解析し、発注データを作成します
+              アップロードされた見積書を自動解析し、発注データを作成するWebアプリケーションです 
             </p>
           </div>
 
