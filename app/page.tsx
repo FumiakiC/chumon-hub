@@ -7,7 +7,19 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Brain, FileImage, X, ShieldCheck, Trash2, Plus, Copy } from "lucide-react"
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  Brain,
+  FileImage,
+  X,
+  ShieldCheck,
+  Trash2,
+  Plus,
+  Copy,
+  Check,
+} from "lucide-react"
 import { useState, useRef } from "react"
 
 interface ProductItem {
@@ -47,6 +59,7 @@ export default function QuoteToOrderPage() {
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [extractedJson, setExtractedJson] = useState<any>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -634,6 +647,8 @@ export default function QuoteToOrderPage() {
                           .writeText(jsonString)
                           .then(() => {
                             console.log("[v0] JSON response copied to clipboard")
+                            setIsCopied(true)
+                            setTimeout(() => setIsCopied(false), 2000)
                           })
                           .catch((err) => {
                             console.error("[v0] Failed to copy:", err)
@@ -645,8 +660,8 @@ export default function QuoteToOrderPage() {
                     className="gap-2"
                     disabled={!extractedJson}
                   >
-                    <Copy className="h-4 w-4" />
-                    コピー
+                    {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {isCopied ? "コピーしました" : "コピー"}
                   </Button>
                 </div>
 
