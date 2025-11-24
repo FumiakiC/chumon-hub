@@ -55,10 +55,10 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: [
+            content: [
             {
               type: "text",
-              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string.",
+              text: "Extract all order details from this quotation/order document into a structured JSON format. Be precise with numbers and text. If a field is missing, leave it as an empty string. Important: For numeric fields such as quantity, unitPrice, amount, and totalAmount, do NOT include thousand-separator commas (e.g. \"1,234\" -> \"1234\"). Do not include currency symbols. Return only the JSON fields matching the schema.",
             },
             {
               type: "image",
@@ -69,7 +69,16 @@ export async function POST(req: Request) {
       ],
     })
 
-    return Response.json(result.object)
+    // result.object should match the schema, but sanitize numeric-like fields server-side as a safety net
+    const numericKeys = ['quantity', 'unitPrice', 'amount', 'totalAmount']
+    const obj: any = result.object ?? {}
+    for (const k of numericKeys) {
+      if (obj && obj[k] != null) {
+        obj[k] = String(obj[k]).replace(/,/g, '').replace(/[¥$]/g, '').trim()
+      }
+    }
+
+    return Response.json(obj)
   } catch (error) {
     console.error("Extraction error:", error)
     return Response.json({ error: "Failed to extract order details" }, { status: 500 })

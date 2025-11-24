@@ -264,7 +264,80 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
-      setFormData(result)
+      // normalize extracted payload: some endpoints return { extractedData: {...} }
+      const extracted = result.extractedData ?? result
+
+      // helpers: separate logic for names (split on comma) and numeric lists
+      const splitNames = (s: any) => {
+        if (!s && s !== 0) return []
+        return String(s).split(/,\s*/).map((p) => p.trim())
+      }
+
+      const splitNumbers = (s: any) => {
+        if (!s && s !== 0) return []
+        const str = String(s).trim()
+        // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
+        if (/\s+/.test(str) && !/,/.test(str)) {
+          return str.split(/\s+/).map((part) => part.trim()).filter(Boolean)
+        }
+        // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
+        if (/,\s+/.test(str)) {
+          return str.split(/,\s+/).map((part) => part.replace(/,/g, "").trim())
+        }
+        // Single value with thousand separators (e.g., "1,055,000")
+        if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(str)) {
+          return [str.replace(/,/g, "").trim()]
+        }
+        // Fallback: split on comma and strip commas
+        return str.split(/,\s*/).map((part) => part.replace(/,/g, "").trim()).filter(Boolean)
+      }
+
+      const names = splitNames(extracted.productName)
+      const quantities = splitNumbers(extracted.quantity)
+      const unitPrices = splitNumbers(extracted.unitPrice)
+      const amounts = splitNumbers(extracted.amount)
+
+      const maxLen = Math.max(names.length, quantities.length, unitPrices.length, amounts.length, 1)
+
+      const mappedItems: ProductItem[] = []
+      for (let i = 0; i < maxLen; i++) {
+        const qty = quantities[i] ?? ""
+        const price = unitPrices[i] ?? ""
+        const qtyNum = Number.parseFloat(qty) || 0
+        const priceNum = Number.parseFloat(price) || 0
+        const calculatedAmount = qtyNum * priceNum
+        
+        mappedItems.push({
+          id: crypto.randomUUID(),
+          productName: (names[i] ?? "").trim(),
+          description: "",
+          quantity: qty.replace(/,/g, "").trim(),
+          unitPrice: price.replace(/,/g, "").trim(),
+          // Auto-calculate amount from quantity * unitPrice
+          amount: calculatedAmount > 0 ? calculatedAmount.toString() : "",
+        })
+      }
+
+      // merge into existing formData to avoid replacing structure
+      setFormData((prev) => ({
+        ...prev,
+        orderNo: extracted.orderNo ?? prev.orderNo,
+        quoteNo: extracted.quoteNo ?? prev.quoteNo,
+        recipientCompany: extracted.recipientCompany ?? prev.recipientCompany,
+        issuerCompany: extracted.issuerCompany ?? prev.issuerCompany,
+        issuerAddress: extracted.issuerAddress ?? prev.issuerAddress,
+        manager: extracted.manager ?? prev.manager,
+        approver: extracted.approver ?? prev.approver,
+        desiredDeliveryDate: extracted.desiredDeliveryDate ?? prev.desiredDeliveryDate,
+        requestedDeliveryDate: extracted.requestedDeliveryDate ?? prev.requestedDeliveryDate,
+        paymentTerms: extracted.paymentTerms ?? prev.paymentTerms,
+        deliveryLocation: extracted.deliveryLocation ?? prev.deliveryLocation,
+        inspectionDeadline: extracted.inspectionDeadline ?? prev.inspectionDeadline,
+        phone: extracted.phone ?? prev.phone,
+        fax: extracted.fax ?? prev.fax,
+        totalAmount: extracted.totalAmount ? String(extracted.totalAmount).replace(/,/g, "").trim() : prev.totalAmount,
+        items: mappedItems.length > 0 ? mappedItems : prev.items,
+      }))
 
       setProcessingStatus("complete")
       addLog("データ抽出完了。JSONパース成功。", "success")
@@ -611,7 +684,7 @@ export default function QuoteToOrderPage() {
                     <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
 
                     <div className="space-y-4">
-                      {formData.items.map((item, index) => (
+                      {(formData.items ?? []).map((item, index) => (
                         <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
                           <div className="mb-3 flex items-center justify-between">
                             <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
