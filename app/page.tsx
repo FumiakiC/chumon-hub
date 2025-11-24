@@ -777,6 +777,27 @@ export default function QuoteToOrderPage() {
                             className="elevation-1 border-0 bg-background"
                           />
                         </div>
+                      </div>
+
+                      <div className="elevation-2 rounded-lg bg-accent/20 p-4">
+                        <label className="mb-2 block text-sm font-semibold text-accent-foreground">合計（税抜）</label>
+                        <Input
+                          value={formData.totalAmount}
+                          onChange={(e) => handleFormChange("totalAmount", e.target.value)}
+                          className="border-0 bg-accent text-lg font-bold text-accent-foreground"
+                        />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-accent-foreground">
+                      <div className="h-1 w-1 rounded-full bg-accent" />
+                      納期・条件
+                    </h3>
+
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
                           <Input
