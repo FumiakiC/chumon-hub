@@ -145,7 +145,7 @@
   }
 }
 
-/* Added shake animation for error state */
+/* Added shake animation for error state </CHANGE> */
 @keyframes shake {
   0%,
   100% {
@@ -168,75 +168,4 @@
 
 .animate-shake {
   animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-}
-
-/* Added print styles for PDF-ready layout */
-@media print {
-  /* Hide non-print elements */
-  body > div:first-child > div:first-child {
-    display: none !important;
-  }
-
-  .no-print,
-  button,
-  .elevation-2,
-  nav,
-  header,
-  footer {
-    display: none !important;
-  }
-
-  /* Show print-only elements */
-  .print-only {
-    display: block !important;
-  }
-
-  .print-document {
-    display: block !important;
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
-    padding: 2rem;
-    background: white !important;
-    color: black !important;
-    page-break-after: always;
-  }
-
-  .page-break {
-    page-break-after: always;
-  }
-
-  /* Ensure proper sizing */
-  @page {
-    size: A4;
-    margin: 1cm;
-  }
-
-  /* Reset all colors for print */
-  * {
-    color: black !important;
-    background: white !important;
-  }
-
-  /* Preserve table borders */
-  table,
-  th,
-  td {
-    border: 1px solid black !important;
-  }
-
-  .bg-gray-100 {
-    background: #f3f4f6 !important;
-  }
-
-  /* Ensure proper spacing */
-  body {
-    margin: 0;
-    padding: 0;
-  }
-}
-
-/* Hide print-only elements on screen */
-.print-only {
-  display: none;
 }
