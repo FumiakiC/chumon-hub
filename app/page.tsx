@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck, Trash2, Plus } from "lucide-react"
+import { Upload, FileText, CheckCircle2, Brain, FileImage, X, ShieldCheck, Trash2, Plus } from "lucide-react"
 import { useState, useRef } from "react"
 
 interface ProductItem {
@@ -549,8 +549,8 @@ export default function QuoteToOrderPage() {
                           {processingStatus === "pro_extraction" && (
                             <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
                           )}
-                          <Sparkles
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "pro_extraction" ? "animate-spin-slow" : ""}`}
+                          <Brain
+                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "pro_extraction" ? "animate-pulse" : ""}`}
                           />
                         </div>
                         <span
