@@ -106,6 +106,20 @@ export default function QuoteToOrderPage() {
     setError(null)
     setProcessingStatus('idle')
     setProgressMessage('')
+    // also clear the underlying input so selecting the same file again triggers onChange
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Clear the hidden file input so the same or another file can be selected again
+  // (browsers may not fire `onChange` if the input's value remains the same)
+  const clearFileInput = () => {
+    if (fileInputRef.current) {
+      try {
+        fileInputRef.current.value = ''
+      } catch (e) {
+        // ignore
+      }
+    }
   }
 
   const handleTranscription = async () => {
@@ -160,7 +174,30 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
-      setFormData(result.extractedData)
+      // APIから返される抽出テキストをサーバーに送り、構造化JSONを取得してフォームに反映
+      const extractedText = result.extractedText || ''
+
+      try {
+        const parseResp = await fetch('/api/parse-extracted', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: extractedText }),
+        })
+
+        if (parseResp.ok) {
+          const parsed = await parseResp.json()
+          if (!parsed.error && parsed.extractedData) {
+            setFormData(parsed.extractedData)
+          } else {
+            // 解析に失敗したら説明欄に生テキストを入れる
+            setFormData(prev => ({ ...prev, description: extractedText }))
+          }
+        } else {
+          setFormData(prev => ({ ...prev, description: extractedText }))
+        }
+      } catch (e) {
+        setFormData(prev => ({ ...prev, description: extractedText }))
+      }
       setProcessingStatus('complete')
       setProgressMessage('抽出完了しました')
     } catch (err) {
