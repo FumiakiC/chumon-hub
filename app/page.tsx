@@ -679,7 +679,7 @@ export default function QuoteToOrderPage() {
                         </Card>
                       ))}
 
-                      <div className="elevation-2 rounded-lg bg-accent/20 p-4">
+                      <div className="elevation-2 rounded-lg p-4 bg-slate-600">
                         <div className="flex items-center justify-between">
                           <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
                           <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
