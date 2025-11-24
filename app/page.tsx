@@ -1,22 +1,28 @@
 "use client"
 
 import type React from "react"
+import type { LogEntry } from "@/types/logEntry" // Import LogEntry type
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck } from "lucide-react"
+import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck, Trash2, Plus } from "lucide-react"
 import { useState, useRef } from "react"
 
-interface OrderFormData {
-  orderNo: string
-  quoteNo: string
+interface ProductItem {
+  id: string
   productName: string
   description: string
   quantity: string
   unitPrice: string
   amount: string
+}
+
+interface OrderFormData {
+  orderNo: string
+  quoteNo: string
+  items: ProductItem[]
   totalAmount: string
   desiredDeliveryDate: string
   requestedDeliveryDate: string
@@ -32,12 +38,6 @@ interface OrderFormData {
   approver: string
 }
 
-interface LogEntry {
-  timestamp: string
-  message: string
-  type: "info" | "success" | "error"
-}
-
 type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
 
 export default function QuoteToOrderPage() {
@@ -51,11 +51,16 @@ export default function QuoteToOrderPage() {
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
     quoteNo: "",
-    productName: "",
-    description: "",
-    quantity: "",
-    unitPrice: "",
-    amount: "",
+    items: [
+      {
+        id: crypto.randomUUID(),
+        productName: "",
+        description: "",
+        quantity: "",
+        unitPrice: "",
+        amount: "",
+      },
+    ],
     totalAmount: "",
     desiredDeliveryDate: "",
     requestedDeliveryDate: "",
@@ -73,6 +78,57 @@ export default function QuoteToOrderPage() {
 
   const handleFormChange = (field: keyof OrderFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleItemChange = (id: string, field: keyof ProductItem, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => {
+        if (item.id === id) {
+          const updatedItem = { ...item, [field]: value }
+
+          if (field === "quantity" || field === "unitPrice") {
+            const qty = Number.parseFloat(field === "quantity" ? value : updatedItem.quantity) || 0
+            const price = Number.parseFloat(field === "unitPrice" ? value : updatedItem.unitPrice) || 0
+            updatedItem.amount = (qty * price).toString()
+          }
+
+          return updatedItem
+        }
+        return item
+      }),
+    }))
+  }
+
+  const addItem = () => {
+    setFormData((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          id: crypto.randomUUID(),
+          productName: "",
+          description: "",
+          quantity: "",
+          unitPrice: "",
+          amount: "",
+        },
+      ],
+    }))
+  }
+
+  const removeItem = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      items: prev.items.filter((item) => item.id !== id),
+    }))
+  }
+
+  const calculateTotal = () => {
+    const total = formData.items.reduce((sum, item) => {
+      return sum + (Number.parseFloat(item.amount) || 0)
+    }, 0)
+    return total.toLocaleString("ja-JP")
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,7 +212,6 @@ export default function QuoteToOrderPage() {
         reader.readAsDataURL(selectedFile)
       })
 
-      // Simulate upload completion
       await new Promise((r) => setTimeout(r, 800))
       addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
 
@@ -209,7 +264,80 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
-      setFormData(result)
+      // normalize extracted payload: some endpoints return { extractedData: {...} }
+      const extracted = result.extractedData ?? result
+
+      // helpers: separate logic for names (split on comma) and numeric lists
+      const splitNames = (s: any) => {
+        if (!s && s !== 0) return []
+        return String(s).split(/,\s*/).map((p) => p.trim())
+      }
+
+      const splitNumbers = (s: any) => {
+        if (!s && s !== 0) return []
+        const str = String(s).trim()
+        // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
+        if (/\s+/.test(str) && !/,/.test(str)) {
+          return str.split(/\s+/).map((part) => part.trim()).filter(Boolean)
+        }
+        // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
+        if (/,\s+/.test(str)) {
+          return str.split(/,\s+/).map((part) => part.replace(/,/g, "").trim())
+        }
+        // Single value with thousand separators (e.g., "1,055,000")
+        if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(str)) {
+          return [str.replace(/,/g, "").trim()]
+        }
+        // Fallback: split on comma and strip commas
+        return str.split(/,\s*/).map((part) => part.replace(/,/g, "").trim()).filter(Boolean)
+      }
+
+      const names = splitNames(extracted.productName)
+      const quantities = splitNumbers(extracted.quantity)
+      const unitPrices = splitNumbers(extracted.unitPrice)
+      const amounts = splitNumbers(extracted.amount)
+
+      const maxLen = Math.max(names.length, quantities.length, unitPrices.length, amounts.length, 1)
+
+      const mappedItems: ProductItem[] = []
+      for (let i = 0; i < maxLen; i++) {
+        const qty = quantities[i] ?? ""
+        const price = unitPrices[i] ?? ""
+        const qtyNum = Number.parseFloat(qty) || 0
+        const priceNum = Number.parseFloat(price) || 0
+        const calculatedAmount = qtyNum * priceNum
+        
+        mappedItems.push({
+          id: crypto.randomUUID(),
+          productName: (names[i] ?? "").trim(),
+          description: "",
+          quantity: qty.replace(/,/g, "").trim(),
+          unitPrice: price.replace(/,/g, "").trim(),
+          // Auto-calculate amount from quantity * unitPrice
+          amount: calculatedAmount > 0 ? calculatedAmount.toString() : "",
+        })
+      }
+
+      // merge into existing formData to avoid replacing structure
+      setFormData((prev) => ({
+        ...prev,
+        orderNo: extracted.orderNo ?? prev.orderNo,
+        quoteNo: extracted.quoteNo ?? prev.quoteNo,
+        recipientCompany: extracted.recipientCompany ?? prev.recipientCompany,
+        issuerCompany: extracted.issuerCompany ?? prev.issuerCompany,
+        issuerAddress: extracted.issuerAddress ?? prev.issuerAddress,
+        manager: extracted.manager ?? prev.manager,
+        approver: extracted.approver ?? prev.approver,
+        desiredDeliveryDate: extracted.desiredDeliveryDate ?? prev.desiredDeliveryDate,
+        requestedDeliveryDate: extracted.requestedDeliveryDate ?? prev.requestedDeliveryDate,
+        paymentTerms: extracted.paymentTerms ?? prev.paymentTerms,
+        deliveryLocation: extracted.deliveryLocation ?? prev.deliveryLocation,
+        inspectionDeadline: extracted.inspectionDeadline ?? prev.inspectionDeadline,
+        phone: extracted.phone ?? prev.phone,
+        fax: extracted.fax ?? prev.fax,
+        totalAmount: extracted.totalAmount ? String(extracted.totalAmount).replace(/,/g, "").trim() : prev.totalAmount,
+        items: mappedItems.length > 0 ? mappedItems : prev.items,
+      }))
 
       setProcessingStatus("complete")
       addLog("データ抽出完了。JSONパース成功。", "success")
@@ -538,54 +666,115 @@ export default function QuoteToOrderPage() {
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
-                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-secondary">
-                      <div className="h-1 w-1 rounded-full bg-secondary" />
-                      商品情報
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="flex items-center gap-2 font-semibold text-secondary">
+                        <div className="h-1 w-1 rounded-full bg-secondary" />
+                        品目一覧
+                      </h3>
+                      <Button
+                        onClick={addItem}
+                        size="sm"
+                        className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        品目を追加
+                      </Button>
+                    </div>
+
+                    <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
+
+                    <div className="space-y-4">
+                      {(formData.items ?? []).map((item, index) => (
+                        <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
+                            {formData.items.length > 1 && (
+                              <Button
+                                onClick={() => removeItem(item.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-4">
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
+                                <Input
+                                  value={item.productName}
+                                  onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
+                                  placeholder="品目名を入力"
+                                  className="elevation-1 border-0 bg-muted/30"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
+                                <Input
+                                  type="number"
+                                  value={item.unitPrice}
+                                  onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
+                                  placeholder="0"
+                                  className="elevation-1 border-0 bg-muted/30 font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
+                                  placeholder="1"
+                                  className="elevation-1 border-0 bg-muted/30"
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
+                                <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
+                                  ¥{(Number.parseFloat(item.amount) || 0).toLocaleString("ja-JP")}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
+                              <Textarea
+                                value={item.description}
+                                onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                                className="elevation-1 border-0 bg-muted/30"
+                                rows={2}
+                              />
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+
+                      <div className="elevation-2 rounded-lg p-4 bg-slate-600">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
+                          <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-accent-foreground">
+                      <div className="h-1 w-1 rounded-full bg-accent" />
+                      納期・条件
                     </h3>
 
                     <div className="space-y-4">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-muted-foreground">品名</label>
-                        <Input
-                          value={formData.productName}
-                          onChange={(e) => handleFormChange("productName", e.target.value)}
-                          className="elevation-1 border-0 bg-background"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-muted-foreground">摘要</label>
-                        <Textarea
-                          value={formData.description}
-                          onChange={(e) => handleFormChange("description", e.target.value)}
-                          className="elevation-1 border-0 bg-background"
-                          rows={2}
-                        />
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">数量</label>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
                           <Input
-                            value={formData.quantity}
-                            onChange={(e) => handleFormChange("quantity", e.target.value)}
+                            value={formData.desiredDeliveryDate}
+                            onChange={(e) => handleFormChange("desiredDeliveryDate", e.target.value)}
                             className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">単価</label>
-                          <Input
-                            value={formData.unitPrice}
-                            onChange={(e) => handleFormChange("unitPrice", e.target.value)}
-                            className="elevation-1 border-0 bg-background font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">金額</label>
-                          <Input
-                            value={formData.amount}
-                            onChange={(e) => handleFormChange("amount", e.target.value)}
-                            className="elevation-1 border-0 bg-background font-mono"
                           />
                         </div>
                       </div>
@@ -609,14 +798,6 @@ export default function QuoteToOrderPage() {
 
                     <div className="space-y-4">
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
-                          <Input
-                            value={formData.desiredDeliveryDate}
-                            onChange={(e) => handleFormChange("desiredDeliveryDate", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
                           <Input
