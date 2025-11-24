@@ -367,12 +367,34 @@ export default function QuoteToOrderPage() {
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 md:text-4xl">
-              Gemini API Test Web App      
-            </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">
-              アップロードされた見積書を自動解析し、発注データを作成するWebアプリケーションです 
-            </p>
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <div className="relative">
+                <div className="absolute inset-0 animate-pulse rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 blur-xl" />
+                <div className="relative rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-3 shadow-lg">
+                  <Brain className="h-8 w-8 text-white animate-pulse" />
+                </div>
+              </div>
+              <h1 className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-4xl font-extrabold text-transparent md:text-5xl lg:text-6xl animate-gradient bg-[length:200%_auto]">
+                Gemini API Test
+              </h1>
+              <div className="relative">
+                <div className="absolute inset-0 animate-pulse rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 opacity-20 blur-xl" />
+                <div className="relative rounded-2xl bg-gradient-to-br from-purple-600 to-blue-500 p-3 shadow-lg">
+                  <FileText className="h-8 w-8 text-white animate-pulse" />
+                </div>
+              </div>
+            </div>
+            <div className="relative mx-auto max-w-2xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/10 to-transparent blur-sm" />
+              <p className="relative mt-3 text-base text-slate-600 dark:text-slate-300 md:text-lg font-medium">
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                  見積書を自動解析し、発注データを作成
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+                </span>
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">AI-Powered Document Processing System</p>
+            </div>
           </div>
 
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
