@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: '見積書→発注フォームアプリ',
+  title: 'Gemini API Test Web App',
   description: 'Gemini APIで見積書を自動解析して発注フォームに入力',
   generator: 'v0.app',
   icons: {
