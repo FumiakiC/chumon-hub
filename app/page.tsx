@@ -401,7 +401,7 @@ export default function QuoteToOrderPage() {
                         クリックまたはドラッグ＆ドロップでPDFを選択
                       </p>
                       <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-                        ※デモ仕様: ファイル名に「見積」か「quote」を含めると成功します
+                        ※デモ仕様: 見積書と注文書をアップロードすると成功します  
                       </p>
                     </div>
                   ) : (
