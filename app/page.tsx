@@ -641,19 +641,21 @@ export default function QuoteToOrderPage() {
                   </div>
                   <Button
                     onClick={() => {
-                      if (extractedJson) {
-                        const jsonString = JSON.stringify(extractedJson, null, 2)
-                        navigator.clipboard
-                          .writeText(jsonString)
-                          .then(() => {
-                            console.log("[v0] JSON response copied to clipboard")
-                            setIsCopied(true)
-                            setTimeout(() => setIsCopied(false), 2000)
-                          })
-                          .catch((err) => {
-                            console.error("[v0] Failed to copy:", err)
-                          })
+                      if (!navigator.clipboard || !extractedJson) {
+                        console.error("[v0] Clipboard API not available or no JSON to copy.");
+                        return;
                       }
+                      const jsonString = JSON.stringify(extractedJson, null, 2);
+                      navigator.clipboard
+                        .writeText(jsonString)
+                        .then(() => {
+                          console.log("[v0] JSON response copied to clipboard");
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2000);
+                        })
+                        .catch((err) => {
+                          console.error("[v0] Failed to copy:", err);
+                        });
                     }}
                     variant="outline"
                     size="sm"
