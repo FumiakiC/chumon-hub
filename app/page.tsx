@@ -58,7 +58,7 @@ export default function QuoteToOrderPage() {
   const [error, setError] = useState<string | null>(null)
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [extractedJson, setExtractedJson] = useState<any>(null)
+  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
 
   const [formData, setFormData] = useState<OrderFormData>({
