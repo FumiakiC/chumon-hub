@@ -7,7 +7,19 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, CheckCircle2, Sparkles, FileImage, X, ShieldCheck, Trash2, Plus } from "lucide-react"
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  Brain,
+  FileImage,
+  X,
+  ShieldCheck,
+  Trash2,
+  Plus,
+  Copy,
+  Check,
+} from "lucide-react"
 import { useState, useRef } from "react"
 
 interface ProductItem {
@@ -23,7 +35,6 @@ interface OrderFormData {
   orderNo: string
   quoteNo: string
   items: ProductItem[]
-  totalAmount: string
   desiredDeliveryDate: string
   requestedDeliveryDate: string
   paymentTerms: string
@@ -47,6 +58,8 @@ export default function QuoteToOrderPage() {
   const [error, setError] = useState<string | null>(null)
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -61,7 +74,6 @@ export default function QuoteToOrderPage() {
         amount: "",
       },
     ],
-    totalAmount: "",
     desiredDeliveryDate: "",
     requestedDeliveryDate: "",
     paymentTerms: "",
@@ -216,7 +228,7 @@ export default function QuoteToOrderPage() {
       addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
 
       setProcessingStatus("flash_check")
-      addLog("Step 1: Gemini 1.5 Flash で書類タイプを判定中...", "info")
+      addLog("Step 1: Gemini 2.5 Flash で書類タイプを判定中...", "info")
 
       const checkResponse = await fetch("/api/check-document-type", {
         method: "POST",
@@ -241,7 +253,7 @@ export default function QuoteToOrderPage() {
       addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
 
       setProcessingStatus("pro_extraction")
-      addLog("Step 2: Gemini 1.5 Pro で詳細データを抽出中...", "info")
+      addLog("Step 2: Gemini 2.5 Flash で詳細データを抽出中...", "info")
 
       const response = await fetch("/api/extract-order", {
         method: "POST",
@@ -264,13 +276,18 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
+      // Store the raw JSON response for copy functionality
+      setExtractedJson(result)
+
       // normalize extracted payload: some endpoints return { extractedData: {...} }
       const extracted = result.extractedData ?? result
 
       // helpers: separate logic for names (split on comma) and numeric lists
       const splitNames = (s: any) => {
         if (!s && s !== 0) return []
-        return String(s).split(/,\s*/).map((p) => p.trim())
+        return String(s)
+          .split(/,\s*/)
+          .map((p) => p.trim())
       }
 
       const splitNumbers = (s: any) => {
@@ -278,7 +295,10 @@ export default function QuoteToOrderPage() {
         const str = String(s).trim()
         // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
         if (/\s+/.test(str) && !/,/.test(str)) {
-          return str.split(/\s+/).map((part) => part.trim()).filter(Boolean)
+          return str
+            .split(/\s+/)
+            .map((part) => part.trim())
+            .filter(Boolean)
         }
         // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
         if (/,\s+/.test(str)) {
@@ -289,7 +309,10 @@ export default function QuoteToOrderPage() {
           return [str.replace(/,/g, "").trim()]
         }
         // Fallback: split on comma and strip commas
-        return str.split(/,\s*/).map((part) => part.replace(/,/g, "").trim()).filter(Boolean)
+        return str
+          .split(/,\s*/)
+          .map((part) => part.replace(/,/g, "").trim())
+          .filter(Boolean)
       }
 
       const names = splitNames(extracted.productName)
@@ -306,11 +329,11 @@ export default function QuoteToOrderPage() {
         const qtyNum = Number.parseFloat(qty) || 0
         const priceNum = Number.parseFloat(price) || 0
         const calculatedAmount = qtyNum * priceNum
-        
+
         mappedItems.push({
           id: crypto.randomUUID(),
           productName: (names[i] ?? "").trim(),
-          description: "",
+          description: extracted.description ? String(extracted.description).trim() : "",
           quantity: qty.replace(/,/g, "").trim(),
           unitPrice: price.replace(/,/g, "").trim(),
           // Auto-calculate amount from quantity * unitPrice
@@ -335,7 +358,6 @@ export default function QuoteToOrderPage() {
         inspectionDeadline: extracted.inspectionDeadline ?? prev.inspectionDeadline,
         phone: extracted.phone ?? prev.phone,
         fax: extracted.fax ?? prev.fax,
-        totalAmount: extracted.totalAmount ? String(extracted.totalAmount).replace(/,/g, "").trim() : prev.totalAmount,
         items: mappedItems.length > 0 ? mappedItems : prev.items,
       }))
 
@@ -363,10 +385,10 @@ export default function QuoteToOrderPage() {
         <div className="mx-auto max-w-[1600px]">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 md:text-4xl">
-              Gemini API Quote to Order
+              Gemini API Test Web App
             </h1>
             <p className="mt-2 text-slate-500 dark:text-slate-400">
-              アップロードされた見積書をAIが自動解析し、発注データを作成します
+              アップロードされた見積書を自動解析し、発注データを作成するWebアプリケーションです
             </p>
           </div>
 
@@ -401,7 +423,7 @@ export default function QuoteToOrderPage() {
                         クリックまたはドラッグ＆ドロップでPDFを選択
                       </p>
                       <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-                        ※デモ仕様: ファイル名に「見積」か「quote」を含めると成功します
+                        ※デモ仕様: 見積書や注文書をアップロードすると成功します
                       </p>
                     </div>
                   ) : (
@@ -544,8 +566,8 @@ export default function QuoteToOrderPage() {
                           {processingStatus === "pro_extraction" && (
                             <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
                           )}
-                          <Sparkles
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "pro_extraction" ? "animate-spin-slow" : ""}`}
+                          <Brain
+                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "pro_extraction" ? "animate-pulse" : ""}`}
                           />
                         </div>
                         <span
@@ -610,11 +632,39 @@ export default function QuoteToOrderPage() {
 
             <div className="flex-1 space-y-6 lg:min-w-[50%]">
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
-                <div className="mb-6 flex items-center gap-2">
-                  <div className="rounded-full bg-secondary/10 p-2">
-                    <FileText className="h-5 w-5 text-secondary" />
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-secondary/10 p-2">
+                      <FileText className="h-5 w-5 text-secondary" />
+                    </div>
+                    <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
                   </div>
-                  <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
+                  <Button
+                    onClick={() => {
+                      if (!navigator.clipboard || !extractedJson) {
+                        console.error("[v0] Clipboard API not available or no JSON to copy.");
+                        return;
+                      }
+                      const jsonString = JSON.stringify(extractedJson, null, 2);
+                      navigator.clipboard
+                        .writeText(jsonString)
+                        .then(() => {
+                          console.log("[v0] JSON response copied to clipboard");
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2000);
+                        })
+                        .catch((err) => {
+                          console.error("[v0] Failed to copy:", err);
+                        });
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={!extractedJson}
+                  >
+                    {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {isCopied ? "コピーしました" : "コピー"}
+                  </Button>
                 </div>
 
                 <div className="space-y-6">
@@ -762,8 +812,8 @@ export default function QuoteToOrderPage() {
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
-                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-accent-foreground">
-                      <div className="h-1 w-1 rounded-full bg-accent" />
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
+                      <div className="h-1 w-1 rounded-full bg-primary" />
                       納期・条件
                     </h3>
 
@@ -777,27 +827,6 @@ export default function QuoteToOrderPage() {
                             className="elevation-1 border-0 bg-background"
                           />
                         </div>
-                      </div>
-
-                      <div className="elevation-2 rounded-lg bg-accent/20 p-4">
-                        <label className="mb-2 block text-sm font-semibold text-accent-foreground">合計（税抜）</label>
-                        <Input
-                          value={formData.totalAmount}
-                          onChange={(e) => handleFormChange("totalAmount", e.target.value)}
-                          className="border-0 bg-accent text-lg font-bold text-accent-foreground"
-                        />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
-                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-accent-foreground">
-                      <div className="h-1 w-1 rounded-full bg-accent" />
-                      納期・条件
-                    </h3>
-
-                    <div className="space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
                           <Input
@@ -814,7 +843,7 @@ export default function QuoteToOrderPage() {
                         <Input
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
-                          className="elevation-1 border-0 bg-background"
+                          className="border-accent/30 bg-white/50 focus:border-accent focus:ring-accent dark:bg-slate-900/50"
                         />
                       </div>
 
