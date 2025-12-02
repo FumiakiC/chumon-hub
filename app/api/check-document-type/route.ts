@@ -1,6 +1,7 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
+import { generateFileId, cacheFile } from "@/lib/fileCache"
 
 export const maxDuration = 60
 
@@ -77,7 +78,15 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
       ],
     })
 
-    return Response.json(result.object)
+    // Cache the file for subsequent API calls
+    const fileId = generateFileId()
+    cacheFile(fileId, fileBase64, mimeType)
+    console.log('[v0] check-document-type: cached file with ID', fileId)
+
+    return Response.json({
+      ...result.object,
+      fileId, // Return fileId for the next API call
+    })
   } catch (error) {
     console.error("Check document error:", error)
     return Response.json({ error: "Failed to check document type" }, { status: 500 })
