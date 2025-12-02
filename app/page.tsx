@@ -572,7 +572,7 @@ export default function QuoteToOrderPage() {
                         <span
                           className={`text-sm font-bold tracking-wide transition-colors duration-300 ${["pro_extraction", "complete"].includes(processingStatus) ? "text-slate-800" : "text-slate-400"}`}
                         >
-                          Pro抽出
+                          {"Flash抽出"}
                         </span>
                       </div>
 
