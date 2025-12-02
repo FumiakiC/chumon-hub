@@ -11,7 +11,7 @@ const cache = new Map<string, CachedFile>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 export function generateFileId(): string {
-  return `file_${Date.now()}_${Math.random().toString(36).substring(7)}`
+  return `file_${crypto.randomUUID()}`
 }
 
 export function cacheFile(fileId: string, fileBase64: string, mimeType: string): void {
