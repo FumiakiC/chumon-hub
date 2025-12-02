@@ -1,9 +1,12 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
-import { getCachedFile } from "@/lib/fileCache"
+import { getCachedFile, startFileCacheMaintenance } from "@/lib/fileCache"
 
 export const maxDuration = 60
+
+// Start background cache maintenance (singleton guarded in the module)
+startFileCacheMaintenance()
 
 // Define the schema for the order form extraction
 const orderSchema = z.object({
@@ -39,9 +42,9 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
     }
 
-    // Try to use cached file first, fallback to provided file
-    let fileBase64: string
-    let mimeType: string
+    // Resolve file data: prefer cache by fileId, fallback to provided payload
+    let fileBase64: string | undefined = providedFileBase64
+    let mimeType: string | undefined = providedMimeType
 
     if (fileId) {
       const cached = getCachedFile(fileId)
@@ -51,18 +54,14 @@ export async function POST(req: Request) {
         mimeType = cached.mimeType
       } else {
         console.warn('[v0] extract-order: fileId provided but cache miss', fileId)
-        if (!providedFileBase64 || !providedMimeType) {
-          return Response.json({ error: 'File cache expired. Please re-upload the file.' }, { status: 400 })
-        }
-        fileBase64 = providedFileBase64
-        mimeType = providedMimeType
       }
-    } else {
-      if (!providedFileBase64 || !providedMimeType) {
-        return Response.json({ error: 'fileBase64 and mimeType are required' }, { status: 400 })
-      }
-      fileBase64 = providedFileBase64
-      mimeType = providedMimeType
+    }
+
+    if (!fileBase64 || !mimeType) {
+      const errorMessage = fileId
+        ? 'File cache expired. Please re-upload the file.'
+        : 'fileBase64 and mimeType are required'
+      return Response.json({ error: errorMessage }, { status: 400 })
     }
 
     // normalize to data URL for image input
@@ -73,7 +72,7 @@ export async function POST(req: Request) {
 
     // Use Gemini 2.5 Pro for high-accuracy extraction
     const result = await generateObject({
-      model: google("gemini-2.5-pro"),
+      model: google("gemini-2.5-flash"),
       schema: orderSchema,
       messages: [
         {

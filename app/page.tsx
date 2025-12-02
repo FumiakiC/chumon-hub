@@ -253,7 +253,7 @@ export default function QuoteToOrderPage() {
       addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
 
       setProcessingStatus("pro_extraction")
-      addLog("Step 2: Gemini 2.5 Pro で詳細データを抽出中...", "info")
+      addLog("Step 2: Gemini 2.5 Flash で詳細データを抽出中...", "info")
 
       const response = await fetch("/api/extract-order", {
         method: "POST",

@@ -1,9 +1,12 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
-import { generateFileId, cacheFile } from "@/lib/fileCache"
+import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/fileCache"
 
 export const maxDuration = 60
+
+// Start background cache maintenance (singleton guarded in the module)
+startFileCacheMaintenance()
 
 export async function POST(req: Request) {
   try {

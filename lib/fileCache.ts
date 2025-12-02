@@ -10,6 +10,9 @@ interface CachedFile {
 const cache = new Map<string, CachedFile>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+let maintenanceStarted = false
+let intervalHandle: ReturnType<typeof setInterval> | null = null
+
 export function generateFileId(): string {
   return `file_${crypto.randomUUID()}`
 }
@@ -20,9 +23,6 @@ export function cacheFile(fileId: string, fileBase64: string, mimeType: string):
     mimeType,
     timestamp: Date.now(),
   })
-  
-  // Clean up expired entries
-  cleanupExpiredCache()
 }
 
 export function getCachedFile(fileId: string): { fileBase64: string; mimeType: string } | null {
@@ -51,4 +51,16 @@ function cleanupExpiredCache(): void {
       cache.delete(key)
     }
   }
+}
+
+export function startFileCacheMaintenance(intervalMs = 60 * 1000): void {
+  if (maintenanceStarted) return
+  maintenanceStarted = true
+  intervalHandle = setInterval(() => {
+    try {
+      cleanupExpiredCache()
+    } catch {
+      // no-op: best-effort cleanup
+    }
+  }, intervalMs)
 }
