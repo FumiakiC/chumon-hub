@@ -86,8 +86,8 @@ export function startFileCacheMaintenance(intervalMs = 60 * 1000): void {
   globalControls.intervalHandle = setInterval(() => {
     try {
       cleanupExpiredCache()
-    } catch {
-      // no-op: best-effort cleanup
+    } catch (error) {
+      console.error('Error during cache cleanup:', error)
     }
   }, intervalMs)
 }
