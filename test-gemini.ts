@@ -10,7 +10,7 @@ async function testGeminiAuth() {
   try {
     console.log('\n--- Testing simple text generation (no image) ---')
     const { object } = await generateObject({
-      model: 'google/gemini-1.5-flash',
+      model: 'google/gemini-2.5-flash',
       schema: z.object({
         text: z.string(),
       }),
