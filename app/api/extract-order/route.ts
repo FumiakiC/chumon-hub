@@ -5,8 +5,7 @@ import { getCachedFile, startFileCacheMaintenance } from "@/lib/fileCache"
 
 export const maxDuration = 60
 
-// Start background cache maintenance (singleton guarded in the module)
-startFileCacheMaintenance()
+// Lazy start in handler to avoid multiple timers in serverless
 
 // Define the schema for the order form extraction
 const orderSchema = z.object({
@@ -34,6 +33,8 @@ const orderSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // Ensure cache maintenance is running (singleton via globalThis)
+    startFileCacheMaintenance()
     const { fileBase64: providedFileBase64, mimeType: providedMimeType, fileId } = await req.json()
 
     const apiKey = process.env.GOOGLE_API_KEY
@@ -62,6 +63,14 @@ export async function POST(req: Request) {
         ? 'File cache expired. Please re-upload the file.'
         : 'fileBase64 and mimeType are required'
       return Response.json({ error: errorMessage }, { status: 400 })
+    }
+
+    // Validate size before proceeding
+    const approxBytes = Math.floor((fileBase64.length * 3) / 4)
+    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
+    if (approxBytes > MAX_SINGLE_FILE_BYTES) {
+      console.error('[v0] extract-order: file too large', { approxBytes })
+      return Response.json({ error: 'File too large' }, { status: 413 })
     }
 
     // normalize to data URL for image input

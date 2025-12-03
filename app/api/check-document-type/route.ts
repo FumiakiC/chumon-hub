@@ -5,11 +5,12 @@ import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/file
 
 export const maxDuration = 60
 
-// Start background cache maintenance (singleton guarded in the module)
-startFileCacheMaintenance()
+// Lazy start cache maintenance per request to avoid multiple timers in serverless
 
 export async function POST(req: Request) {
   try {
+    // Ensure cache maintenance is running (singleton via globalThis)
+    startFileCacheMaintenance()
     const { fileBase64, mimeType } = await req.json()
 
     // basic diagnostics: ensure we received values
@@ -36,6 +37,14 @@ export async function POST(req: Request) {
     }
 
     const google = createGoogleGenerativeAI({ apiKey })
+
+    // Validate size before sending to model or caching
+    const approxBytes = Math.floor((fileBase64.length * 3) / 4)
+    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
+    if (approxBytes > MAX_SINGLE_FILE_BYTES) {
+      console.error('[v0] check-document-type: file too large', { approxBytes })
+      return Response.json({ error: 'File too large' }, { status: 413 })
+    }
 
     const result = await generateObject({
       model: google("gemini-2.5-flash"),
@@ -83,7 +92,12 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
 
     // Cache the file for subsequent API calls
     const fileId = generateFileId()
-    cacheFile(fileId, fileBase64, mimeType)
+    try {
+      cacheFile(fileId, fileBase64, mimeType)
+    } catch (e) {
+      console.error('[v0] check-document-type: cacheFile error', e)
+      return Response.json({ error: 'Failed to cache file' }, { status: 500 })
+    }
     console.log('[v0] check-document-type: cached file with ID', fileId)
 
     return Response.json({
