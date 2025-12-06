@@ -274,67 +274,18 @@ export default function QuoteToOrderPage() {
       // Store the raw JSON response for copy functionality
       setExtractedJson(result)
 
-      // normalize extracted payload: some endpoints return { extractedData: {...} }
-      const extracted = result.extractedData ?? result
+      // APIレスポンスから直接 items を取得
+      const extracted = result
 
-      // helpers: separate logic for names (split on comma) and numeric lists
-      const splitNames = (s: any) => {
-        if (!s && s !== 0) return []
-        return String(s)
-          .split(/,\s*/)
-          .map((p) => p.trim())
-      }
-
-      const splitNumbers = (s: any) => {
-        if (!s && s !== 0) return []
-        const str = String(s).trim()
-        // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
-        if (/\s+/.test(str) && !/,/.test(str)) {
-          return str
-            .split(/\s+/)
-            .map((part) => part.trim())
-            .filter(Boolean)
-        }
-        // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
-        if (/,\s+/.test(str)) {
-          return str.split(/,\s+/).map((part) => part.replace(/,/g, "").trim())
-        }
-        // Single value with thousand separators (e.g., "1,055,000")
-        if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(str)) {
-          return [str.replace(/,/g, "").trim()]
-        }
-        // Fallback: split on comma and strip commas
-        return str
-          .split(/,\s*/)
-          .map((part) => part.replace(/,/g, "").trim())
-          .filter(Boolean)
-      }
-
-      const names = splitNames(extracted.productName)
-      const quantities = splitNumbers(extracted.quantity)
-      const unitPrices = splitNumbers(extracted.unitPrice)
-      const amounts = splitNumbers(extracted.amount)
-
-      const maxLen = Math.max(names.length, quantities.length, unitPrices.length, amounts.length, 1)
-
-      const mappedItems: ProductItem[] = []
-      for (let i = 0; i < maxLen; i++) {
-        const qty = quantities[i] ?? ""
-        const price = unitPrices[i] ?? ""
-        const qtyNum = Number.parseFloat(qty) || 0
-        const priceNum = Number.parseFloat(price) || 0
-        const calculatedAmount = qtyNum * priceNum
-
-        mappedItems.push({
-          id: crypto.randomUUID(),
-          productName: (names[i] ?? "").trim(),
-          description: extracted.description ? String(extracted.description).trim() : "",
-          quantity: qty.replace(/,/g, "").trim(),
-          unitPrice: price.replace(/,/g, "").trim(),
-          // Auto-calculate amount from quantity * unitPrice
-          amount: calculatedAmount > 0 ? calculatedAmount.toString() : "",
-        })
-      }
+      // items 配列をマップして ProductItem[] に変換
+      const mappedItems: ProductItem[] = (extracted.items || []).map((item: any) => ({
+        id: crypto.randomUUID(),
+        productName: item.productName ?? "",
+        description: item.description ?? "",
+        quantity: (item.quantity ?? 0).toString(),
+        unitPrice: (item.unitPrice ?? 0).toString(),
+        amount: (item.amount ?? 0).toString(),
+      }))
 
       // merge into existing formData to avoid replacing structure
       setFormData((prev) => ({

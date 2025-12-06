@@ -9,26 +9,23 @@ export const maxDuration = 60
 
 // Define the schema for the order form extraction
 const orderSchema = z.object({
-  orderNo: z.string().describe("Order Number (注番/注文番号)"),
+  items: z.array(
+    z.object({
+      productName: z.string().describe("Product Name (品名)"),
+      quantity: z.number().describe("Quantity (数量)"),
+      unitPrice: z.number().describe("Unit Price (単価) - numeric value without comma or currency symbol"),
+      amount: z.number().describe("Amount/Subtotal (金額) - numeric value without comma or currency symbol"),
+      description: z.string().optional().describe("Description or remarks (摘要)"),
+    })
+  ).describe("Line items array (明細行の配列)"),
+  orderNo: z.string().describe("Order Number (注番) - Extract the ID strictly matching the format: 'S' + YYMMDD (date) + '-' + SerialNumber (e.g., S251106-008). It is usually found in '件名' or 'No.'. Ignore any other IDs like 'MGG...'."),
   quoteNo: z.string().describe("Quotation Number (見積No)"),
-  productName: z.string().describe("All Product Names (品名) - combine all products with comma or space separation, e.g., 'サーバーA(テスト用), ノートPC B (開発用), ネットワーク機器セット'"),
-  description: z.string().describe("Description or Summary (摘要)"),
-  quantity: z.string().describe("All Quantities (数量) - list all quantities in order separated by spaces, e.g., '1 2 1'"),
-  unitPrice: z.string().describe("All Unit Prices (単価) - list all unit prices in order separated by spaces, e.g., '800000 120000 15000'"),
-  amount: z.string().describe("Amount (金額) - if multiple items, this may be subtotal or empty"),
   totalAmount: z.string().describe("Total Amount (合計金額)"),
-  desiredDeliveryDate: z.string().describe("Desired Delivery Date (希望納期)"),
-  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期)"),
+  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期/納入期日) - Extract '納入期日' or '納期' here. Format as YYYYMMDD (e.g., 20251114). Do NOT use slashes or other separators."),
   paymentTerms: z.string().describe("Payment Terms (支払条件)"),
-  deliveryLocation: z.string().describe("Delivery Location (受渡場所)"),
+  deliveryLocation: z.string().describe("Delivery Location (受渡場所) - Do NOT infer from the recipient's address or company name. If '受渡場所' is not explicitly labeled, return an empty string."),
   inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日)"),
-  recipientCompany: z.string().describe("Recipient Company Name (宛先会社名/殿)"),
-  issuerCompany: z.string().describe("Issuer Company Name (発注元/自社名)"),
-  issuerAddress: z.string().describe("Issuer Address (自社住所)"),
-  phone: z.string().describe("Phone Number (電話番号)"),
-  fax: z.string().describe("FAX Number"),
-  manager: z.string().describe("Manager Name (担当)"),
-  approver: z.string().describe("Approver Name (承認)"),
+  recipientCompany: z.string().describe("Order Recipient / Vendor Name (発注先/見積発行元) - The company that issued this quotation (e.g. 株式会社 山口製作所)"),
 })
 
 export async function POST(req: Request) {
@@ -86,24 +83,31 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-            content: [
+          content: [
             {
               type: "text",
               text: `Extract all order details from this quotation/order document into a structured JSON format.
 
-CRITICAL INSTRUCTIONS for multiple line items:
-1. If the document contains MULTIPLE line items/products, you MUST extract ALL of them:
-   - productName: Combine ALL product names separated by commas (e.g., "サーバーA(テスト用), ノートPC B (開発用), ネットワーク機器セット")
-   - quantity: List ALL quantities in the same order, separated by spaces (e.g., "1 2 1")
-   - unitPrice: List ALL unit prices in the same order, separated by spaces (e.g., "800000 120000 15000")
+CRITICAL INSTRUCTIONS for line items:
+1. Extract ALL line items/products as an array in the "items" field.
+2. Each item object MUST contain:
+   - productName: Product name (品名)
+   - quantity: Quantity as a NUMBER without commas (e.g., 1, 2, 100)
+   - unitPrice: Unit price as a NUMBER without commas or currency symbols (e.g., 800000, 120000)
+   - amount: Subtotal for this line item as a NUMBER (quantity × unitPrice)
+   - description: Optional remarks or specifications
 
-2. For numeric fields (quantity, unitPrice, amount, totalAmount):
-   - Do NOT include thousand-separator commas (convert "1,234" to "1234")
-   - Do NOT include currency symbols (¥, $, etc.)
+3. For numeric fields (quantity, unitPrice, amount):
+   - Convert all values to pure numbers
+   - Remove thousand-separator commas (e.g., "1,234" → 1234)
+   - Remove currency symbols (¥, $, etc.)
+   - Do NOT return strings for these fields; return actual numbers
 
-3. If a field is not found in the document, leave it as an empty string "".
+4. Preserve other fields at the root level (orderNo, quoteNo, totalAmount, etc.).
 
-4. Be extremely thorough - check the entire document for all line items in tables or lists.
+5. If a field is not found, use an empty string "" or null as appropriate.
+
+6. Be extremely thorough - extract ALL line items from tables or lists.
 
 Return only valid JSON matching the schema.`,
             },
@@ -116,16 +120,7 @@ Return only valid JSON matching the schema.`,
       ],
     })
 
-    // result.object should match the schema, but sanitize numeric-like fields server-side as a safety net
-    const numericKeys = ['quantity', 'unitPrice', 'amount', 'totalAmount']
-    const obj: any = result.object ?? {}
-    for (const k of numericKeys) {
-      if (obj && obj[k] != null) {
-        obj[k] = String(obj[k]).replace(/,/g, '').replace(/[¥$]/g, '').trim()
-      }
-    }
-
-    return Response.json(obj)
+    return Response.json(result.object)
   } catch (error) {
     console.error("Extraction error:", error)
     return Response.json({ error: "Failed to extract order details" }, { status: 500 })
