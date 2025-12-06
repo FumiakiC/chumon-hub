@@ -330,12 +330,6 @@ export default function QuoteToOrderPage() {
     fileInputRef.current?.click()
   }
 
-  const handleDateChange = (field: keyof OrderFormData, date: Date | undefined) => {
-    if (date && isValid(date)) {
-      handleFormChange(field, format(date, "yyyy-MM-dd", { locale: ja }))
-    }
-  }
-
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="flex-1 p-4 md:p-8">
@@ -690,6 +684,7 @@ export default function QuoteToOrderPage() {
                                     handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
+                                locale={ja}
                               />
                             </PopoverContent>
                           </Popover>
@@ -730,6 +725,7 @@ export default function QuoteToOrderPage() {
                                     handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
+                                locale={ja}
                               />
                             </PopoverContent>
                           </Popover>
@@ -756,23 +752,11 @@ export default function QuoteToOrderPage() {
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Input
-                              value={formData.inspectionDeadline}
-                              onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
-                              className="elevation-1 border-0 bg-background"
-                            />
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={parse(formData.inspectionDeadline, "yyyy-MM-dd", new Date())}
-                              onSelect={(date) => handleDateChange("inspectionDeadline", date)}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
+                        <Input
+                          value={formData.inspectionDeadline}
+                          onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
                       </div>
                     </div>
                   </Card>
