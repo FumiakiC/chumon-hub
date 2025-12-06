@@ -470,15 +470,15 @@ export default function QuoteToOrderPage() {
                   </div>
                   <Button
                     onClick={() => {
-                      if (!navigator.clipboard || !extractedJson) {
-                        console.error("[v0] Clipboard API not available or no JSON to copy.")
+                      if (!navigator.clipboard) {
+                        console.error("[v0] Clipboard API not available.")
                         return
                       }
-                      const jsonString = JSON.stringify(extractedJson, null, 2)
+                      const jsonString = JSON.stringify(formData, null, 2)
                       navigator.clipboard
                         .writeText(jsonString)
                         .then(() => {
-                          console.log("[v0] JSON response copied to clipboard")
+                          console.log("[v0] formData copied to clipboard")
                           setIsCopied(true)
                           setTimeout(() => setIsCopied(false), 2000)
                         })
@@ -489,7 +489,7 @@ export default function QuoteToOrderPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    disabled={!extractedJson}
+                    disabled={!formData.orderNo && !formData.items.some(item => item.productName)}
                   >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
