@@ -16,6 +16,15 @@ import { format, parse, isValid } from "date-fns"
 import { ja } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 
+// APIからのレスポンス形式（route.tsのschemaと一致させる）
+interface ExtractedItem {
+  productName: string
+  quantity: number
+  unitPrice: number
+  amount: number
+  description?: string
+}
+
 interface ProductItem {
   id: string
   productName: string
@@ -282,8 +291,10 @@ export default function QuoteToOrderPage() {
       // APIレスポンスから直接 items を取得
       const extracted = result
 
-      // items 配列をマップして ProductItem[] に変換
-      const mappedItems: ProductItem[] = (extracted.items || []).map((item: any) => ({
+      // items 配列を型安全にマップして ProductItem[] に変換
+      const items: ExtractedItem[] = (extracted.items ?? []) as ExtractedItem[]
+
+      const mappedItems: ProductItem[] = items.map((item) => ({
         id: crypto.randomUUID(),
         productName: item.productName ?? "",
         description: item.description ?? "",
