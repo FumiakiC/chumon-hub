@@ -7,9 +7,14 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check } from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format, parse, isValid } from "date-fns"
+import { ja } from "date-fns/locale"
+import { cn } from "@/lib/utils"
 
 interface ProductItem {
   id: string
@@ -323,6 +328,12 @@ export default function QuoteToOrderPage() {
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const handleDateChange = (field: keyof OrderFormData, date: Date | undefined) => {
+    if (date && isValid(date)) {
+      handleFormChange(field, format(date, "yyyy-MM-dd", { locale: ja }))
+    }
   }
 
   return (
@@ -645,20 +656,85 @@ export default function QuoteToOrderPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
-                          <Input
-                            value={formData.desiredDeliveryDate}
-                            onChange={(e) => handleFormChange("desiredDeliveryDate", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.desiredDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.desiredDeliveryDate &&
+                                isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.desiredDeliveryDate &&
+                                  isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                    ? parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
+                                  }
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
-                          <Input
-                            value={formData.requestedDeliveryDate}
-                            onChange={(e) => handleFormChange("requestedDeliveryDate", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                            placeholder="（空欄）"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.requestedDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.requestedDeliveryDate &&
+                                isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.requestedDeliveryDate &&
+                                  isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                    ? parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
+                                  }
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
 
@@ -682,11 +758,23 @@ export default function QuoteToOrderPage() {
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
-                        <Input
-                          value={formData.inspectionDeadline}
-                          onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Input
+                              value={formData.inspectionDeadline}
+                              onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
+                              className="elevation-1 border-0 bg-background"
+                            />
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={parse(formData.inspectionDeadline, "yyyy-MM-dd", new Date())}
+                              onSelect={(date) => handleDateChange("inspectionDeadline", date)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
                   </Card>
