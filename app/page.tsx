@@ -7,9 +7,14 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check } from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format, parse, isValid } from "date-fns"
+import { ja } from "date-fns/locale"
+import { cn } from "@/lib/utils"
 
 interface ProductItem {
   id: string
@@ -274,67 +279,18 @@ export default function QuoteToOrderPage() {
       // Store the raw JSON response for copy functionality
       setExtractedJson(result)
 
-      // normalize extracted payload: some endpoints return { extractedData: {...} }
-      const extracted = result.extractedData ?? result
+      // APIレスポンスから直接 items を取得
+      const extracted = result
 
-      // helpers: separate logic for names (split on comma) and numeric lists
-      const splitNames = (s: any) => {
-        if (!s && s !== 0) return []
-        return String(s)
-          .split(/,\s*/)
-          .map((p) => p.trim())
-      }
-
-      const splitNumbers = (s: any) => {
-        if (!s && s !== 0) return []
-        const str = String(s).trim()
-        // Handle space-separated numbers (e.g., "1 2 1" or "800000 120000 15000")
-        if (/\s+/.test(str) && !/,/.test(str)) {
-          return str
-            .split(/\s+/)
-            .map((part) => part.trim())
-            .filter(Boolean)
-        }
-        // Handle comma+space separated (e.g., "800,000, 240,000, 15,000")
-        if (/,\s+/.test(str)) {
-          return str.split(/,\s+/).map((part) => part.replace(/,/g, "").trim())
-        }
-        // Single value with thousand separators (e.g., "1,055,000")
-        if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(str)) {
-          return [str.replace(/,/g, "").trim()]
-        }
-        // Fallback: split on comma and strip commas
-        return str
-          .split(/,\s*/)
-          .map((part) => part.replace(/,/g, "").trim())
-          .filter(Boolean)
-      }
-
-      const names = splitNames(extracted.productName)
-      const quantities = splitNumbers(extracted.quantity)
-      const unitPrices = splitNumbers(extracted.unitPrice)
-      const amounts = splitNumbers(extracted.amount)
-
-      const maxLen = Math.max(names.length, quantities.length, unitPrices.length, amounts.length, 1)
-
-      const mappedItems: ProductItem[] = []
-      for (let i = 0; i < maxLen; i++) {
-        const qty = quantities[i] ?? ""
-        const price = unitPrices[i] ?? ""
-        const qtyNum = Number.parseFloat(qty) || 0
-        const priceNum = Number.parseFloat(price) || 0
-        const calculatedAmount = qtyNum * priceNum
-
-        mappedItems.push({
-          id: crypto.randomUUID(),
-          productName: (names[i] ?? "").trim(),
-          description: extracted.description ? String(extracted.description).trim() : "",
-          quantity: qty.replace(/,/g, "").trim(),
-          unitPrice: price.replace(/,/g, "").trim(),
-          // Auto-calculate amount from quantity * unitPrice
-          amount: calculatedAmount > 0 ? calculatedAmount.toString() : "",
-        })
-      }
+      // items 配列をマップして ProductItem[] に変換
+      const mappedItems: ProductItem[] = (extracted.items || []).map((item: any) => ({
+        id: crypto.randomUUID(),
+        productName: item.productName ?? "",
+        description: item.description ?? "",
+        quantity: (item.quantity ?? 0).toString(),
+        unitPrice: (item.unitPrice ?? 0).toString(),
+        amount: (item.amount ?? 0).toString(),
+      }))
 
       // merge into existing formData to avoid replacing structure
       setFormData((prev) => ({
@@ -514,15 +470,15 @@ export default function QuoteToOrderPage() {
                   </div>
                   <Button
                     onClick={() => {
-                      if (!navigator.clipboard || !extractedJson) {
-                        console.error("[v0] Clipboard API not available or no JSON to copy.")
+                      if (!navigator.clipboard) {
+                        console.error("[v0] Clipboard API not available.")
                         return
                       }
-                      const jsonString = JSON.stringify(extractedJson, null, 2)
+                      const jsonString = JSON.stringify(formData, null, 2)
                       navigator.clipboard
                         .writeText(jsonString)
                         .then(() => {
-                          console.log("[v0] JSON response copied to clipboard")
+                          console.log("[v0] formData copied to clipboard")
                           setIsCopied(true)
                           setTimeout(() => setIsCopied(false), 2000)
                         })
@@ -533,7 +489,7 @@ export default function QuoteToOrderPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    disabled={!extractedJson}
+                    disabled={!formData.orderNo && !formData.items.some(item => item.productName)}
                   >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
@@ -694,20 +650,85 @@ export default function QuoteToOrderPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
-                          <Input
-                            value={formData.desiredDeliveryDate}
-                            onChange={(e) => handleFormChange("desiredDeliveryDate", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.desiredDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.desiredDeliveryDate &&
+                                isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.desiredDeliveryDate &&
+                                  isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                    ? parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
+                                  }
+                                }}
+                                locale={ja}
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
-                          <Input
-                            value={formData.requestedDeliveryDate}
-                            onChange={(e) => handleFormChange("requestedDeliveryDate", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                            placeholder="（空欄）"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.requestedDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.requestedDeliveryDate &&
+                                isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.requestedDeliveryDate &&
+                                  isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                    ? parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
+                                  }
+                                }}
+                                locale={ja}
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
 
@@ -716,7 +737,7 @@ export default function QuoteToOrderPage() {
                         <Input
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
-                          className="border-accent/30 bg-white/50 focus:border-accent focus:ring-accent dark:bg-slate-900/50"
+                          className="elevation-1 border-0 bg-background"
                         />
                       </div>
 
