@@ -737,7 +737,7 @@ export default function QuoteToOrderPage() {
                         <Input
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
-                          className="border-accent/30 bg-white/50 focus:border-accent focus:ring-accent dark:bg-slate-900/50"
+                          className="elevation-1 border-0 bg-background"
                         />
                       </div>
 
