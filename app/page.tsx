@@ -690,7 +690,6 @@ export default function QuoteToOrderPage() {
                                     handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
-                                initialFocus
                               />
                             </PopoverContent>
                           </Popover>
@@ -731,7 +730,6 @@ export default function QuoteToOrderPage() {
                                     handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
-                                initialFocus
                               />
                             </PopoverContent>
                           </Popover>
