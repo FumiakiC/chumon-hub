@@ -15,6 +15,22 @@ import { Calendar } from "@/components/ui/calendar"
 import { format, parse, isValid } from "date-fns"
 import { ja } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { z } from "zod"
+
+// APIレスポンスの各アイテムの検証スキーマ
+const ExtractedItemSchema = z.object({
+  productName: z.string(),
+  quantity: z.number(),
+  unitPrice: z.number(),
+  amount: z.number(),
+  description: z.string().optional(),
+})
+
+// スキーマから型を自動生成
+type ExtractedItem = z.infer<typeof ExtractedItemSchema>
+
+// 配列用のスキーマ
+const ExtractedItemsSchema = z.array(ExtractedItemSchema)
 
 interface ProductItem {
   id: string
@@ -282,8 +298,17 @@ export default function QuoteToOrderPage() {
       // APIレスポンスから直接 items を取得
       const extracted = result
 
-      // items 配列をマップして ProductItem[] に変換
-      const mappedItems: ProductItem[] = (extracted.items || []).map((item: any) => ({
+      // Zodスキーマでランタイム検証
+      const parseResult = ExtractedItemsSchema.safeParse(extracted.items ?? [])
+
+      if (!parseResult.success) {
+        console.error("[v0] Validation failed:", parseResult.error)
+        throw new Error("データの形式が不正です")
+      }
+
+      const items = parseResult.data // 型は ExtractedItem[] として保証される
+
+      const mappedItems: ProductItem[] = items.map((item) => ({
         id: crypto.randomUUID(),
         productName: item.productName ?? "",
         description: item.description ?? "",
