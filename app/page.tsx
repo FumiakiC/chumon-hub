@@ -135,22 +135,20 @@ export default function QuoteToOrderPage() {
   const processFile = (file: File) => {
     if (!file) return
 
+    // 既存のObject URLがあれば解放してメモリをリセット
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
+
     setSelectedFile(file)
     setError(null)
     setLogs([])
     setProcessingStatus("idle")
     setExtractedJson(null)
 
-    // Object URLを使用してメモリ効率的にプレビューを生成
+    // 新しいObject URLを生成
     const objectUrl = URL.createObjectURL(file)
     setPreviewUrl(objectUrl)
-
-    // 既存のObject URLがある場合は解放
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl)
-      }
-    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
