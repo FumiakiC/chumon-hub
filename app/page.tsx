@@ -7,20 +7,9 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Upload,
-  FileText,
-  CheckCircle2,
-  Brain,
-  FileImage,
-  X,
-  ShieldCheck,
-  Trash2,
-  Plus,
-  Copy,
-  Check,
-} from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check } from "lucide-react"
 import { useState, useRef } from "react"
+import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 
 interface ProductItem {
   id: string
@@ -486,129 +475,7 @@ export default function QuoteToOrderPage() {
                   )}
 
                   {(logs.length > 0 || processingStatus !== "idle") && (
-                    <div className="mt-8 flex justify-between px-4">
-                      <div className="flex flex-col items-center gap-2">
-                        <div
-                          className={`relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-500 shadow-lg ${
-                            processingStatus !== "idle"
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
-                              : "border-slate-200 bg-white text-slate-300"
-                          }`}
-                        >
-                          {processingStatus === "uploading" && (
-                            <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
-                          )}
-                          <Upload
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "uploading" ? "animate-bounce" : ""}`}
-                          />
-                        </div>
-                        <span
-                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${processingStatus !== "idle" ? "text-slate-800" : "text-slate-400"}`}
-                        >
-                          Upload
-                        </span>
-                      </div>
-
-                      <div
-                        className={`mt-7 h-1 flex-1 mx-4 rounded-full transition-all duration-700 ${
-                          ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
-                            ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-sm"
-                            : "bg-slate-100"
-                        }`}
-                      />
-
-                      <div className="flex flex-col items-center gap-2">
-                        <div
-                          className={`relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-500 shadow-lg ${
-                            processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌"))
-                              ? "border-red-500 bg-red-50 text-red-600 scale-110 shadow-red-200 animate-shake"
-                              : ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
-                                ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
-                                : "border-slate-200 bg-white text-slate-300"
-                          }`}
-                        >
-                          {processingStatus === "flash_check" && (
-                            <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
-                          )}
-                          {processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌")) ? (
-                            <X className="h-7 w-7 animate-pulse" />
-                          ) : (
-                            <ShieldCheck
-                              className={`h-7 w-7 transition-all duration-500 ${processingStatus === "flash_check" ? "animate-pulse scale-110" : ""}`}
-                            />
-                          )}
-                        </div>
-                        <span
-                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${
-                            processingStatus === "error" && logs.some((l) => l.message.includes("判定結果: ❌"))
-                              ? "text-red-600"
-                              : ["flash_check", "pro_extraction", "complete"].includes(processingStatus)
-                                ? "text-slate-800"
-                                : "text-slate-400"
-                          }`}
-                        >
-                          Flash判定
-                        </span>
-                      </div>
-
-                      <div
-                        className={`mt-7 h-1 flex-1 mx-4 rounded-full transition-all duration-700 ${
-                          ["pro_extraction", "complete"].includes(processingStatus)
-                            ? "bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-sm"
-                            : "bg-slate-100"
-                        }`}
-                      />
-
-                      <div className="flex flex-col items-center gap-2">
-                        <div
-                          className={`relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-500 shadow-lg ${
-                            ["pro_extraction", "complete"].includes(processingStatus)
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
-                              : "border-slate-200 bg-white text-slate-300"
-                          }`}
-                        >
-                          {processingStatus === "pro_extraction" && (
-                            <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-30" />
-                          )}
-                          <Brain
-                            className={`h-7 w-7 transition-all duration-500 ${processingStatus === "pro_extraction" ? "animate-pulse" : ""}`}
-                          />
-                        </div>
-                        <span
-                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${["pro_extraction", "complete"].includes(processingStatus) ? "text-slate-800" : "text-slate-400"}`}
-                        >
-                          {"Flash抽出"}
-                        </span>
-                      </div>
-
-                      <div
-                        className={`mt-7 h-1 flex-1 mx-4 rounded-full transition-all duration-700 ${
-                          processingStatus === "complete"
-                            ? "bg-gradient-to-r from-emerald-400 to-blue-500 shadow-sm"
-                            : "bg-slate-100"
-                        }`}
-                      />
-
-                      <div className="flex flex-col items-center gap-2">
-                        <div
-                          className={`relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all duration-500 shadow-lg ${
-                            processingStatus === "complete"
-                              ? "border-blue-500 bg-blue-50 text-blue-600 scale-125 shadow-blue-200"
-                              : "border-slate-200 bg-white text-slate-300"
-                          }`}
-                        >
-                          {processingStatus === "complete" && (
-                            <div className="absolute inset-0 animate-ping rounded-full bg-blue-200 opacity-20" />
-                          )}
-                          <CheckCircle2 className={`h-7 w-7 transition-all duration-500`} />
-                        </div>
-                        <span
-                          className={`text-sm font-bold tracking-wide transition-colors duration-300 ${processingStatus === "complete" ? "text-blue-600" : "text-slate-400"}`}
-                        >
-                          完了
-                        </span>
-                      </div>
-                    </div>
+                    <ProcessingStepper status={processingStatus} logs={logs} />
                   )}
                 </Card>
 
@@ -646,20 +513,20 @@ export default function QuoteToOrderPage() {
                   <Button
                     onClick={() => {
                       if (!navigator.clipboard || !extractedJson) {
-                        console.error("[v0] Clipboard API not available or no JSON to copy.");
-                        return;
+                        console.error("[v0] Clipboard API not available or no JSON to copy.")
+                        return
                       }
-                      const jsonString = JSON.stringify(extractedJson, null, 2);
+                      const jsonString = JSON.stringify(extractedJson, null, 2)
                       navigator.clipboard
                         .writeText(jsonString)
                         .then(() => {
-                          console.log("[v0] JSON response copied to clipboard");
-                          setIsCopied(true);
-                          setTimeout(() => setIsCopied(false), 2000);
+                          console.log("[v0] JSON response copied to clipboard")
+                          setIsCopied(true)
+                          setTimeout(() => setIsCopied(false), 2000)
                         })
                         .catch((err) => {
-                          console.error("[v0] Failed to copy:", err);
-                        });
+                          console.error("[v0] Failed to copy:", err)
+                        })
                     }}
                     variant="outline"
                     size="sm"
