@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check } from "lucide-react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 
 interface ProductItem {
@@ -132,23 +132,32 @@ export default function QuoteToOrderPage() {
     return total.toLocaleString("ja-JP")
   }
 
+  // Object URLのライフサイクル管理（自動生成・破棄）
+  useEffect(() => {
+    if (!selectedFile) {
+      // ファイルなしの場合：previewUrlをクリア
+      setPreviewUrl(null)
+      return
+    }
+
+    // 新しいObject URLを生成
+    const objectUrl = URL.createObjectURL(selectedFile)
+    setPreviewUrl(objectUrl)
+
+    // クリーンアップ：コンポーネントアンマウント時やSelectedFileが変更されたときに実行
+    return () => {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }, [selectedFile])
+
   const processFile = (file: File) => {
     if (!file) return
-
-    // 既存のObject URLがあれば解放してメモリをリセット
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl)
-    }
 
     setSelectedFile(file)
     setError(null)
     setLogs([])
     setProcessingStatus("idle")
     setExtractedJson(null)
-
-    // 新しいObject URLを生成
-    const objectUrl = URL.createObjectURL(file)
-    setPreviewUrl(objectUrl)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,12 +178,7 @@ export default function QuoteToOrderPage() {
   }
 
   const handleRemoveFile = () => {
-    // Object URLのメモリを解放
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl)
-    }
     setSelectedFile(null)
-    setPreviewUrl(null)
     setError(null)
     setProcessingStatus("idle")
     setLogs([])
