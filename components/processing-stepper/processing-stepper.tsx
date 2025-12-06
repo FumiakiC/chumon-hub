@@ -2,8 +2,43 @@ import { Upload, ShieldCheck, Brain, CheckCircle2, X } from "lucide-react"
 import type { LogEntry } from "@/types/logEntry"
 import { StepItem } from "./step-item"
 import { ProgressBar } from "./progress-bar"
+import type { LucideIcon } from "lucide-react"
 
-type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
+export type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
+
+const STEP_ORDER: ProcessingStatus[] = ["uploading", "flash_check", "pro_extraction", "complete"]
+
+interface StepConfig {
+  id: ProcessingStatus
+  icon: LucideIcon
+  label: string
+  completedColorClass?: "blue"
+  progressVariant?: "complete"
+}
+
+const STEP_CONFIGS: StepConfig[] = [
+  { id: "uploading", icon: Upload, label: "Upload" },
+  { id: "flash_check", icon: ShieldCheck, label: "Flash判定" },
+  { id: "pro_extraction", icon: Brain, label: "Flash抽出" },
+  { id: "complete", icon: CheckCircle2, label: "完了", completedColorClass: "blue", progressVariant: "complete" },
+]
+
+function getStepIndex(status: ProcessingStatus): number {
+  if (status === "idle") return -1
+  if (status === "error") return -1 // エラー時は別途ハンドリング
+  return STEP_ORDER.indexOf(status)
+}
+
+function getStepState(stepId: ProcessingStatus, currentStatus: ProcessingStatus) {
+  const stepIndex = STEP_ORDER.indexOf(stepId)
+  const currentIndex = getStepIndex(currentStatus)
+
+  return {
+    isCompleted: currentIndex >= stepIndex,
+    isCurrentStep: currentStatus === stepId,
+    isActive: currentIndex >= stepIndex,
+  }
+}
 
 interface ProcessingStepperProps {
   status: ProcessingStatus
@@ -14,66 +49,40 @@ export function ProcessingStepper({ status, logs }: ProcessingStepperProps) {
   // Flash判定エラーかどうかを判定
   const isFlashCheckError = status === "error" && logs.some((l) => l.message.includes("判定結果: ❌"))
 
-  // 各ステップのアクティブ/完了状態を計算
-  const isUploadActive = status !== "idle"
-  const isUploadCurrent = status === "uploading"
-
-  const isFlashCheckCompleted = ["flash_check", "pro_extraction", "complete"].includes(status)
-  const isFlashCheckCurrent = status === "flash_check"
-
-  const isProExtractionCompleted = ["pro_extraction", "complete"].includes(status)
-  const isProExtractionCurrent = status === "pro_extraction"
-
-  const isComplete = status === "complete"
+  // エラー時は flash_check のインデックスまで進んだとみなす
+  const effectiveStatus = isFlashCheckError ? "flash_check" : status
 
   return (
     <div className="mt-8 flex justify-between px-4">
-      {/* Step 1: Upload */}
-      <StepItem
-        icon={Upload}
-        label="Upload"
-        isActive={isUploadActive}
-        isCompleted={isUploadActive}
-        isCurrentStep={isUploadCurrent}
-      />
+      {STEP_CONFIGS.map((step, index) => {
+        const state = getStepState(step.id, effectiveStatus)
+        const isFlashCheckStep = step.id === "flash_check"
 
-      {/* Progress Bar 1 */}
-      <ProgressBar isActive={isFlashCheckCompleted} />
+        // Flash判定ステップでエラーの場合はXアイコンに差し替え
+        const icon = isFlashCheckStep && isFlashCheckError ? X : step.icon
 
-      {/* Step 2: Flash判定 */}
-      <StepItem
-        icon={isFlashCheckError ? X : ShieldCheck}
-        label="Flash判定"
-        isActive={isFlashCheckCompleted}
-        isCompleted={isFlashCheckCompleted}
-        isError={isFlashCheckError}
-        isCurrentStep={isFlashCheckCurrent}
-      />
+        return (
+          <div key={step.id} className="contents">
+            <StepItem
+              icon={icon}
+              label={step.label}
+              isActive={state.isActive}
+              isCompleted={state.isCompleted}
+              isError={isFlashCheckStep && isFlashCheckError}
+              isCurrentStep={state.isCurrentStep}
+              completedColorClass={step.completedColorClass}
+            />
 
-      {/* Progress Bar 2 */}
-      <ProgressBar isActive={isProExtractionCompleted} />
-
-      {/* Step 3: Flash抽出 */}
-      <StepItem
-        icon={Brain}
-        label="Flash抽出"
-        isActive={isProExtractionCompleted}
-        isCompleted={isProExtractionCompleted}
-        isCurrentStep={isProExtractionCurrent}
-      />
-
-      {/* Progress Bar 3 */}
-      <ProgressBar isActive={isComplete} variant="complete" />
-
-      {/* Step 4: 完了 */}
-      <StepItem
-        icon={CheckCircle2}
-        label="完了"
-        isActive={isComplete}
-        isCompleted={isComplete}
-        isCurrentStep={isComplete}
-        completedColorClass="blue"
-      />
+            {/* 最後のステップ以外にはプログレスバーを表示 */}
+            {index < STEP_CONFIGS.length - 1 && (
+              <ProgressBar
+                isActive={getStepState(STEP_CONFIGS[index + 1].id, effectiveStatus).isActive}
+                variant={STEP_CONFIGS[index + 1].progressVariant}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

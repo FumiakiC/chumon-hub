@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check } from "lucide-react"
 import { useState, useRef } from "react"
-import { ProcessingStepper } from "@/components/processing-stepper"
+import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 
 interface ProductItem {
   id: string
