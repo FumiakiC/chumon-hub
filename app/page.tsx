@@ -143,20 +143,31 @@ export default function QuoteToOrderPage() {
     return total.toLocaleString("ja-JP")
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      setError(null)
-      setLogs([]) // Clear logs on new file
-      setProcessingStatus("idle")
+  const processFile = (file: File) => {
+    if (!file) return
 
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string)
+    setSelectedFile(file)
+    setError(null)
+    setLogs([])
+    setProcessingStatus("idle")
+    setExtractedJson(null)
+
+    // Object URLを使用してメモリ効率的にプレビューを生成
+    const objectUrl = URL.createObjectURL(file)
+    setPreviewUrl(objectUrl)
+
+    // 既存のObject URLがある場合は解放
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
       }
-      reader.readAsDataURL(file)
     }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    processFile(file)
   }
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -166,21 +177,15 @@ export default function QuoteToOrderPage() {
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     const file = event.dataTransfer.files[0]
-    if (file) {
-      setSelectedFile(file)
-      setError(null)
-      setLogs([]) // Clear logs on new file
-      setProcessingStatus("idle")
-
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
+    if (!file) return
+    processFile(file)
   }
 
   const handleRemoveFile = () => {
+    // Object URLのメモリを解放
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
     setSelectedFile(null)
     setPreviewUrl(null)
     setError(null)
