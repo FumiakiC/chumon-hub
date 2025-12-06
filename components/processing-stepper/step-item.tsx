@@ -1,5 +1,20 @@
 import type { LucideIcon } from "lucide-react"
 
+const colorThemes = {
+  emerald: {
+    container: "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200",
+    label: "text-slate-800",
+    ping: "bg-emerald-200 opacity-30",
+  },
+  blue: {
+    container: "border-blue-500 bg-blue-50 text-blue-600 scale-125 shadow-blue-200",
+    label: "text-blue-600",
+    ping: "bg-blue-200 opacity-20",
+  },
+} as const
+
+type ColorTheme = keyof typeof colorThemes
+
 interface StepItemProps {
   icon: LucideIcon
   label: string
@@ -7,7 +22,7 @@ interface StepItemProps {
   isCompleted: boolean
   isError?: boolean
   isCurrentStep?: boolean
-  completedColorClass?: string // カスタム完了時の色クラス (例: "blue" for complete step)
+  completedColorClass?: ColorTheme
 }
 
 export function StepItem({
@@ -19,16 +34,15 @@ export function StepItem({
   isCurrentStep = false,
   completedColorClass = "emerald",
 }: StepItemProps) {
+  const theme = colorThemes[completedColorClass]
+
   // スタイル決定ロジック
   const getContainerClasses = () => {
     if (isError) {
       return "border-red-500 bg-red-50 text-red-600 scale-110 shadow-red-200 animate-shake"
     }
     if (isCompleted || isActive) {
-      if (completedColorClass === "blue") {
-        return "border-blue-500 bg-blue-50 text-blue-600 scale-125 shadow-blue-200"
-      }
-      return "border-emerald-500 bg-emerald-50 text-emerald-600 scale-110 shadow-emerald-200"
+      return theme.container
     }
     return "border-slate-200 bg-white text-slate-300"
   }
@@ -38,10 +52,7 @@ export function StepItem({
       return "text-red-600"
     }
     if (isCompleted || isActive) {
-      if (completedColorClass === "blue") {
-        return "text-blue-600"
-      }
-      return "text-slate-800"
+      return theme.label
     }
     return "text-slate-400"
   }
@@ -56,12 +67,7 @@ export function StepItem({
     return ""
   }
 
-  const getPingClasses = () => {
-    if (completedColorClass === "blue") {
-      return "bg-blue-200 opacity-20"
-    }
-    return "bg-emerald-200 opacity-30"
-  }
+  const getPingClasses = () => theme.ping
 
   return (
     <div className="flex flex-col items-center gap-2">
