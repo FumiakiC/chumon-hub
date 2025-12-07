@@ -12,7 +12,7 @@ export default function NotFound() {
         poster="/404-poster.jpg"
         className="absolute inset-0 z-[-1] h-full w-full object-cover opacity-60"
       >
-        <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/404-2oiLuy60VqC4Ao8XrO4YvI9zJzcdE5.webm" type="video/webm" />
+        <source src="/404-bg.webm" type="video/webm" />
       </video>
 
       {/* Dark Overlay */}
@@ -25,11 +25,11 @@ export default function NotFound() {
         </h1>
 
         <h2 className="mt-4 text-2xl font-semibold tracking-wide text-white/90 sm:text-3xl md:text-4xl">
-          Lost in the Void
+          虚空への現実逃避
         </h2>
 
-        <p className="mt-4 max-w-md text-base text-white/70 sm:text-lg">
-          The page you are looking for has drifted away.
+        <p className="mt-4 w-full text-base text-white/70 sm:text-lg font-semibold">
+          お探しのページは「自分探しの旅に出たい」と言い残し、どこかへ流れていきました。
         </p>
 
         <Link
