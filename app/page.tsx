@@ -73,7 +73,6 @@ export default function QuoteToOrderPage() {
   const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const [isItemsEditing, setIsItemsEditing] = useState(false)
-  const [isSwitchChecked, setIsSwitchChecked] = useState(false) // Add state for switch
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -584,7 +583,7 @@ export default function QuoteToOrderPage() {
                           <Switch id="items-edit-mode" checked={isItemsEditing} onCheckedChange={setIsItemsEditing} />
                           <Label
                             htmlFor="items-edit-mode"
-                            className="text-sm text-muted-foreground cursor-pointer w-24"
+                            className="text-sm text-muted-foreground cursor-pointer w-24 text-right inline-block"
                           >
                             {isItemsEditing ? "編集モード" : "ロック中"}
                           </Label>
@@ -862,16 +861,6 @@ export default function QuoteToOrderPage() {
                           />
                         </div>
                       </div>
-                    </div>
-                  </Card>
-
-                  {/* Add switch component */}
-                  <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="rounded-full bg-secondary/10 p-2">
-                        <Switch checked={isSwitchChecked} onCheckedChange={setIsSwitchChecked} className="h-5 w-5" />
-                      </div>
-                      <Label className="text-xl font-bold text-foreground">Switch Example</Label>
                     </div>
                   </Card>
                 </div>
