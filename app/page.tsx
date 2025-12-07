@@ -1,358 +1,153 @@
 "use client"
 
 import type React from "react"
-import type { LogEntry } from "@/types/logEntry" // Import LogEntry type
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
-import { useState, useRef, useEffect } from "react"
+import { useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { format, parse, isValid } from "date-fns"
 import { ja } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { useOrderProcessing } from "@/hooks/use-order-processing"
+import { useForm, useFieldArray, useWatch } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 
-// APIレスポンスの各アイテムの検証スキーマ
-const ExtractedItemSchema = z.object({
-  productName: z.string(),
-  quantity: z.number(),
-  unitPrice: z.number(),
-  amount: z.number(),
-  description: z.string().optional(),
+// Zodスキーマ定義
+const productItemSchema = z.object({
+  productName: z.string().default(""),
+  description: z.string().default(""),
+  quantity: z.number().default(0),
+  unitPrice: z.number().default(0),
+  amount: z.number().default(0),
 })
 
-// スキーマから型を自動生成
-type ExtractedItem = z.infer<typeof ExtractedItemSchema>
+const orderFormSchema = z.object({
+  orderNo: z.string().default(""),
+  quoteNo: z.string().default(""),
+  items: z.array(productItemSchema).min(1),
+  desiredDeliveryDate: z.string().default(""),
+  requestedDeliveryDate: z.string().default(""),
+  paymentTerms: z.string().default(""),
+  deliveryLocation: z.string().default(""),
+  inspectionDeadline: z.string().default(""),
+  recipientCompany: z.string().default(""),
+  issuerCompany: z.string().default(""),
+  issuerAddress: z.string().default(""),
+  phone: z.string().default(""),
+  fax: z.string().default(""),
+  manager: z.string().default(""),
+  approver: z.string().default(""),
+})
 
-// 配列用のスキーマ
-const ExtractedItemsSchema = z.array(ExtractedItemSchema)
-
-// ユーティリティ関数: カンマや全角数字を正しく処理して数値に変換
-const safeParseFloat = (value: string): number => {
-  // カンマをすべて削除
-  let cleaned = value.replace(/,/g, "")
-  
-  // 全角数字（０-９）を半角数字に変換
-  cleaned = cleaned.replace(/[０-９]/g, (char) => {
-    return String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
-  })
-  
-  // Number.parseFloatで変換
-  const parsed = Number.parseFloat(cleaned)
-  
-  // NaNの場合は0を返す
-  return isNaN(parsed) ? 0 : parsed
-}
-
-interface ProductItem {
-  id: string
-  productName: string
-  description: string
-  quantity: string
-  unitPrice: string
-  amount: string
-}
-
-interface OrderFormData {
-  orderNo: string
-  quoteNo: string
-  items: ProductItem[]
-  desiredDeliveryDate: string
-  requestedDeliveryDate: string
-  paymentTerms: string
-  deliveryLocation: string
-  inspectionDeadline: string
-  recipientCompany: string
-  issuerCompany: string
-  issuerAddress: string
-  phone: string
-  fax: string
-  manager: string
-  approver: string
-}
-
-type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
+type OrderFormData = z.infer<typeof orderFormSchema>
 
 export default function QuoteToOrderPage() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
-  const [isCopied, setIsCopied] = useState(false)
+  // カスタムフックからファイル処理とAPI通信のロジックを取得
+  const {
+    selectedFile,
+    previewUrl,
+    isLoading,
+    error,
+    processingStatus,
+    logs,
+    isCopied,
+    setIsCopied,
+    handleFileChange,
+    handleDragOver,
+    handleDrop,
+    handleRemoveFile,
+    handleTranscription,
+  } = useOrderProcessing()
 
-  const [formData, setFormData] = useState<OrderFormData>({
-    orderNo: "",
-    quoteNo: "",
-    items: [
-      {
-        id: crypto.randomUUID(),
-        productName: "",
-        description: "",
-        quantity: "",
-        unitPrice: "",
-        amount: "",
-      },
-    ],
-    desiredDeliveryDate: "",
-    requestedDeliveryDate: "",
-    paymentTerms: "",
-    deliveryLocation: "",
-    inspectionDeadline: "",
-    recipientCompany: "",
-    issuerCompany: "",
-    issuerAddress: "",
-    phone: "",
-    fax: "",
-    manager: "",
-    approver: "",
-  })
-
-  const handleFormChange = (field: keyof OrderFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleItemChange = (id: string, field: keyof ProductItem, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.map((item) => {
-        if (item.id === id) {
-          const updatedItem = { ...item, [field]: value }
-
-          if (field === "quantity" || field === "unitPrice") {
-            const qty = safeParseFloat(field === "quantity" ? value : updatedItem.quantity)
-            const price = safeParseFloat(field === "unitPrice" ? value : updatedItem.unitPrice)
-            updatedItem.amount = (qty * price).toString()
-          }
-
-          return updatedItem
-        }
-        return item
-      }),
-    }))
-  }
-
-  const addItem = () => {
-    setFormData((prev) => ({
-      ...prev,
+  // react-hook-formのセットアップ
+  const {
+    register,
+    control,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<OrderFormData>({
+    resolver: zodResolver(orderFormSchema),
+    defaultValues: {
+      orderNo: "",
+      quoteNo: "",
       items: [
-        ...prev.items,
         {
-          id: crypto.randomUUID(),
           productName: "",
           description: "",
-          quantity: "",
-          unitPrice: "",
-          amount: "",
+          quantity: 0,
+          unitPrice: 0,
+          amount: 0,
         },
       ],
-    }))
-  }
+      desiredDeliveryDate: "",
+      requestedDeliveryDate: "",
+      paymentTerms: "",
+      deliveryLocation: "",
+      inspectionDeadline: "",
+      recipientCompany: "",
+      issuerCompany: "",
+      issuerAddress: "",
+      phone: "",
+      fax: "",
+      manager: "",
+      approver: "",
+    },
+  })
 
-  const removeItem = (id: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.filter((item) => item.id !== id),
-    }))
-  }
+  // 動的フィールド配列の管理
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "items",
+  })
 
+  // フォーム全体の値を監視
+  const formValues = useWatch({ control })
+
+  // 各アイテムの quantity と unitPrice を監視し、amount を自動計算
+  useEffect(() => {
+    fields.forEach((field, index) => {
+      const quantity = formValues.items?.[index]?.quantity ?? 0
+      const unitPrice = formValues.items?.[index]?.unitPrice ?? 0
+      const calculatedAmount = quantity * unitPrice
+      
+      // 現在の amount と計算結果が異なる場合のみ更新
+      if (formValues.items?.[index]?.amount !== calculatedAmount) {
+        setValue(`items.${index}.amount`, calculatedAmount, { shouldValidate: false })
+      }
+    })
+  }, [formValues.items, fields, setValue])
+
+  // 合計金額の計算（useWatchでリアルタイム算出）
+  const watchedItems = useWatch({ control, name: "items" })
   const calculateTotal = () => {
-    const total = formData.items.reduce((sum, item) => {
-      return sum + safeParseFloat(item.amount)
+    const total = (watchedItems ?? []).reduce((sum, item) => {
+      return sum + (item?.amount ?? 0)
     }, 0)
     return total.toLocaleString("ja-JP")
   }
 
-  // Object URLのライフサイクル管理（自動生成・破棄）
-  useEffect(() => {
-    if (!selectedFile) {
-      // ファイルなしの場合：previewUrlをクリア
-      setPreviewUrl(null)
-      return
-    }
-
-    // 新しいObject URLを生成
-    const objectUrl = URL.createObjectURL(selectedFile)
-    setPreviewUrl(objectUrl)
-
-    // クリーンアップ：コンポーネントアンマウント時やSelectedFileが変更されたときに実行
-    return () => {
-      URL.revokeObjectURL(objectUrl)
-    }
-  }, [selectedFile])
-
-  const processFile = (file: File) => {
-    if (!file) return
-
-    setSelectedFile(file)
-    setError(null)
-    setLogs([])
-    setProcessingStatus("idle")
-    setExtractedJson(null)
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    processFile(file)
-  }
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-  }
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    const file = event.dataTransfer.files[0]
-    if (!file) return
-    processFile(file)
-  }
-
-  const handleRemoveFile = () => {
-    setSelectedFile(null)
-    setError(null)
-    setProcessingStatus("idle")
-    setLogs([])
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  const addLog = (message: string, type: "info" | "success" | "error" = "info") => {
-    const now = new Date()
-    const timeString = now.toLocaleTimeString("ja-JP", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+  const addItem = () => {
+    append({
+      productName: "",
+      description: "",
+      quantity: 0,
+      unitPrice: 0,
+      amount: 0,
     })
-    setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
   }
 
-  const handleTranscription = async () => {
-    if (!selectedFile) {
-      setError("ファイルを選択してください")
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-    setLogs([])
-
-    setProcessingStatus("uploading")
-    addLog("ファイルアップロードを開始...", "info")
-
-    try {
-      const formData = new FormData()
-      formData.append("file", selectedFile)
-      formData.append("mimeType", selectedFile.type)
-
-      await new Promise((r) => setTimeout(r, 800))
-      addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
-
-      setProcessingStatus("flash_check")
-      addLog("Gemini 2.5 Flash-lite で書類タイプを判定中...", "info")
-
-      const checkResponse = await fetch("/api/check-document-type", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!checkResponse.ok) throw new Error("判定APIエラー")
-      const checkResult = await checkResponse.json()
-
-      if (!checkResult.isQuotation) {
-        addLog(`判定結果: ❌ 見積書・発注書ではありません (${checkResult.documentType})。処理を中断します。`, "error")
-        addLog(`理由: ${checkResult.reason}`, "error")
-        setProcessingStatus("error")
-        setIsLoading(false)
-        return
-      }
-
-      addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
-
-      setProcessingStatus("pro_extraction")
-      addLog("Gemini 2.5 Flash で詳細データを抽出中...", "info")
-
-      const response = await fetch("/api/extract-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fileId: checkResult.fileId, // Use cached file
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("APIリクエストが失敗しました")
-      }
-
-      const result = await response.json()
-
-      if (result.error) {
-        throw new Error(result.error)
-      }
-
-      // Store the raw JSON response for copy functionality
-      setExtractedJson(result)
-
-      // APIレスポンスから直接 items を取得
-      const extracted = result
-
-      // Zodスキーマでランタイム検証
-      const parseResult = ExtractedItemsSchema.safeParse(extracted.items ?? [])
-
-      if (!parseResult.success) {
-        console.error("[v0] Validation failed:", parseResult.error)
-        throw new Error("データの形式が不正です")
-      }
-
-      const items = parseResult.data // 型は ExtractedItem[] として保証される
-
-      const mappedItems: ProductItem[] = items.map((item) => ({
-        id: crypto.randomUUID(),
-        productName: item.productName ?? "",
-        description: item.description ?? "",
-        quantity: (item.quantity ?? 0).toString(),
-        unitPrice: (item.unitPrice ?? 0).toString(),
-        amount: (item.amount ?? 0).toString(),
-      }))
-
-      // merge into existing formData to avoid replacing structure
-      setFormData((prev) => ({
-        ...prev,
-        orderNo: extracted.orderNo ?? prev.orderNo,
-        quoteNo: extracted.quoteNo ?? prev.quoteNo,
-        recipientCompany: extracted.recipientCompany ?? prev.recipientCompany,
-        issuerCompany: extracted.issuerCompany ?? prev.issuerCompany,
-        issuerAddress: extracted.issuerAddress ?? prev.issuerAddress,
-        manager: extracted.manager ?? prev.manager,
-        approver: extracted.approver ?? prev.approver,
-        desiredDeliveryDate: extracted.desiredDeliveryDate ?? prev.desiredDeliveryDate,
-        requestedDeliveryDate: extracted.requestedDeliveryDate ?? prev.requestedDeliveryDate,
-        paymentTerms: extracted.paymentTerms ?? prev.paymentTerms,
-        deliveryLocation: extracted.deliveryLocation ?? prev.deliveryLocation,
-        inspectionDeadline: extracted.inspectionDeadline ?? prev.inspectionDeadline,
-        phone: extracted.phone ?? prev.phone,
-        fax: extracted.fax ?? prev.fax,
-        items: mappedItems.length > 0 ? mappedItems : prev.items,
-      }))
-
-      setProcessingStatus("complete")
-      addLog("データ抽出完了。JSONパース成功。", "success")
-    } catch (err) {
-      console.error("[v0] Extraction error:", err)
-      setProcessingStatus("error")
-      addLog("エラーが発生しました", "error")
-      setError(err instanceof Error ? err.message : "データの抽出に失敗しました")
-    } finally {
-      setIsLoading(false)
+  const removeItem = (index: number) => {
+    if (fields.length > 1) {
+      remove(index)
     }
   }
 
@@ -426,7 +221,42 @@ export default function QuoteToOrderPage() {
 
                       {processingStatus === "idle" && (
                         <Button
-                          onClick={handleTranscription}
+                          onClick={() =>
+                            handleTranscription((extracted) => {
+                              // react-hook-formのresetを使用してフォーム全体に値を流し込む
+                              reset({
+                                orderNo: extracted.orderNo ?? "",
+                                quoteNo: extracted.quoteNo ?? "",
+                                recipientCompany: extracted.recipientCompany ?? "",
+                                issuerCompany: extracted.issuerCompany ?? "",
+                                issuerAddress: extracted.issuerAddress ?? "",
+                                manager: extracted.manager ?? "",
+                                approver: extracted.approver ?? "",
+                                desiredDeliveryDate: extracted.desiredDeliveryDate ?? "",
+                                requestedDeliveryDate: extracted.requestedDeliveryDate ?? "",
+                                paymentTerms: extracted.paymentTerms ?? "",
+                                deliveryLocation: extracted.deliveryLocation ?? "",
+                                inspectionDeadline: extracted.inspectionDeadline ?? "",
+                                phone: extracted.phone ?? "",
+                                fax: extracted.fax ?? "",
+                                items: extracted.items.length > 0 
+                                  ? extracted.items.map(item => ({
+                                      productName: item.productName,
+                                      description: item.description,
+                                      quantity: Number(item.quantity) || 0,
+                                      unitPrice: Number(item.unitPrice) || 0,
+                                      amount: Number(item.amount) || 0,
+                                    }))
+                                  : [{
+                                      productName: "",
+                                      description: "",
+                                      quantity: 0,
+                                      unitPrice: 0,
+                                      amount: 0,
+                                    }],
+                              })
+                            })
+                          }
                           className="w-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
                         >
                           読み取り開始
@@ -506,7 +336,8 @@ export default function QuoteToOrderPage() {
                         console.error("[v0] Clipboard API not available.")
                         return
                       }
-                      const jsonString = JSON.stringify(formData, null, 2)
+                      const currentValues = watch()
+                      const jsonString = JSON.stringify(currentValues, null, 2)
                       navigator.clipboard
                         .writeText(jsonString)
                         .then(() => {
@@ -521,7 +352,7 @@ export default function QuoteToOrderPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    disabled={!formData.orderNo && !formData.items.some(item => item.productName)}
+                    disabled={!watch("orderNo") && !watch("items")?.some(item => item?.productName)}
                   >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
@@ -539,16 +370,14 @@ export default function QuoteToOrderPage() {
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">注 No</label>
                         <Input
-                          value={formData.orderNo}
-                          onChange={(e) => handleFormChange("orderNo", e.target.value)}
+                          {...register("orderNo")}
                           className="elevation-1 border-0 bg-background font-mono"
                         />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">見積書 No.</label>
                         <Input
-                          value={formData.quoteNo}
-                          onChange={(e) => handleFormChange("quoteNo", e.target.value)}
+                          {...register("quoteNo")}
                           className="elevation-1 border-0 bg-background font-mono"
                         />
                       </div>
@@ -560,16 +389,14 @@ export default function QuoteToOrderPage() {
                           宛先（相手企業名）
                         </label>
                         <Input
-                          value={formData.recipientCompany}
-                          onChange={(e) => handleFormChange("recipientCompany", e.target.value)}
+                          {...register("recipientCompany")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">発注元（自社名）</label>
                         <Input
-                          value={formData.issuerCompany}
-                          onChange={(e) => handleFormChange("issuerCompany", e.target.value)}
+                          {...register("issuerCompany")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
@@ -595,13 +422,13 @@ export default function QuoteToOrderPage() {
                     <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
 
                     <div className="space-y-4">
-                      {(formData.items ?? []).map((item, index) => (
-                        <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
+                      {fields.map((field, index) => (
+                        <Card key={field.id} className="elevation-1 border border-border/50 bg-background p-4">
                           <div className="mb-3 flex items-center justify-between">
                             <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
-                            {formData.items.length > 1 && (
+                            {fields.length > 1 && (
                               <Button
-                                onClick={() => removeItem(item.id)}
+                                onClick={() => removeItem(index)}
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -616,8 +443,7 @@ export default function QuoteToOrderPage() {
                               <div>
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
                                 <Input
-                                  value={item.productName}
-                                  onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
+                                  {...register(`items.${index}.productName`)}
                                   placeholder="品目名を入力"
                                   className="elevation-1 border-0 bg-muted/30"
                                 />
@@ -626,8 +452,7 @@ export default function QuoteToOrderPage() {
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
                                 <Input
                                   type="number"
-                                  value={item.unitPrice}
-                                  onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
+                                  {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
                                   placeholder="0"
                                   className="elevation-1 border-0 bg-muted/30 font-mono"
                                 />
@@ -636,8 +461,7 @@ export default function QuoteToOrderPage() {
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
                                 <Input
                                   type="number"
-                                  value={item.quantity}
-                                  onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
+                                  {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                                   placeholder="1"
                                   className="elevation-1 border-0 bg-muted/30"
                                 />
@@ -645,7 +469,7 @@ export default function QuoteToOrderPage() {
                               <div>
                                 <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
                                 <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
-                                  ¥{(Number.parseFloat(item.amount) || 0).toLocaleString("ja-JP")}
+                                  ¥{((watchedItems?.[index]?.amount ?? 0) || 0).toLocaleString("ja-JP")}
                                 </div>
                               </div>
                             </div>
@@ -653,8 +477,7 @@ export default function QuoteToOrderPage() {
                             <div>
                               <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
                               <Textarea
-                                value={item.description}
-                                onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                                {...register(`items.${index}.description`)}
                                 className="elevation-1 border-0 bg-muted/30"
                                 rows={2}
                               />
@@ -688,14 +511,14 @@ export default function QuoteToOrderPage() {
                                 variant="outline"
                                 className={cn(
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
-                                  !formData.desiredDeliveryDate && "text-muted-foreground",
+                                  !watch("desiredDeliveryDate") && "text-muted-foreground",
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.desiredDeliveryDate &&
-                                isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                {watch("desiredDeliveryDate") &&
+                                isValid(parse(watch("desiredDeliveryDate"), "yyyyMMdd", new Date()))
                                   ? format(
-                                      parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()),
+                                      parse(watch("desiredDeliveryDate"), "yyyyMMdd", new Date()),
                                       "yyyy年MM月dd日",
                                       { locale: ja },
                                     )
@@ -706,14 +529,14 @@ export default function QuoteToOrderPage() {
                               <Calendar
                                 mode="single"
                                 selected={
-                                  formData.desiredDeliveryDate &&
-                                  isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
-                                    ? parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date())
+                                  watch("desiredDeliveryDate") &&
+                                  isValid(parse(watch("desiredDeliveryDate"), "yyyyMMdd", new Date()))
+                                    ? parse(watch("desiredDeliveryDate"), "yyyyMMdd", new Date())
                                     : undefined
                                 }
                                 onSelect={(date) => {
                                   if (date) {
-                                    handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
+                                    setValue("desiredDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
                                 locale={ja}
@@ -729,14 +552,14 @@ export default function QuoteToOrderPage() {
                                 variant="outline"
                                 className={cn(
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
-                                  !formData.requestedDeliveryDate && "text-muted-foreground",
+                                  !watch("requestedDeliveryDate") && "text-muted-foreground",
                                 )}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.requestedDeliveryDate &&
-                                isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                {watch("requestedDeliveryDate") &&
+                                isValid(parse(watch("requestedDeliveryDate"), "yyyyMMdd", new Date()))
                                   ? format(
-                                      parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()),
+                                      parse(watch("requestedDeliveryDate"), "yyyyMMdd", new Date()),
                                       "yyyy年MM月dd日",
                                       { locale: ja },
                                     )
@@ -747,14 +570,14 @@ export default function QuoteToOrderPage() {
                               <Calendar
                                 mode="single"
                                 selected={
-                                  formData.requestedDeliveryDate &&
-                                  isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
-                                    ? parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date())
+                                  watch("requestedDeliveryDate") &&
+                                  isValid(parse(watch("requestedDeliveryDate"), "yyyyMMdd", new Date()))
+                                    ? parse(watch("requestedDeliveryDate"), "yyyyMMdd", new Date())
                                     : undefined
                                 }
                                 onSelect={(date) => {
                                   if (date) {
-                                    handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
+                                    setValue("requestedDeliveryDate", format(date, "yyyyMMdd"))
                                   }
                                 }}
                                 locale={ja}
@@ -767,8 +590,7 @@ export default function QuoteToOrderPage() {
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">支払条件</label>
                         <Input
-                          value={formData.paymentTerms}
-                          onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
+                          {...register("paymentTerms")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
@@ -776,8 +598,7 @@ export default function QuoteToOrderPage() {
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">受渡場所</label>
                         <Input
-                          value={formData.deliveryLocation}
-                          onChange={(e) => handleFormChange("deliveryLocation", e.target.value)}
+                          {...register("deliveryLocation")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
@@ -785,8 +606,7 @@ export default function QuoteToOrderPage() {
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
                         <Input
-                          value={formData.inspectionDeadline}
-                          onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
+                          {...register("inspectionDeadline")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
@@ -804,16 +624,14 @@ export default function QuoteToOrderPage() {
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">担当</label>
                           <Input
-                            value={formData.manager}
-                            onChange={(e) => handleFormChange("manager", e.target.value)}
+                            {...register("manager")}
                             className="elevation-1 border-0 bg-background"
                           />
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">承認</label>
                           <Input
-                            value={formData.approver}
-                            onChange={(e) => handleFormChange("approver", e.target.value)}
+                            {...register("approver")}
                             className="elevation-1 border-0 bg-background"
                             placeholder="（空欄）"
                           />
@@ -823,8 +641,7 @@ export default function QuoteToOrderPage() {
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">自社住所</label>
                         <Input
-                          value={formData.issuerAddress}
-                          onChange={(e) => handleFormChange("issuerAddress", e.target.value)}
+                          {...register("issuerAddress")}
                           className="elevation-1 border-0 bg-background"
                         />
                       </div>
@@ -833,16 +650,14 @@ export default function QuoteToOrderPage() {
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">電話</label>
                           <Input
-                            value={formData.phone}
-                            onChange={(e) => handleFormChange("phone", e.target.value)}
+                            {...register("phone")}
                             className="elevation-1 border-0 bg-background font-mono"
                           />
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">FAX</label>
                           <Input
-                            value={formData.fax}
-                            onChange={(e) => handleFormChange("fax", e.target.value)}
+                            {...register("fax")}
                             className="elevation-1 border-0 bg-background font-mono"
                           />
                         </div>
