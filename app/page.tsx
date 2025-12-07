@@ -574,12 +574,12 @@ export default function QuoteToOrderPage() {
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex items-start justify-between">
                       <h3 className="flex items-center gap-2 font-semibold text-secondary">
                         <div className="h-1 w-1 rounded-full bg-secondary" />
                         品目一覧
                       </h3>
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-col items-end gap-2">
                         <div className="flex items-center gap-2">
                           <Switch id="items-edit-mode" checked={isItemsEditing} onCheckedChange={setIsItemsEditing} />
                           <Label htmlFor="items-edit-mode" className="text-sm text-muted-foreground cursor-pointer">
