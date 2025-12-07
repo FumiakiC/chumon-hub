@@ -239,21 +239,27 @@ export default function QuoteToOrderPage() {
                                 inspectionDeadline: extracted.inspectionDeadline ?? "",
                                 phone: extracted.phone ?? "",
                                 fax: extracted.fax ?? "",
-                                items: extracted.items.length > 0 
-                                  ? extracted.items.map(item => ({
-                                      productName: item.productName,
-                                      description: item.description,
-                                      quantity: Number(item.quantity) || 0,
-                                      unitPrice: Number(item.unitPrice) || 0,
-                                      amount: Number(item.amount) || 0,
-                                    }))
-                                  : [{
-                                      productName: "",
-                                      description: "",
-                                      quantity: 0,
-                                      unitPrice: 0,
-                                      amount: 0,
-                                    }],
+                                items: extracted.items.length > 0
+                                  ? extracted.items.map((item) => {
+                                      const q = Number(item.quantity) || 0
+                                      const p = Number(item.unitPrice) || 0
+                                      return {
+                                        productName: item.productName,
+                                        description: item.description,
+                                        quantity: q,
+                                        unitPrice: p,
+                                        amount: q * p,
+                                      }
+                                    })
+                                  : [
+                                      {
+                                        productName: "",
+                                        description: "",
+                                        quantity: 0,
+                                        unitPrice: 0,
+                                        amount: 0,
+                                      },
+                                    ],
                               })
                             })
                           }
