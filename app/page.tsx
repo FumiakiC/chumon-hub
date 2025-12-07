@@ -7,7 +7,19 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon, Lock, Unlock } from "lucide-react"
+import {
+  Upload,
+  FileText,
+  FileImage,
+  X,
+  Trash2,
+  Plus,
+  Copy,
+  Check,
+  CalendarIcon,
+  Twitch as Switch,
+  Gavel as Label,
+} from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -57,6 +69,7 @@ interface OrderFormData {
   fax: string
   manager: string
   approver: string
+  isConfidential: boolean
 }
 
 type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
@@ -71,6 +84,7 @@ export default function QuoteToOrderPage() {
   const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [isConfidential, setIsConfidential] = useState(false)
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -97,6 +111,7 @@ export default function QuoteToOrderPage() {
     fax: "",
     manager: "",
     approver: "",
+    isConfidential: false,
   })
 
   const handleFormChange = (field: keyof OrderFormData, value: string) => {
@@ -336,6 +351,7 @@ export default function QuoteToOrderPage() {
         phone: extracted.phone ?? prev.phone,
         fax: extracted.fax ?? prev.fax,
         items: mappedItems.length > 0 ? mappedItems : prev.items,
+        isConfidential: extracted.isConfidential ?? prev.isConfidential,
       }))
 
       setProcessingStatus("complete")
@@ -358,6 +374,27 @@ export default function QuoteToOrderPage() {
 
   const toggleEditing = () => {
     setIsEditing((prev) => !prev)
+  }
+
+  const toggleConfidential = () => {
+    setIsConfidential((prev) => !prev)
+  }
+
+  const handleCopyToClipboard = () => {
+    if (!formData.orderNo && !formData.items.some((item) => item.productName)) {
+      return
+    }
+    const jsonString = JSON.stringify(formData, null, 2)
+    navigator.clipboard
+      .writeText(jsonString)
+      .then(() => {
+        console.log("[v0] formData copied to clipboard")
+        setIsCopied(true)
+        setTimeout(() => setIsCopied(false), 2000)
+      })
+      .catch((err) => {
+        console.error("[v0] Failed to copy:", err)
+      })
   }
 
   return (
@@ -492,41 +529,14 @@ export default function QuoteToOrderPage() {
             <div className="flex-1 space-y-6 lg:min-w-[50%]">
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
                 <div className="mb-6 flex items-center justify-end gap-2">
-                  <Button onClick={() => setIsEditing(!isEditing)} variant="outline" size="sm" className="gap-2">
-                    {isEditing ? (
-                      <>
-                        <Lock className="h-4 w-4" />
-                        編集を終了
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="h-4 w-4" />
-                        品目・基本情報を編集
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (!formData.orderNo && !formData.items.some((item) => item.productName)) {
-                        return
-                      }
-                      const jsonString = JSON.stringify(formData, null, 2)
-                      navigator.clipboard
-                        .writeText(jsonString)
-                        .then(() => {
-                          console.log("[v0] formData copied to clipboard")
-                          setIsCopied(true)
-                          setTimeout(() => setIsCopied(false), 2000)
-                        })
-                        .catch((err) => {
-                          console.error("[v0] Failed to copy:", err)
-                        })
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={!formData.orderNo && !formData.items.some((item) => item.productName)}
-                  >
+                  <div className="flex items-center gap-2">
+                    <Switch id="edit-mode" checked={isEditing} onCheckedChange={setIsEditing} />
+                    <Label htmlFor="edit-mode" className="text-sm text-muted-foreground cursor-pointer">
+                      {isEditing ? "編集モード" : "ロック中"}
+                    </Label>
+                  </div>
+
+                  <Button onClick={handleCopyToClipboard} variant="outline" size="sm" className="gap-2 bg-transparent">
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
                   </Button>
@@ -871,6 +881,23 @@ export default function QuoteToOrderPage() {
                           />
                         </div>
                       </div>
+                    </div>
+                  </Card>
+
+                  <Card className="elevation-1 border-0 bg-gradient-to-br from-primary/5 to-transparent p-5">
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
+                      <div className="h-1 w-1 rounded-full bg-primary" />
+                      機密情報
+                    </h3>
+
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={isConfidential}
+                        onCheckedChange={toggleConfidential}
+                        className="data-[state=checked]:bg-primary"
+                        disabled={!isEditing}
+                      />
+                      <Label className="text-sm font-medium text-muted-foreground">機密情報</Label>
                     </div>
                   </Card>
                 </div>
