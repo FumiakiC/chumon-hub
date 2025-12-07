@@ -39,12 +39,12 @@ export default function Home() {
         <div className="mb-16 flex flex-col items-center text-center">
           {/* Badge */}
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/60 bg-blue-50 px-4 py-1.5 dark:border-blue-500/20 dark:bg-blue-900/20">
-            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">注文管理システム</span>
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">注文管理システム v0.2.0</span>
           </div>
 
           {/* Title with subtle gradient */}
           <h1 className="mb-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-4xl font-bold tracking-tight text-transparent dark:from-slate-50 dark:via-slate-200 dark:to-slate-400 md:text-5xl lg:text-6xl">
-            Order Management
+            CHUMON HUB
           </h1>
 
           {/* Subtitle with constrained width and relaxed line height */}
