@@ -38,9 +38,9 @@ export default function Home() {
       <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 px-4 py-12 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
         <div className="mb-16 text-center">
           <h1 className="mb-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 md:text-4xl lg:text-5xl">
-            注文書作成システム
+            注文管理システム
           </h1>
-          <p className="text-base text-slate-500 dark:text-slate-400">用途に合わせて注文書を作成・管理します</p>
+          <p className="text-base text-slate-500 dark:text-slate-400">注文書を作成・管理します</p>
         </div>
 
         <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
@@ -59,7 +59,7 @@ export default function Home() {
                 仮注文書作成
               </h2>
               <p className="relative text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-                概算見積もりや
+                金額未定時などに
                 <br />
                 一時的な注文書を作成します
               </p>
@@ -125,9 +125,7 @@ export default function Home() {
                 注文管理
               </h2>
               <p className="relative text-sm leading-relaxed text-slate-400 dark:text-slate-500">
-                既存の注文書を管理・
-                <br />
-                追跡します
+                既存の注文を管理・追跡します
               </p>
 
               <div className="relative mt-6">
