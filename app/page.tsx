@@ -7,19 +7,9 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Upload,
-  FileText,
-  FileImage,
-  X,
-  Trash2,
-  Plus,
-  Copy,
-  Check,
-  CalendarIcon,
-  Twitch as Switch,
-  Gavel as Label,
-} from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -530,7 +520,7 @@ export default function QuoteToOrderPage() {
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
                 <div className="mb-6 flex items-center justify-end gap-2">
                   <div className="flex items-center gap-2">
-                    <Switch id="edit-mode" checked={isEditing} onCheckedChange={setIsEditing} />
+                    <Switch id="edit-mode" checked={isEditing} onCheckedChange={toggleEditing} />
                     <Label htmlFor="edit-mode" className="text-sm text-muted-foreground cursor-pointer">
                       {isEditing ? "編集モード" : "ロック中"}
                     </Label>
