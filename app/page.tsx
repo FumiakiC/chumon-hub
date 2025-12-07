@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      {/* ▼ ヘッダーエリア (ご提示のコードをベースに右寄せ修正) */}
+      
+      {/* ▼ ヘッダーエリア (右側メニューボタンを目立たせないため背景はなし) */}
       <header className="sticky top-0 z-50 flex h-16 items-center justify-end px-6">
         {/* 右側のメニューエリア */}
         <div className="flex items-center gap-2">
@@ -19,7 +20,9 @@ export default function Home() {
               <span className="sr-only">設定（管理者）</span>
             </Button>
           </Link>
-
+          
+          {/* ユーザーメニューボタン */}
+          <Link href="/profile">
           <Button
             variant="ghost"
             size="icon"
@@ -28,6 +31,7 @@ export default function Home() {
             <User className="h-5 w-5" />
             <span className="sr-only">ユーザーメニュー</span>
           </Button>
+          </Link>
         </div>
       </header>
 
