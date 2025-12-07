@@ -18,12 +18,12 @@ export async function POST(req: Request) {
 
     // basic diagnostics: ensure we received values
     console.log('[v0] check-document-type request:', { mimeType, hasFile: !!file })
-    if (!file) {
-      console.error('[v0] check-document-type: file empty')
+    if (!(file instanceof File)) {
+      console.error('[v0] check-document-type: file is not a File object')
       return Response.json({ error: 'file is required' }, { status: 400 })
     }
-    if (!mimeType) {
-      console.error('[v0] check-document-type: mimeType empty')
+    if (typeof mimeType !== 'string' || !mimeType) {
+      console.error('[v0] check-document-type: mimeType is not a string')
       return Response.json({ error: 'mimeType is required' }, { status: 400 })
     }
 
