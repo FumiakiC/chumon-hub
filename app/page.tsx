@@ -253,7 +253,7 @@ export default function QuoteToOrderPage() {
       formData.append("mimeType", selectedFile.type)
 
       await new Promise((r) => setTimeout(r, 800))
-      addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
+      addLog(`アップロード完了。書類タイプの判定を開始します。`, "success")
 
       setProcessingStatus("flash_check")
       addLog("Gemini 2.5 Flash-lite で書類タイプを判定中...", "info")
