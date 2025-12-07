@@ -100,7 +100,7 @@ export default function QuoteToOrderPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <header className="sticky top-0 z-50 w-full bg-transparent">
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/70">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-4">
             <Link
@@ -122,7 +122,7 @@ export default function QuoteToOrderPage() {
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-            <div className="lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] lg:w-[45%] lg:overflow-y-auto no-scrollbar">
+            <div className="lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)] lg:w-[45%] lg:overflow-y-auto no-scrollbar">
               <QuoteUploadPanel
                 selectedFile={selectedFile}
                 previewUrl={previewUrl}
