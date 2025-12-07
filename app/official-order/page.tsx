@@ -1,12 +1,10 @@
 "use client"
 
-import type React from "react"
-
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon, ChevronLeft } from "lucide-react"
 import { useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -18,6 +16,7 @@ import { useOrderProcessing } from "@/hooks/use-order-processing"
 import { useForm, useFieldArray, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import Link from "next/link"
 
 // Zodスキーマ定義
 const productItemSchema = z.object({
@@ -118,7 +117,7 @@ export default function QuoteToOrderPage() {
       const quantity = formValues.items?.[index]?.quantity ?? 0
       const unitPrice = formValues.items?.[index]?.unitPrice ?? 0
       const calculatedAmount = quantity * unitPrice
-      
+
       // 現在の amount と計算結果が異なる場合のみ更新
       if (formValues.items?.[index]?.amount !== calculatedAmount) {
         setValue(`items.${index}.amount`, calculatedAmount, { shouldValidate: false })
@@ -159,15 +158,34 @@ export default function QuoteToOrderPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 md:px-8">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="group flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-300 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
+              <ChevronLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
+              <span>戻る</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">注文書作成システム</span>
+            </div>
+          </div>
+          <div className="w-[88px]" /> {/* Spacer for balance */}
+        </div>
+      </header>
+
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100 md:text-4xl">
-              Gemini API Test Web App
+            <h1 className="text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100 md:text-4xl">
+              本注文書作成
             </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">
-              アップロードされた見積書を自動解析し、発注データを作成するWebアプリケーションです
-            </p>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">正式な発注処理として確定した注文書を作成します</p>
           </div>
 
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
@@ -239,27 +257,28 @@ export default function QuoteToOrderPage() {
                                 inspectionDeadline: extracted.inspectionDeadline ?? "",
                                 phone: extracted.phone ?? "",
                                 fax: extracted.fax ?? "",
-                                items: extracted.items.length > 0
-                                  ? extracted.items.map((item) => {
-                                      const q = Number(item.quantity) || 0
-                                      const p = Number(item.unitPrice) || 0
-                                      return {
-                                        productName: item.productName,
-                                        description: item.description,
-                                        quantity: q,
-                                        unitPrice: p,
-                                        amount: q * p,
-                                      }
-                                    })
-                                  : [
-                                      {
-                                        productName: "",
-                                        description: "",
-                                        quantity: 0,
-                                        unitPrice: 0,
-                                        amount: 0,
-                                      },
-                                    ],
+                                items:
+                                  extracted.items.length > 0
+                                    ? extracted.items.map((item) => {
+                                        const q = Number(item.quantity) || 0
+                                        const p = Number(item.unitPrice) || 0
+                                        return {
+                                          productName: item.productName,
+                                          description: item.description,
+                                          quantity: q,
+                                          unitPrice: p,
+                                          amount: q * p,
+                                        }
+                                      })
+                                    : [
+                                        {
+                                          productName: "",
+                                          description: "",
+                                          quantity: 0,
+                                          unitPrice: 0,
+                                          amount: 0,
+                                        },
+                                      ],
                               })
                             })
                           }
@@ -358,7 +377,7 @@ export default function QuoteToOrderPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    disabled={!watch("orderNo") && !watch("items")?.some(item => item?.productName)}
+                    disabled={!watch("orderNo") && !watch("items")?.some((item) => item?.productName)}
                   >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
@@ -375,17 +394,11 @@ export default function QuoteToOrderPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">注 No</label>
-                        <Input
-                          {...register("orderNo")}
-                          className="elevation-1 border-0 bg-background font-mono"
-                        />
+                        <Input {...register("orderNo")} className="elevation-1 border-0 bg-background font-mono" />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">見積書 No.</label>
-                        <Input
-                          {...register("quoteNo")}
-                          className="elevation-1 border-0 bg-background font-mono"
-                        />
+                        <Input {...register("quoteNo")} className="elevation-1 border-0 bg-background font-mono" />
                       </div>
                     </div>
 
@@ -394,17 +407,11 @@ export default function QuoteToOrderPage() {
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">
                           宛先（相手企業名）
                         </label>
-                        <Input
-                          {...register("recipientCompany")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("recipientCompany")} className="elevation-1 border-0 bg-background" />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">発注元（自社名）</label>
-                        <Input
-                          {...register("issuerCompany")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("issuerCompany")} className="elevation-1 border-0 bg-background" />
                       </div>
                     </div>
                   </Card>
@@ -595,26 +602,17 @@ export default function QuoteToOrderPage() {
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">支払条件</label>
-                        <Input
-                          {...register("paymentTerms")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("paymentTerms")} className="elevation-1 border-0 bg-background" />
                       </div>
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">受渡場所</label>
-                        <Input
-                          {...register("deliveryLocation")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("deliveryLocation")} className="elevation-1 border-0 bg-background" />
                       </div>
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
-                        <Input
-                          {...register("inspectionDeadline")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("inspectionDeadline")} className="elevation-1 border-0 bg-background" />
                       </div>
                     </div>
                   </Card>
@@ -629,10 +627,7 @@ export default function QuoteToOrderPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">担当</label>
-                          <Input
-                            {...register("manager")}
-                            className="elevation-1 border-0 bg-background"
-                          />
+                          <Input {...register("manager")} className="elevation-1 border-0 bg-background" />
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">承認</label>
@@ -646,26 +641,17 @@ export default function QuoteToOrderPage() {
 
                       <div>
                         <label className="mb-2 block text-sm font-medium text-muted-foreground">自社住所</label>
-                        <Input
-                          {...register("issuerAddress")}
-                          className="elevation-1 border-0 bg-background"
-                        />
+                        <Input {...register("issuerAddress")} className="elevation-1 border-0 bg-background" />
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">電話</label>
-                          <Input
-                            {...register("phone")}
-                            className="elevation-1 border-0 bg-background font-mono"
-                          />
+                          <Input {...register("phone")} className="elevation-1 border-0 bg-background font-mono" />
                         </div>
                         <div>
                           <label className="mb-2 block text-sm font-medium text-muted-foreground">FAX</label>
-                          <Input
-                            {...register("fax")}
-                            className="elevation-1 border-0 bg-background font-mono"
-                          />
+                          <Input {...register("fax")} className="elevation-1 border-0 bg-background font-mono" />
                         </div>
                       </div>
                     </div>
