@@ -36,13 +36,24 @@ export default function Home() {
 
       {/* ▼ メインコンテンツ */}
       <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 px-4 py-12 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
-        <div className="mb-16 text-center">
-          <h1 className="mb-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50 md:text-4xl lg:text-5xl">
-            注文管理システム
+        <div className="mb-16 flex flex-col items-center text-center">
+          {/* Badge */}
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/60 bg-blue-50 px-4 py-1.5 dark:border-blue-500/20 dark:bg-blue-900/20">
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">注文管理システム</span>
+          </div>
+
+          {/* Title with subtle gradient */}
+          <h1 className="mb-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-4xl font-bold tracking-tight text-transparent dark:from-slate-50 dark:via-slate-200 dark:to-slate-400 md:text-5xl lg:text-6xl">
+            Order Management
           </h1>
-          <p className="text-base text-slate-500 dark:text-slate-400">注文書を作成・管理します</p>
+
+          {/* Subtitle with constrained width and relaxed line height */}
+          <p className="max-w-md text-base leading-relaxed text-slate-500 dark:text-slate-400 md:text-lg">
+            注文書を作成・管理するための統合プラットフォーム
+          </p>
         </div>
 
+        {/* Card grid - unchanged */}
         <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
           {/* 仮注文書作成カード */}
           <Link href="/provisional-order" className="group block h-full">
