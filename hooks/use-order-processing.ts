@@ -176,7 +176,7 @@ export function useOrderProcessing() {
         return
       }
 
-      addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
+      addLog(`判定結果: ✅ ${checkResult.documentType}と認定。次のステップに移行します。`, "success")
 
       setProcessingStatus("pro_extraction")
       addLog("Gemini 2.5 Flash で詳細データを抽出中...", "info")

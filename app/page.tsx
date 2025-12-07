@@ -198,10 +198,10 @@ export default function QuoteToOrderPage() {
                         <Upload className="h-10 w-10" />
                       </div>
                       <p className="text-lg font-semibold text-slate-700 dark:text-slate-200">
-                        クリックまたはドラッグ＆ドロップでPDFを選択
+                        クリックまたはドラッグ&ドロップでPDFを選択
                       </p>
                       <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-                        ※デモ仕様: 見積書や注文書をアップロードすると成功します
+                        見積書をアップロードして解析を開始します
                       </p>
                     </div>
                   ) : (
