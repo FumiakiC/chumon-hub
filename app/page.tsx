@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -18,6 +16,8 @@ import { format, parse, isValid } from "date-fns"
 import { ja } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { z } from "zod"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 // APIレスポンスの各アイテムの検証スキーマ
 const ExtractedItemSchema = z.object({
@@ -59,7 +59,6 @@ interface OrderFormData {
   fax: string
   manager: string
   approver: string
-  isConfidential: boolean
 }
 
 type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
@@ -73,8 +72,8 @@ export default function QuoteToOrderPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [isConfidential, setIsConfidential] = useState(false)
+  const [isItemsEditing, setIsItemsEditing] = useState(false)
+  const [isSwitchChecked, setIsSwitchChecked] = useState(false) // Add state for switch
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -101,7 +100,6 @@ export default function QuoteToOrderPage() {
     fax: "",
     manager: "",
     approver: "",
-    isConfidential: false,
   })
 
   const handleFormChange = (field: keyof OrderFormData, value: string) => {
@@ -341,7 +339,6 @@ export default function QuoteToOrderPage() {
         phone: extracted.phone ?? prev.phone,
         fax: extracted.fax ?? prev.fax,
         items: mappedItems.length > 0 ? mappedItems : prev.items,
-        isConfidential: extracted.isConfidential ?? prev.isConfidential,
       }))
 
       setProcessingStatus("complete")
@@ -360,31 +357,6 @@ export default function QuoteToOrderPage() {
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
-  }
-
-  const toggleEditing = () => {
-    setIsEditing((prev) => !prev)
-  }
-
-  const toggleConfidential = () => {
-    setIsConfidential((prev) => !prev)
-  }
-
-  const handleCopyToClipboard = () => {
-    if (!formData.orderNo && !formData.items.some((item) => item.productName)) {
-      return
-    }
-    const jsonString = JSON.stringify(formData, null, 2)
-    navigator.clipboard
-      .writeText(jsonString)
-      .then(() => {
-        console.log("[v0] formData copied to clipboard")
-        setIsCopied(true)
-        setTimeout(() => setIsCopied(false), 2000)
-      })
-      .catch((err) => {
-        console.error("[v0] Failed to copy:", err)
-      })
   }
 
   return (
@@ -518,15 +490,36 @@ export default function QuoteToOrderPage() {
 
             <div className="flex-1 space-y-6 lg:min-w-[50%]">
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
-                <div className="mb-6 flex items-center justify-end gap-2">
+                <div className="mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Switch id="edit-mode" checked={isEditing} onCheckedChange={toggleEditing} />
-                    <Label htmlFor="edit-mode" className="text-sm text-muted-foreground cursor-pointer">
-                      {isEditing ? "編集モード" : "ロック中"}
-                    </Label>
+                    <div className="rounded-full bg-secondary/10 p-2">
+                      <FileText className="h-5 w-5 text-secondary" />
+                    </div>
+                    <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
                   </div>
-
-                  <Button onClick={handleCopyToClipboard} variant="outline" size="sm" className="gap-2 bg-transparent">
+                  <Button
+                    onClick={() => {
+                      if (!navigator.clipboard) {
+                        console.error("[v0] Clipboard API not available.")
+                        return
+                      }
+                      const jsonString = JSON.stringify(formData, null, 2)
+                      navigator.clipboard
+                        .writeText(jsonString)
+                        .then(() => {
+                          console.log("[v0] formData copied to clipboard")
+                          setIsCopied(true)
+                          setTimeout(() => setIsCopied(false), 2000)
+                        })
+                        .catch((err) => {
+                          console.error("[v0] Failed to copy:", err)
+                        })
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={!formData.orderNo && !formData.items.some((item) => item.productName)}
+                  >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
                   </Button>
@@ -546,7 +539,6 @@ export default function QuoteToOrderPage() {
                           value={formData.orderNo}
                           onChange={(e) => handleFormChange("orderNo", e.target.value)}
                           className="elevation-1 border-0 bg-background font-mono"
-                          disabled={!isEditing}
                         />
                       </div>
                       <div>
@@ -555,7 +547,6 @@ export default function QuoteToOrderPage() {
                           value={formData.quoteNo}
                           onChange={(e) => handleFormChange("quoteNo", e.target.value)}
                           className="elevation-1 border-0 bg-background font-mono"
-                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -569,7 +560,6 @@ export default function QuoteToOrderPage() {
                           value={formData.recipientCompany}
                           onChange={(e) => handleFormChange("recipientCompany", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
                       <div>
@@ -578,7 +568,6 @@ export default function QuoteToOrderPage() {
                           value={formData.issuerCompany}
                           onChange={(e) => handleFormChange("issuerCompany", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -590,26 +579,36 @@ export default function QuoteToOrderPage() {
                         <div className="h-1 w-1 rounded-full bg-secondary" />
                         品目一覧
                       </h3>
-                      {isEditing && (
-                        <Button
-                          onClick={addItem}
-                          size="sm"
-                          className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          品目を追加
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Switch id="items-edit-mode" checked={isItemsEditing} onCheckedChange={setIsItemsEditing} />
+                          <Label htmlFor="items-edit-mode" className="text-sm text-muted-foreground cursor-pointer">
+                            {isItemsEditing ? "編集モード" : "ロック中"}
+                          </Label>
+                        </div>
+                        {isItemsEditing && (
+                          <Button
+                            onClick={addItem}
+                            size="sm"
+                            className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            品目を追加
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
-                    <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      {isItemsEditing ? "品目を追加、編集、削除できます" : "編集するにはトグルをONにしてください"}
+                    </p>
 
                     <div className="space-y-4">
                       {(formData.items ?? []).map((item, index) => (
                         <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
                           <div className="mb-3 flex items-center justify-between">
                             <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
-                            {isEditing && formData.items.length > 1 && (
+                            {isItemsEditing && formData.items.length > 1 && (
                               <Button
                                 onClick={() => removeItem(item.id)}
                                 variant="ghost"
@@ -630,7 +629,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
                                   placeholder="品目名を入力"
                                   className="elevation-1 border-0 bg-muted/30"
-                                  disabled={!isEditing}
+                                  disabled={!isItemsEditing}
                                 />
                               </div>
                               <div>
@@ -641,7 +640,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
                                   placeholder="0"
                                   className="elevation-1 border-0 bg-muted/30 font-mono"
-                                  disabled={!isEditing}
+                                  disabled={!isItemsEditing}
                                 />
                               </div>
                               <div>
@@ -652,7 +651,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
                                   placeholder="1"
                                   className="elevation-1 border-0 bg-muted/30"
-                                  disabled={!isEditing}
+                                  disabled={!isItemsEditing}
                                 />
                               </div>
                               <div>
@@ -670,18 +669,18 @@ export default function QuoteToOrderPage() {
                                 onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
                                 className="elevation-1 border-0 bg-muted/30"
                                 rows={2}
-                                disabled={!isEditing}
+                                disabled={!isItemsEditing}
                               />
                             </div>
                           </div>
                         </Card>
                       ))}
+                    </div>
 
-                      <div className="elevation-2 rounded-lg p-4 bg-slate-600">
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
-                          <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
-                        </div>
+                    <div className="elevation-2 rounded-lg p-4 bg-slate-600">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
+                        <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
                       </div>
                     </div>
                   </Card>
@@ -704,7 +703,6 @@ export default function QuoteToOrderPage() {
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
                                   !formData.desiredDeliveryDate && "text-muted-foreground",
                                 )}
-                                disabled={!isEditing}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.desiredDeliveryDate &&
@@ -746,7 +744,6 @@ export default function QuoteToOrderPage() {
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
                                   !formData.requestedDeliveryDate && "text-muted-foreground",
                                 )}
-                                disabled={!isEditing}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.requestedDeliveryDate &&
@@ -786,7 +783,6 @@ export default function QuoteToOrderPage() {
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
 
@@ -796,7 +792,6 @@ export default function QuoteToOrderPage() {
                           value={formData.deliveryLocation}
                           onChange={(e) => handleFormChange("deliveryLocation", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
 
@@ -806,7 +801,6 @@ export default function QuoteToOrderPage() {
                           value={formData.inspectionDeadline}
                           onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -826,7 +820,6 @@ export default function QuoteToOrderPage() {
                             value={formData.manager}
                             onChange={(e) => handleFormChange("manager", e.target.value)}
                             className="elevation-1 border-0 bg-background"
-                            disabled={!isEditing}
                           />
                         </div>
                         <div>
@@ -836,7 +829,6 @@ export default function QuoteToOrderPage() {
                             onChange={(e) => handleFormChange("approver", e.target.value)}
                             className="elevation-1 border-0 bg-background"
                             placeholder="（空欄）"
-                            disabled={!isEditing}
                           />
                         </div>
                       </div>
@@ -847,7 +839,6 @@ export default function QuoteToOrderPage() {
                           value={formData.issuerAddress}
                           onChange={(e) => handleFormChange("issuerAddress", e.target.value)}
                           className="elevation-1 border-0 bg-background"
-                          disabled={!isEditing}
                         />
                       </div>
 
@@ -858,7 +849,6 @@ export default function QuoteToOrderPage() {
                             value={formData.phone}
                             onChange={(e) => handleFormChange("phone", e.target.value)}
                             className="elevation-1 border-0 bg-background font-mono"
-                            disabled={!isEditing}
                           />
                         </div>
                         <div>
@@ -867,27 +857,19 @@ export default function QuoteToOrderPage() {
                             value={formData.fax}
                             onChange={(e) => handleFormChange("fax", e.target.value)}
                             className="elevation-1 border-0 bg-background font-mono"
-                            disabled={!isEditing}
                           />
                         </div>
                       </div>
                     </div>
                   </Card>
 
-                  <Card className="elevation-1 border-0 bg-gradient-to-br from-primary/5 to-transparent p-5">
-                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
-                      <div className="h-1 w-1 rounded-full bg-primary" />
-                      機密情報
-                    </h3>
-
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={isConfidential}
-                        onCheckedChange={toggleConfidential}
-                        className="data-[state=checked]:bg-primary"
-                        disabled={!isEditing}
-                      />
-                      <Label className="text-sm font-medium text-muted-foreground">機密情報</Label>
+                  {/* Add switch component */}
+                  <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
+                    <div className="mb-4 flex items-center gap-2">
+                      <div className="rounded-full bg-secondary/10 p-2">
+                        <Switch checked={isSwitchChecked} onCheckedChange={setIsSwitchChecked} className="h-5 w-5" />
+                      </div>
+                      <Label className="text-xl font-bold text-foreground">Switch Example</Label>
                     </div>
                   </Card>
                 </div>
