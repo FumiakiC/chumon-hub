@@ -166,12 +166,12 @@ export default function QuoteToOrderPage() {
               className="group flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-300 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-slate-100"
             >
               <ChevronLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
-              <span>戻る</span>
+              <span className="text-sm font-bold">戻る</span>
             </Link>
           </div>
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">本注文書作成</span>
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">本注文書作成</span>
           </div>
           <div className="w-[88px]" /> {/* Spacer for balance */}
         </div>
