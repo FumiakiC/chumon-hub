@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect,useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,12 +45,12 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
 
   const watchedItems = useWatch({ control, name: "items" })
 
-  const calculateTotal = () => {
+  const totalAmountString = useMemo(() => {
     const total = (watchedItems ?? []).reduce((sum, item) => {
       return sum + (item?.amount ?? 0)
     }, 0)
     return total.toLocaleString("ja-JP")
-  }
+  }, [watchedItems])
 
   const addItem = () => {
     append({
@@ -151,7 +151,7 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
         <div className="elevation-2 rounded-lg p-4 bg-slate-600">
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
-            <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
+            <div className="text-2xl font-bold text-accent-foreground">¥{totalAmountString}</div>
           </div>
         </div>
       </div>
