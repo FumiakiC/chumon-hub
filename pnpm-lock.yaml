@@ -15,8 +15,8 @@ importers:
         specifier: latest
         version: 0.24.1
       '@hookform/resolvers':
-        specifier: ^3.10.0
-        version: 3.10.0(react-hook-form@7.66.1(react@19.2.0))
+        specifier: latest
+        version: 5.2.2(react-hook-form@7.68.0(react@19.2.0))
       '@radix-ui/react-accordion':
         specifier: 1.2.2
         version: 1.2.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -57,7 +57,7 @@ importers:
         specifier: 1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@radix-ui/react-popover':
-        specifier: 1.1.15
+        specifier: latest
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@radix-ui/react-progress':
         specifier: 1.1.1
@@ -117,7 +117,7 @@ importers:
         specifier: 1.0.4
         version: 1.0.4(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       date-fns:
-        specifier: 4.1.0
+        specifier: latest
         version: 4.1.0
       embla-carousel-react:
         specifier: 8.5.1
@@ -138,14 +138,14 @@ importers:
         specifier: 19.2.0
         version: 19.2.0
       react-day-picker:
-        specifier: 9.12.0
+        specifier: latest
         version: 9.12.0(react@19.2.0)
       react-dom:
         specifier: 19.2.0
         version: 19.2.0(react@19.2.0)
       react-hook-form:
-        specifier: ^7.60.0
-        version: 7.66.1(react@19.2.0)
+        specifier: latest
+        version: 7.68.0(react@19.2.0)
       react-resizable-panels:
         specifier: ^2.1.7
         version: 2.1.9(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -409,10 +409,10 @@ packages:
     resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
     engines: {node: '>=18.0.0'}
 
-  '@hookform/resolvers@3.10.0':
-    resolution: {integrity: sha512-79Dv+3mDF7i+2ajj7SkypSKHhl1cbln1OGavqrsF7p6mbUv11xpqpacPsGDCTRvCSjEEIez2ef1NveSVL3b0Ag==}
+  '@hookform/resolvers@5.2.2':
+    resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
     peerDependencies:
-      react-hook-form: ^7.0.0
+      react-hook-form: ^7.55.0
 
   '@img/colour@1.0.0':
     resolution: {integrity: sha512-A5P/LfWGFSl6nsckYtjw9da+19jB8hkJ6ACTGcDfEJ0aE+l2n2El7dsVM7UVHZQ9s2lmYMWlrS21YLy2IR1LUw==}
@@ -1459,6 +1459,9 @@ packages:
   '@standard-schema/spec@1.0.0':
     resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
 
+  '@standard-schema/utils@0.3.0':
+    resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
+
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
@@ -1963,8 +1966,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  react-hook-form@7.66.1:
-    resolution: {integrity: sha512-2KnjpgG2Rhbi+CIiIBQQ9Df6sMGH5ExNyFl4Hw9qO7pIqMBR8Bvu9RQyjl3JM4vehzCh9soiNUM/xYMswb2EiA==}
+  react-hook-form@7.68.0:
+    resolution: {integrity: sha512-oNN3fjrZ/Xo40SWlHf1yCjlMK417JxoSJVUXQjGdvdRCU07NTFei1i1f8ApUAts+IVh14e4EdakeLEA+BEAs/Q==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -2289,9 +2292,10 @@ snapshots:
 
   '@google/generative-ai@0.24.1': {}
 
-  '@hookform/resolvers@3.10.0(react-hook-form@7.66.1(react@19.2.0))':
+  '@hookform/resolvers@5.2.2(react-hook-form@7.68.0(react@19.2.0))':
     dependencies:
-      react-hook-form: 7.66.1(react@19.2.0)
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.68.0(react@19.2.0)
 
   '@img/colour@1.0.0':
     optional: true
@@ -3276,6 +3280,8 @@ snapshots:
 
   '@standard-schema/spec@1.0.0': {}
 
+  '@standard-schema/utils@0.3.0': {}
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -3717,7 +3723,7 @@ snapshots:
       react: 19.2.0
       scheduler: 0.27.0
 
-  react-hook-form@7.66.1(react@19.2.0):
+  react-hook-form@7.68.0(react@19.2.0):
     dependencies:
       react: 19.2.0
 
