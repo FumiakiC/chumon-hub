@@ -5,19 +5,26 @@ import { Button } from "@/components/ui/button"
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      
       {/* ▼ ヘッダーエリア (ご提示のコードをベースに右寄せ修正) */}
       <header className="sticky top-0 z-50 flex h-16 items-center justify-end px-6">
         {/* 右側のメニューエリア */}
         <div className="flex items-center gap-2">
           <Link href="/admin">
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-slate-400 transition-all duration-300 ease-out hover:rotate-180 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-500 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+            >
               <Settings className="h-5 w-5" />
               <span className="sr-only">設定（管理者）</span>
             </Button>
           </Link>
-          
-          <Button variant="ghost" size="icon" className="rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full border border-transparent text-slate-400 transition-all duration-300 ease-out hover:scale-110 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600 dark:text-slate-500 dark:hover:border-orange-500/30 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
+          >
             <User className="h-5 w-5" />
             <span className="sr-only">ユーザーメニュー</span>
           </Button>
