@@ -245,7 +245,7 @@ export default function QuoteToOrderPage() {
       addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
 
       setProcessingStatus("flash_check")
-      addLog("Step 1: Gemini 2.5 Flash で書類タイプを判定中...", "info")
+      addLog("Step 1: Gemini 2.5 Flash-lite で書類タイプを判定中...", "info")
 
       const checkResponse = await fetch("/api/check-document-type", {
         method: "POST",
