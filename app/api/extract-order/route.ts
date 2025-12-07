@@ -12,9 +12,9 @@ const orderSchema = z.object({
   items: z.array(
     z.object({
       productName: z.string().describe("Product Name (品名)"),
-      quantity: z.number().describe("Quantity (数量)"),
-      unitPrice: z.number().describe("Unit Price (単価) - numeric value without comma or currency symbol"),
-      amount: z.number().describe("Amount/Subtotal (金額) - numeric value without comma or currency symbol"),
+      quantity: z.coerce.number().describe("Quantity (数量)"),
+      unitPrice: z.coerce.number().describe("Unit Price (単価) - numeric value without comma or currency symbol"),
+      amount: z.coerce.number().describe("Amount/Subtotal (金額) - numeric value without comma or currency symbol"),
       description: z.string().optional().describe("Description or remarks (摘要)"),
     })
   ).describe("Line items array (明細行の配列)"),
@@ -32,7 +32,11 @@ export async function POST(req: Request) {
   try {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
-    const { fileBase64: providedFileBase64, mimeType: providedMimeType, fileId } = await req.json()
+    const { fileId } = await req.json()
+
+    if (!fileId) {
+      return Response.json({ error: 'fileId is required' }, { status: 400 })
+    }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
@@ -40,27 +44,15 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
     }
 
-    // Resolve file data: prefer cache by fileId, fallback to provided payload
-    let fileBase64: string | undefined = providedFileBase64
-    let mimeType: string | undefined = providedMimeType
-
-    if (fileId) {
-      const cached = getCachedFile(fileId)
-      if (cached) {
-        console.log('[v0] extract-order: using cached file', fileId)
-        fileBase64 = cached.fileBase64
-        mimeType = cached.mimeType
-      } else {
-        console.warn('[v0] extract-order: fileId provided but cache miss', fileId)
-      }
+    // Resolve file data from cache
+    const cached = getCachedFile(fileId)
+    if (!cached) {
+      console.error('[v0] extract-order: cache miss for fileId', fileId)
+      return Response.json({ error: 'File cache expired' }, { status: 410 })
     }
 
-    if (!fileBase64 || !mimeType) {
-      const errorMessage = fileId
-        ? 'File cache expired. Please re-upload the file.'
-        : 'fileBase64 and mimeType are required'
-      return Response.json({ error: errorMessage }, { status: 400 })
-    }
+    const { fileBase64, mimeType } = cached
+    console.log('[v0] extract-order: using cached file', fileId)
 
     // Validate size before proceeding
     const approxBytes = Math.floor((fileBase64.length * 3) / 4)

@@ -34,6 +34,23 @@ type ExtractedItem = z.infer<typeof ExtractedItemSchema>
 // 配列用のスキーマ
 const ExtractedItemsSchema = z.array(ExtractedItemSchema)
 
+// ユーティリティ関数: カンマや全角数字を正しく処理して数値に変換
+const safeParseFloat = (value: string): number => {
+  // カンマをすべて削除
+  let cleaned = value.replace(/,/g, "")
+  
+  // 全角数字（０-９）を半角数字に変換
+  cleaned = cleaned.replace(/[０-９]/g, (char) => {
+    return String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+  })
+  
+  // Number.parseFloatで変換
+  const parsed = Number.parseFloat(cleaned)
+  
+  // NaNの場合は0を返す
+  return isNaN(parsed) ? 0 : parsed
+}
+
 interface ProductItem {
   id: string
   productName: string
@@ -113,8 +130,8 @@ export default function QuoteToOrderPage() {
           const updatedItem = { ...item, [field]: value }
 
           if (field === "quantity" || field === "unitPrice") {
-            const qty = Number.parseFloat(field === "quantity" ? value : updatedItem.quantity) || 0
-            const price = Number.parseFloat(field === "unitPrice" ? value : updatedItem.unitPrice) || 0
+            const qty = safeParseFloat(field === "quantity" ? value : updatedItem.quantity)
+            const price = safeParseFloat(field === "unitPrice" ? value : updatedItem.unitPrice)
             updatedItem.amount = (qty * price).toString()
           }
 
@@ -151,7 +168,7 @@ export default function QuoteToOrderPage() {
 
   const calculateTotal = () => {
     const total = formData.items.reduce((sum, item) => {
-      return sum + (Number.parseFloat(item.amount) || 0)
+      return sum + safeParseFloat(item.amount)
     }, 0)
     return total.toLocaleString("ja-JP")
   }
@@ -234,29 +251,19 @@ export default function QuoteToOrderPage() {
     addLog("ファイルアップロードを開始...", "info")
 
     try {
-      const reader = new FileReader()
-      const fileData = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(",")[1]
-          resolve(base64)
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(selectedFile)
-      })
+      const formData = new FormData()
+      formData.append("file", selectedFile)
+      formData.append("mimeType", selectedFile.type)
 
       await new Promise((r) => setTimeout(r, 800))
-      addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
+      addLog(`アップロード完了。書類タイプの判定を開始します。`, "success")
 
       setProcessingStatus("flash_check")
       addLog("Gemini 2.5 Flash-lite で書類タイプを判定中...", "info")
 
       const checkResponse = await fetch("/api/check-document-type", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileBase64: fileData,
-          mimeType: selectedFile.type,
-        }),
+        body: formData,
       })
 
       if (!checkResponse.ok) throw new Error("判定APIエラー")

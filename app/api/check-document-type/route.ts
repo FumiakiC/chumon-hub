@@ -11,18 +11,33 @@ export async function POST(req: Request) {
   try {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
-    const { fileBase64, mimeType } = await req.json()
+    
+    const formData = await req.formData()
+    const file = formData.get("file")
+    const mimeType = formData.get("mimeType")
 
     // basic diagnostics: ensure we received values
-    console.log('[v0] check-document-type request:', { mimeType, hasBase64: !!fileBase64 })
-    if (!fileBase64) {
-      console.error('[v0] check-document-type: fileBase64 empty')
-      return Response.json({ error: 'fileBase64 is required' }, { status: 400 })
+    console.log('[v0] check-document-type request:', { mimeType, hasFile: !!file })
+    if (!(file instanceof File)) {
+      console.error('[v0] check-document-type: file is not a File object')
+      return Response.json({ error: 'file is required' }, { status: 400 })
     }
-    if (!mimeType) {
-      console.error('[v0] check-document-type: mimeType empty')
+    if (typeof mimeType !== 'string' || !mimeType) {
+      console.error('[v0] check-document-type: mimeType is not a string')
       return Response.json({ error: 'mimeType is required' }, { status: 400 })
     }
+
+    // Validate size before processing
+    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
+    if (file.size > MAX_SINGLE_FILE_BYTES) {
+      console.error('[v0] check-document-type: file too large', { fileSize: file.size })
+      return Response.json({ error: 'File too large' }, { status: 413 })
+    }
+
+    // Convert File to ArrayBuffer, then to Base64
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const fileBase64 = buffer.toString('base64')
 
     // Normalize to a data URL. Some SDKs/models expect `data:<mime>;base64,<data>`.
     const dataUrl = `data:${mimeType};base64,${fileBase64}`
@@ -37,14 +52,6 @@ export async function POST(req: Request) {
     }
 
     const google = createGoogleGenerativeAI({ apiKey })
-
-    // Validate size before sending to model or caching
-    const approxBytes = Math.floor((fileBase64.length * 3) / 4)
-    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
-    if (approxBytes > MAX_SINGLE_FILE_BYTES) {
-      console.error('[v0] check-document-type: file too large', { approxBytes })
-      return Response.json({ error: 'File too large' }, { status: 413 })
-    }
 
     const result = await generateObject({
       model: google("gemini-2.5-flash-lite"),
