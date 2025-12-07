@@ -1,52 +1,82 @@
 "use client"
 
 import type React from "react"
+import type { LogEntry } from "@/types/logEntry" // Import LogEntry type
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { FileText, Upload, Trash2, X, Copy, Check, CalendarIcon, FileImage, Plus } from "lucide-react"
-import type { ProductItem, OrderFormData, LogEntry, ProcessingStatus } from "@/types/logEntry"
-import { ExtractedItemsSchema } from "@/types/logEntry"
-import { useState, useRef, useEffect, useCallback } from "react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { format, parse, isValid } from "date-fns"
 import { ja } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { z } from "zod"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+
+// APIレスポンスの各アイテムの検証スキーマ
+const ExtractedItemSchema = z.object({
+  productName: z.string(),
+  quantity: z.number(),
+  unitPrice: z.number(),
+  amount: z.number(),
+  description: z.string().optional(),
+})
+
+// スキーマから型を自動生成
+type ExtractedItem = z.infer<typeof ExtractedItemSchema>
+
+// 配列用のスキーマ
+const ExtractedItemsSchema = z.array(ExtractedItemSchema)
+
+interface ProductItem {
+  id: string
+  productName: string
+  description: string
+  quantity: string
+  unitPrice: string
+  amount: string
+}
+
+interface OrderFormData {
+  orderNo: string
+  quoteNo: string
+  items: ProductItem[]
+  desiredDeliveryDate: string
+  requestedDeliveryDate: string
+  paymentTerms: string
+  deliveryLocation: string
+  inspectionDeadline: string
+  recipientCompany: string
+  issuerCompany: string
+  issuerAddress: string
+  phone: string
+  fax: string
+  manager: string
+  approver: string
+}
+
+type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
 
 export default function QuoteToOrderPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
+  const [isItemsEditing, setIsItemsEditing] = useState(false)
+
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
     quoteNo: "",
-    recipientCompany: "",
-    issuerCompany: "",
-    issuerAddress: "",
-    manager: "",
-    approver: "",
-    desiredDeliveryDate: "",
-    requestedDeliveryDate: "",
-    paymentTerms: "",
-    deliveryLocation: "",
-    inspectionDeadline: "",
-    phone: "",
-    fax: "",
     items: [
       {
         id: crypto.randomUUID(),
@@ -57,42 +87,19 @@ export default function QuoteToOrderPage() {
         amount: "",
       },
     ],
+    desiredDeliveryDate: "",
+    requestedDeliveryDate: "",
+    paymentTerms: "",
+    deliveryLocation: "",
+    inspectionDeadline: "",
+    recipientCompany: "",
+    issuerCompany: "",
+    issuerAddress: "",
+    phone: "",
+    fax: "",
+    manager: "",
+    approver: "",
   })
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
-  const [isCopied, setIsCopied] = useState(false)
-  const [isItemsEditing, setIsItemsEditing] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [showCancelDialog, setShowCancelDialog] = useState(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
-
-  const STORAGE_KEY = "quote-to-order-form-data"
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        setFormData(parsed)
-      }
-    } catch (err) {
-      console.error("[v0] Failed to load from localStorage:", err)
-    } finally {
-      setIsInitialized(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isInitialized) return
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData))
-    } catch (err) {
-      console.error("[v0] Failed to save to localStorage:", err)
-    }
-  }, [formData, isInitialized])
 
   const handleFormChange = (field: keyof OrderFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -149,15 +156,19 @@ export default function QuoteToOrderPage() {
     return total.toLocaleString("ja-JP")
   }
 
+  // Object URLのライフサイクル管理（自動生成・破棄）
   useEffect(() => {
     if (!selectedFile) {
+      // ファイルなしの場合：previewUrlをクリア
       setPreviewUrl(null)
       return
     }
 
+    // 新しいObject URLを生成
     const objectUrl = URL.createObjectURL(selectedFile)
     setPreviewUrl(objectUrl)
 
+    // クリーンアップ：コンポーネントアンマウント時やSelectedFileが変更されたときに実行
     return () => {
       URL.revokeObjectURL(objectUrl)
     }
@@ -190,40 +201,30 @@ export default function QuoteToOrderPage() {
     processFile(file)
   }
 
-  const handleRemoveFile = useCallback(() => {
-    if (isLoading) {
-      setShowCancelDialog(true)
-    } else {
-      setSelectedFile(null)
-      setError(null)
-      setProcessingStatus("idle")
-      setLogs([])
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
-  }, [isLoading])
-
-  const confirmCancelAnalysis = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-    }
-    setIsLoading(false)
+  const handleRemoveFile = () => {
     setSelectedFile(null)
     setError(null)
     setProcessingStatus("idle")
     setLogs([])
-    setShowCancelDialog(false)
     if (fileInputRef.current) fileInputRef.current.value = ""
-  }, [])
+  }
+
+  const addLog = (message: string, type: "info" | "success" | "error" = "info") => {
+    const now = new Date()
+    const timeString = now.toLocaleTimeString("ja-JP", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+    setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
+  }
 
   const handleTranscription = async () => {
     if (!selectedFile) {
       setError("ファイルを選択してください")
       return
     }
-
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
 
     setIsLoading(true)
     setError(null)
@@ -256,21 +257,20 @@ export default function QuoteToOrderPage() {
           fileBase64: fileData,
           mimeType: selectedFile.type,
         }),
-        signal,
       })
 
       if (!checkResponse.ok) throw new Error("判定APIエラー")
       const checkResult = await checkResponse.json()
 
       if (!checkResult.isQuotation) {
-        addLog(`判定結果: ${checkResult.documentType} は見積書・発注書ではありません。処理を中断します。`, "error")
+        addLog(`判定結果: ❌ 見積書・発注書ではありません (${checkResult.documentType})。処理を中断します。`, "error")
         addLog(`理由: ${checkResult.reason}`, "error")
         setProcessingStatus("error")
         setIsLoading(false)
         return
       }
 
-      addLog(`判定結果: ${checkResult.documentType} と認定。Step 2へ進みます。`, "success")
+      addLog(`判定結果: ✅ ${checkResult.documentType}と認定。Step 2へ進みます。`, "success")
 
       setProcessingStatus("pro_extraction")
       addLog("Gemini 2.5 Flash で詳細データを抽出中...", "info")
@@ -283,7 +283,6 @@ export default function QuoteToOrderPage() {
         body: JSON.stringify({
           fileId: checkResult.fileId, // Use cached file
         }),
-        signal,
       })
 
       if (!response.ok) {
@@ -296,10 +295,13 @@ export default function QuoteToOrderPage() {
         throw new Error(result.error)
       }
 
+      // Store the raw JSON response for copy functionality
       setExtractedJson(result)
 
+      // APIレスポンスから直接 items を取得
       const extracted = result
 
+      // Zodスキーマでランタイム検証
       const parseResult = ExtractedItemsSchema.safeParse(extracted.items ?? [])
 
       if (!parseResult.success) {
@@ -307,7 +309,7 @@ export default function QuoteToOrderPage() {
         throw new Error("データの形式が不正です")
       }
 
-      const items = parseResult.data
+      const items = parseResult.data // 型は ExtractedItem[] として保証される
 
       const mappedItems: ProductItem[] = items.map((item) => ({
         id: crypto.randomUUID(),
@@ -318,6 +320,7 @@ export default function QuoteToOrderPage() {
         amount: (item.amount ?? 0).toString(),
       }))
 
+      // merge into existing formData to avoid replacing structure
       setFormData((prev) => ({
         ...prev,
         orderNo: extracted.orderNo ?? prev.orderNo,
@@ -340,17 +343,12 @@ export default function QuoteToOrderPage() {
       setProcessingStatus("complete")
       addLog("データ抽出完了。JSONパース成功。", "success")
     } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        console.log("[v0] Request was cancelled by user")
-        return
-      }
       console.error("[v0] Extraction error:", err)
       setProcessingStatus("error")
       addLog("エラーが発生しました", "error")
       setError(err instanceof Error ? err.message : "データの抽出に失敗しました")
     } finally {
       setIsLoading(false)
-      abortControllerRef.current = null
     }
   }
 
@@ -360,34 +358,8 @@ export default function QuoteToOrderPage() {
     fileInputRef.current?.click()
   }
 
-  const addLog = (message: string, type: "info" | "success" | "error" = "info") => {
-    const now = new Date()
-    const timeString = now.toLocaleTimeString("ja-JP", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    })
-    setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
-  }
-
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>解析をキャンセルしますか？</AlertDialogTitle>
-            <AlertDialogDescription>
-              現在処理中のファイル解析を中断します。この操作は取り消せません。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>続行する</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmCancelAnalysis}>キャンセルする</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
           <div className="mb-8 text-center">
@@ -430,7 +402,7 @@ export default function QuoteToOrderPage() {
                         クリックまたはドラッグ＆ドロップでPDFを選択
                       </p>
                       <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">
-                        ※デモ仕様: 見積書や注文書をアップロードすると成功します
+                        見積書や注文書をアップロードすると成功します
                       </p>
                     </div>
                   ) : (
@@ -554,64 +526,59 @@ export default function QuoteToOrderPage() {
 
                 <div className="space-y-6">
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-primary/5 to-transparent p-5">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 font-semibold text-primary">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
-                        基本情報
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">注 No</label>
-                          <Input
-                            value={formData.orderNo}
-                            onChange={(e) => handleFormChange("orderNo", e.target.value)}
-                            className="elevation-1 border-0 bg-background font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">見積書 No.</label>
-                          <Input
-                            value={formData.quoteNo}
-                            onChange={(e) => handleFormChange("quoteNo", e.target.value)}
-                            className="elevation-1 border-0 bg-background font-mono"
-                          />
-                        </div>
-                      </div>
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
+                      <div className="h-1 w-1 rounded-full bg-primary" />
+                      基本情報
+                    </h3>
 
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">
-                            宛先（相手企業名）
-                          </label>
-                          <Input
-                            value={formData.recipientCompany}
-                            onChange={(e) => handleFormChange("recipientCompany", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">
-                            発注元（自社名）
-                          </label>
-                          <Input
-                            value={formData.issuerCompany}
-                            onChange={(e) => handleFormChange("issuerCompany", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">注 No</label>
+                        <Input
+                          value={formData.orderNo}
+                          onChange={(e) => handleFormChange("orderNo", e.target.value)}
+                          className="elevation-1 border-0 bg-background font-mono"
+                        />
                       </div>
-                    </CardContent>
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">見積書 No.</label>
+                        <Input
+                          value={formData.quoteNo}
+                          onChange={(e) => handleFormChange("quoteNo", e.target.value)}
+                          className="elevation-1 border-0 bg-background font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                          宛先（相手企業名）
+                        </label>
+                        <Input
+                          value={formData.recipientCompany}
+                          onChange={(e) => handleFormChange("recipientCompany", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">発注元（自社名）</label>
+                        <Input
+                          value={formData.issuerCompany}
+                          onChange={(e) => handleFormChange("issuerCompany", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+                    </div>
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between gap-2 font-semibold text-secondary">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="flex items-center gap-2 font-semibold text-secondary">
                         <div className="h-1 w-1 rounded-full bg-secondary" />
                         品目一覧
-                      </CardTitle>
-                      <CardDescription className="flex items-center gap-4">
+                      </h3>
+                      <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                           <Switch id="items-edit-mode" checked={isItemsEditing} onCheckedChange={setIsItemsEditing} />
                           <Label
@@ -630,280 +597,271 @@ export default function QuoteToOrderPage() {
                           <Plus className="h-4 w-4 mr-1" />
                           品目を追加
                         </Button>
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="mb-4 text-sm text-muted-foreground">
-                        {isItemsEditing ? "品目を追加、編集、削除できます" : "編集するにはトグルをONにしてください"}
-                      </p>
+                      </div>
+                    </div>
 
-                      <div className="space-y-4">
-                        {(formData.items ?? []).map((item, index) => (
-                          <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
-                            <div className="mb-3 flex items-center justify-between">
-                              <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
-                              {isItemsEditing && formData.items.length > 1 && (
-                                <Button
-                                  onClick={() => removeItem(item.id)}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      {isItemsEditing ? "品目を追加、編集、削除できます" : "編集するにはトグルをONにしてください"}
+                    </p>
 
-                            <div className="space-y-3">
-                              <div className="grid gap-3 sm:grid-cols-4">
-                                <div>
-                                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
-                                    品目名
-                                  </label>
-                                  <Input
-                                    value={item.productName}
-                                    onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
-                                    placeholder="品目名を入力"
-                                    className="elevation-1 border-0 bg-muted/30"
-                                    disabled={!isItemsEditing}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
-                                  <Input
-                                    type="number"
-                                    value={item.unitPrice}
-                                    onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
-                                    placeholder="0"
-                                    className="elevation-1 border-0 bg-muted/30 font-mono"
-                                    disabled={!isItemsEditing}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
-                                  <Input
-                                    type="number"
-                                    value={item.quantity}
-                                    onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
-                                    placeholder="1"
-                                    className="elevation-1 border-0 bg-muted/30"
-                                    disabled={!isItemsEditing}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
-                                  <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
-                                    ¥{(Number.parseFloat(item.amount) || 0).toLocaleString("ja-JP")}
-                                  </div>
-                                </div>
-                              </div>
+                    <div className="space-y-4">
+                      {(formData.items ?? []).map((item, index) => (
+                        <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
+                            {isItemsEditing && formData.items.length > 1 && (
+                              <Button
+                                onClick={() => removeItem(item.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
 
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-4">
                               <div>
-                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
-                                <Textarea
-                                  value={item.description}
-                                  onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
+                                <Input
+                                  value={item.productName}
+                                  onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
+                                  placeholder="品目名を入力"
                                   className="elevation-1 border-0 bg-muted/30"
-                                  rows={2}
                                   disabled={!isItemsEditing}
                                 />
                               </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
+                                <Input
+                                  type="number"
+                                  value={item.unitPrice}
+                                  onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
+                                  placeholder="0"
+                                  className="elevation-1 border-0 bg-muted/30 font-mono"
+                                  disabled={!isItemsEditing}
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
+                                  placeholder="1"
+                                  className="elevation-1 border-0 bg-muted/30"
+                                  disabled={!isItemsEditing}
+                                />
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
+                                <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
+                                  ¥{(Number.parseFloat(item.amount) || 0).toLocaleString("ja-JP")}
+                                </div>
+                              </div>
                             </div>
-                          </Card>
-                        ))}
-                      </div>
 
-                      <div className="elevation-2 rounded-lg p-4 bg-slate-600">
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
-                          <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
-                        </div>
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
+                              <Textarea
+                                value={item.description}
+                                onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
+                                className="elevation-1 border-0 bg-muted/30"
+                                rows={2}
+                                disabled={!isItemsEditing}
+                              />
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+
+                    <div className="elevation-2 rounded-lg p-4 bg-slate-600">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
+                        <div className="text-2xl font-bold text-accent-foreground">¥{calculateTotal()}</div>
                       </div>
-                    </CardContent>
+                    </div>
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-accent/5 to-transparent p-5">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 font-semibold text-primary">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
-                        納期・条件
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
-                                    !formData.desiredDeliveryDate && "text-muted-foreground",
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {formData.desiredDeliveryDate &&
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
+                      <div className="h-1 w-1 rounded-full bg-primary" />
+                      納期・条件
+                    </h3>
+
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">希望納期</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.desiredDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.desiredDeliveryDate &&
+                                isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.desiredDeliveryDate &&
                                   isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
-                                    ? format(
-                                        parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()),
-                                        "yyyy年MM月dd日",
-                                        { locale: ja },
-                                      )
-                                    : "日付を選択"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={
-                                    formData.desiredDeliveryDate &&
-                                    isValid(parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date()))
-                                      ? parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date())
-                                      : undefined
+                                    ? parse(formData.desiredDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
                                   }
-                                  onSelect={(date) => {
-                                    if (date) {
-                                      handleFormChange("desiredDeliveryDate", format(date, "yyyyMMdd"))
-                                    }
-                                  }}
-                                  locale={ja}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
-                                    !formData.requestedDeliveryDate && "text-muted-foreground",
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {formData.requestedDeliveryDate &&
+                                }}
+                                locale={ja}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">請納期</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
+                                  !formData.requestedDeliveryDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formData.requestedDeliveryDate &&
+                                isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
+                                  ? format(
+                                      parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()),
+                                      "yyyy年MM月dd日",
+                                      { locale: ja },
+                                    )
+                                  : "日付を選択"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={
+                                  formData.requestedDeliveryDate &&
                                   isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
-                                    ? format(
-                                        parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()),
-                                        "yyyy年MM月dd日",
-                                        { locale: ja },
-                                      )
-                                    : "日付を選択"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={
-                                    formData.requestedDeliveryDate &&
-                                    isValid(parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date()))
-                                      ? parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date())
-                                      : undefined
+                                    ? parse(formData.requestedDeliveryDate, "yyyyMMdd", new Date())
+                                    : undefined
+                                }
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
                                   }
-                                  onSelect={(date) => {
-                                    if (date) {
-                                      handleFormChange("requestedDeliveryDate", format(date, "yyyyMMdd"))
-                                    }
-                                  }}
-                                  locale={ja}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">支払条件</label>
-                          <Input
-                            value={formData.paymentTerms}
-                            onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">受渡場所</label>
-                          <Input
-                            value={formData.deliveryLocation}
-                            onChange={(e) => handleFormChange("deliveryLocation", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
-                          <Input
-                            value={formData.inspectionDeadline}
-                            onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
-                            className="elevation-1 border-0 bg-background"
-                          />
+                                }}
+                                locale={ja}
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
-                    </CardContent>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">支払条件</label>
+                        <Input
+                          value={formData.paymentTerms}
+                          onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">受渡場所</label>
+                        <Input
+                          value={formData.deliveryLocation}
+                          onChange={(e) => handleFormChange("deliveryLocation", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">検査完了期日</label>
+                        <Input
+                          value={formData.inspectionDeadline}
+                          onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+                    </div>
                   </Card>
 
                   <Card className="elevation-1 border-0 bg-gradient-to-br from-primary/5 to-transparent p-5">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 font-semibold text-primary">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
-                        担当者情報
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">担当</label>
-                            <Input
-                              value={formData.manager}
-                              onChange={(e) => handleFormChange("manager", e.target.value)}
-                              className="elevation-1 border-0 bg-background"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">承認</label>
-                            <Input
-                              value={formData.approver}
-                              onChange={(e) => handleFormChange("approver", e.target.value)}
-                              className="elevation-1 border-0 bg-background"
-                              placeholder="（空欄）"
-                            />
-                          </div>
-                        </div>
+                    <h3 className="mb-4 flex items-center gap-2 font-semibold text-primary">
+                      <div className="h-1 w-1 rounded-full bg-primary" />
+                      担当者情報
+                    </h3>
 
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-muted-foreground">自社住所</label>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">担当</label>
                           <Input
-                            value={formData.issuerAddress}
-                            onChange={(e) => handleFormChange("issuerAddress", e.target.value)}
+                            value={formData.manager}
+                            onChange={(e) => handleFormChange("manager", e.target.value)}
                             className="elevation-1 border-0 bg-background"
                           />
                         </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">電話</label>
-                            <Input
-                              value={formData.phone}
-                              onChange={(e) => handleFormChange("phone", e.target.value)}
-                              className="elevation-1 border-0 bg-background font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-2 block text-sm font-medium text-muted-foreground">FAX</label>
-                            <Input
-                              value={formData.fax}
-                              onChange={(e) => handleFormChange("fax", e.target.value)}
-                              className="elevation-1 border-0 bg-background font-mono"
-                            />
-                          </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">承認</label>
+                          <Input
+                            value={formData.approver}
+                            onChange={(e) => handleFormChange("approver", e.target.value)}
+                            className="elevation-1 border-0 bg-background"
+                            placeholder="（空欄）"
+                          />
                         </div>
                       </div>
-                    </CardContent>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-muted-foreground">自社住所</label>
+                        <Input
+                          value={formData.issuerAddress}
+                          onChange={(e) => handleFormChange("issuerAddress", e.target.value)}
+                          className="elevation-1 border-0 bg-background"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">電話</label>
+                          <Input
+                            value={formData.phone}
+                            onChange={(e) => handleFormChange("phone", e.target.value)}
+                            className="elevation-1 border-0 bg-background font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-muted-foreground">FAX</label>
+                          <Input
+                            value={formData.fax}
+                            onChange={(e) => handleFormChange("fax", e.target.value)}
+                            className="elevation-1 border-0 bg-background font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </Card>
                 </div>
               </Card>
