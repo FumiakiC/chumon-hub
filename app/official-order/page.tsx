@@ -172,7 +172,7 @@ export default function QuoteToOrderPage() {
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-blue-500" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">注文書作成システム</span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">本注文書作成</span>
             </div>
           </div>
           <div className="w-[88px]" /> {/* Spacer for balance */}
@@ -181,13 +181,7 @@ export default function QuoteToOrderPage() {
 
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100 md:text-4xl">
-              本注文書作成
-            </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">正式な発注処理として確定した注文書を作成します</p>
-          </div>
-
+          
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
             <div className="lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] lg:w-[45%] lg:overflow-y-auto no-scrollbar">
               <div className="space-y-6">
