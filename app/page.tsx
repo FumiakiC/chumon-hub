@@ -583,7 +583,7 @@ export default function QuoteToOrderPage() {
                           <Switch id="items-edit-mode" checked={isItemsEditing} onCheckedChange={setIsItemsEditing} />
                           <Label
                             htmlFor="items-edit-mode"
-                            className="text-sm text-muted-foreground cursor-pointer w-24 text-right inline-block"
+                            className="text-sm text-muted-foreground cursor-pointer w-24 text-left inline-block"
                           >
                             {isItemsEditing ? "編集モード" : "ロック中"}
                           </Label>
