@@ -13,8 +13,8 @@ export async function POST(req: Request) {
     startFileCacheMaintenance()
     
     const formData = await req.formData()
-    const file = formData.get("file") as File
-    const mimeType = formData.get("mimeType") as string
+    const file = formData.get("file")
+    const mimeType = formData.get("mimeType")
 
     // basic diagnostics: ensure we received values
     console.log('[v0] check-document-type request:', { mimeType, hasFile: !!file })
