@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon } from "lucide-react"
+import { Upload, FileText, FileImage, X, Trash2, Plus, Copy, Check, CalendarIcon, Lock, Unlock } from "lucide-react"
 import { useState, useRef, useEffect } from "react"
 import { ProcessingStepper } from "@/components/processing-stepper/processing-stepper"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -70,6 +70,7 @@ export default function QuoteToOrderPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
   const [formData, setFormData] = useState<OrderFormData>({
     orderNo: "",
@@ -355,6 +356,10 @@ export default function QuoteToOrderPage() {
     fileInputRef.current?.click()
   }
 
+  const toggleEditing = () => {
+    setIsEditing((prev) => !prev)
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="flex-1 p-4 md:p-8">
@@ -486,17 +491,23 @@ export default function QuoteToOrderPage() {
 
             <div className="flex-1 space-y-6 lg:min-w-[50%]">
               <Card className="elevation-2 border-0 bg-white p-8 dark:bg-slate-900">
-                <div className="mb-6 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="rounded-full bg-secondary/10 p-2">
-                      <FileText className="h-5 w-5 text-secondary" />
-                    </div>
-                    <h2 className="text-xl font-bold text-foreground">発注フォーム（抽出結果）</h2>
-                  </div>
+                <div className="mb-6 flex items-center justify-end gap-2">
+                  <Button onClick={() => setIsEditing(!isEditing)} variant="outline" size="sm" className="gap-2">
+                    {isEditing ? (
+                      <>
+                        <Lock className="h-4 w-4" />
+                        編集を終了
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="h-4 w-4" />
+                        品目・基本情報を編集
+                      </>
+                    )}
+                  </Button>
                   <Button
                     onClick={() => {
-                      if (!navigator.clipboard) {
-                        console.error("[v0] Clipboard API not available.")
+                      if (!formData.orderNo && !formData.items.some((item) => item.productName)) {
                         return
                       }
                       const jsonString = JSON.stringify(formData, null, 2)
@@ -514,7 +525,7 @@ export default function QuoteToOrderPage() {
                     variant="outline"
                     size="sm"
                     className="gap-2"
-                    disabled={!formData.orderNo && !formData.items.some(item => item.productName)}
+                    disabled={!formData.orderNo && !formData.items.some((item) => item.productName)}
                   >
                     {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {isCopied ? "コピーしました" : "コピー"}
@@ -535,6 +546,7 @@ export default function QuoteToOrderPage() {
                           value={formData.orderNo}
                           onChange={(e) => handleFormChange("orderNo", e.target.value)}
                           className="elevation-1 border-0 bg-background font-mono"
+                          disabled={!isEditing}
                         />
                       </div>
                       <div>
@@ -543,6 +555,7 @@ export default function QuoteToOrderPage() {
                           value={formData.quoteNo}
                           onChange={(e) => handleFormChange("quoteNo", e.target.value)}
                           className="elevation-1 border-0 bg-background font-mono"
+                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -556,6 +569,7 @@ export default function QuoteToOrderPage() {
                           value={formData.recipientCompany}
                           onChange={(e) => handleFormChange("recipientCompany", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
                       <div>
@@ -564,6 +578,7 @@ export default function QuoteToOrderPage() {
                           value={formData.issuerCompany}
                           onChange={(e) => handleFormChange("issuerCompany", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -575,14 +590,16 @@ export default function QuoteToOrderPage() {
                         <div className="h-1 w-1 rounded-full bg-secondary" />
                         品目一覧
                       </h3>
-                      <Button
-                        onClick={addItem}
-                        size="sm"
-                        className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        品目を追加
-                      </Button>
+                      {isEditing && (
+                        <Button
+                          onClick={addItem}
+                          size="sm"
+                          className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          品目を追加
+                        </Button>
+                      )}
                     </div>
 
                     <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
@@ -592,7 +609,7 @@ export default function QuoteToOrderPage() {
                         <Card key={item.id} className="elevation-1 border border-border/50 bg-background p-4">
                           <div className="mb-3 flex items-center justify-between">
                             <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
-                            {formData.items.length > 1 && (
+                            {isEditing && formData.items.length > 1 && (
                               <Button
                                 onClick={() => removeItem(item.id)}
                                 variant="ghost"
@@ -613,6 +630,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "productName", e.target.value)}
                                   placeholder="品目名を入力"
                                   className="elevation-1 border-0 bg-muted/30"
+                                  disabled={!isEditing}
                                 />
                               </div>
                               <div>
@@ -623,6 +641,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "unitPrice", e.target.value)}
                                   placeholder="0"
                                   className="elevation-1 border-0 bg-muted/30 font-mono"
+                                  disabled={!isEditing}
                                 />
                               </div>
                               <div>
@@ -633,6 +652,7 @@ export default function QuoteToOrderPage() {
                                   onChange={(e) => handleItemChange(item.id, "quantity", e.target.value)}
                                   placeholder="1"
                                   className="elevation-1 border-0 bg-muted/30"
+                                  disabled={!isEditing}
                                 />
                               </div>
                               <div>
@@ -650,6 +670,7 @@ export default function QuoteToOrderPage() {
                                 onChange={(e) => handleItemChange(item.id, "description", e.target.value)}
                                 className="elevation-1 border-0 bg-muted/30"
                                 rows={2}
+                                disabled={!isEditing}
                               />
                             </div>
                           </div>
@@ -683,6 +704,7 @@ export default function QuoteToOrderPage() {
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
                                   !formData.desiredDeliveryDate && "text-muted-foreground",
                                 )}
+                                disabled={!isEditing}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.desiredDeliveryDate &&
@@ -724,6 +746,7 @@ export default function QuoteToOrderPage() {
                                   "w-full justify-start text-left font-normal elevation-1 border-0 bg-background",
                                   !formData.requestedDeliveryDate && "text-muted-foreground",
                                 )}
+                                disabled={!isEditing}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {formData.requestedDeliveryDate &&
@@ -763,6 +786,7 @@ export default function QuoteToOrderPage() {
                           value={formData.paymentTerms}
                           onChange={(e) => handleFormChange("paymentTerms", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
 
@@ -772,6 +796,7 @@ export default function QuoteToOrderPage() {
                           value={formData.deliveryLocation}
                           onChange={(e) => handleFormChange("deliveryLocation", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
 
@@ -781,6 +806,7 @@ export default function QuoteToOrderPage() {
                           value={formData.inspectionDeadline}
                           onChange={(e) => handleFormChange("inspectionDeadline", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
                     </div>
@@ -800,6 +826,7 @@ export default function QuoteToOrderPage() {
                             value={formData.manager}
                             onChange={(e) => handleFormChange("manager", e.target.value)}
                             className="elevation-1 border-0 bg-background"
+                            disabled={!isEditing}
                           />
                         </div>
                         <div>
@@ -809,6 +836,7 @@ export default function QuoteToOrderPage() {
                             onChange={(e) => handleFormChange("approver", e.target.value)}
                             className="elevation-1 border-0 bg-background"
                             placeholder="（空欄）"
+                            disabled={!isEditing}
                           />
                         </div>
                       </div>
@@ -819,6 +847,7 @@ export default function QuoteToOrderPage() {
                           value={formData.issuerAddress}
                           onChange={(e) => handleFormChange("issuerAddress", e.target.value)}
                           className="elevation-1 border-0 bg-background"
+                          disabled={!isEditing}
                         />
                       </div>
 
@@ -829,6 +858,7 @@ export default function QuoteToOrderPage() {
                             value={formData.phone}
                             onChange={(e) => handleFormChange("phone", e.target.value)}
                             className="elevation-1 border-0 bg-background font-mono"
+                            disabled={!isEditing}
                           />
                         </div>
                         <div>
@@ -837,6 +867,7 @@ export default function QuoteToOrderPage() {
                             value={formData.fax}
                             onChange={(e) => handleFormChange("fax", e.target.value)}
                             className="elevation-1 border-0 bg-background font-mono"
+                            disabled={!isEditing}
                           />
                         </div>
                       </div>
