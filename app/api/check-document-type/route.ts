@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     }
 
     const result = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-2.5-flash-lite"),
       schema: z.object({
         isQuotation: z.boolean().describe("Whether the document is a quotation, estimate, or purchase order form"),
         documentType: z
