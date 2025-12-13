@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { z } from "zod"
 import type { LogEntry } from "@/types/logEntry"
 
@@ -43,7 +43,7 @@ interface ProductItem {
   amount: string
 }
 
-type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
+type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error" | "cancelled"
 
 export function useOrderProcessing() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -54,6 +54,7 @@ export function useOrderProcessing() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Object URLのライフサイクル管理（自動生成・破棄）
   useEffect(() => {
@@ -101,10 +102,17 @@ export function useOrderProcessing() {
   }
 
   const handleRemoveFile = () => {
-    setSelectedFile(null)
-    setError(null)
-    setProcessingStatus("idle")
-    setLogs([])
+    if (isLoading && abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      setSelectedFile(null)
+      setError(null)
+      // ログは残したままにする
+    } else {
+      setSelectedFile(null)
+      setError(null)
+      setProcessingStatus("idle")
+      setLogs([])
+    }
   }
 
   const addLog = (message: string, type: "info" | "success" | "error" = "info") => {
@@ -145,6 +153,8 @@ export function useOrderProcessing() {
     setIsLoading(true)
     setError(null)
     setLogs([])
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
 
     setProcessingStatus("uploading")
     addLog("ファイルアップロードを開始...", "info")
@@ -155,6 +165,9 @@ export function useOrderProcessing() {
       formData.append("mimeType", selectedFile.type)
 
       await new Promise((r) => setTimeout(r, 800))
+      if (signal.aborted) {
+        throw new DOMException("処理が中断されました", "AbortError")
+      }
       addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
 
       setProcessingStatus("flash_check")
@@ -163,10 +176,14 @@ export function useOrderProcessing() {
       const checkResponse = await fetch("/api/check-document-type", {
         method: "POST",
         body: formData,
+        signal: signal,
       })
 
       if (!checkResponse.ok) throw new Error("判定APIエラー")
       const checkResult = await checkResponse.json()
+      if (signal.aborted) {
+        throw new DOMException("処理が中断されました", "AbortError")
+      }
 
       if (!checkResult.isQuotation) {
         addLog(`判定結果: ❌ 見積書・発注書ではありません (${checkResult.documentType})。処理を中断します。`, "error")
@@ -189,6 +206,7 @@ export function useOrderProcessing() {
         body: JSON.stringify({
           fileId: checkResult.fileId, // Use cached file
         }),
+        signal: signal,
       })
 
       if (!response.ok) {
@@ -196,6 +214,9 @@ export function useOrderProcessing() {
       }
 
       const result = await response.json()
+      if (signal.aborted) {
+        throw new DOMException("処理が中断されました", "AbortError")
+      }
 
       if (result.error) {
         throw new Error(result.error)
@@ -249,10 +270,16 @@ export function useOrderProcessing() {
       addLog("データ抽出完了。JSONパース成功。", "success")
     } catch (err) {
       console.error("[v0] Extraction error:", err)
-      setProcessingStatus("error")
-      addLog("エラーが発生しました", "error")
-      setError(err instanceof Error ? err.message : "データの抽出に失敗しました")
+      if (err instanceof DOMException && err.name === "AbortError") {
+        addLog("ユーザーの操作により処理を停止しました", "info")
+        setProcessingStatus("cancelled")
+      } else {
+        setProcessingStatus("error")
+        addLog("エラーが発生しました", "error")
+        setError(err instanceof Error ? err.message : "データの抽出に失敗しました")
+      }
     } finally {
+      abortControllerRef.current = null
       setIsLoading(false)
     }
   }

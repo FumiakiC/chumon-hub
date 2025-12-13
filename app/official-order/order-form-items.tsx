@@ -1,16 +1,19 @@
 "use client"
 
-import { useEffect,useMemo } from "react"
+import type React from "react"
+
+import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Trash2 } from "lucide-react"
 import {
-  Control,
-  UseFormRegister,
-  UseFormSetValue,
-  UseFormWatch,
+  type Control,
+  Controller,
+  type UseFormRegister,
+  type UseFormSetValue,
+  type UseFormWatch,
   useFieldArray,
   useWatch,
 } from "react-hook-form"
@@ -21,6 +24,63 @@ type OrderFormItemsProps = {
   register: UseFormRegister<OrderFormData>
   watch: UseFormWatch<OrderFormData>
   setValue: UseFormSetValue<OrderFormData>
+}
+
+function NumericInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: number
+  onChange: (value: number) => void
+  placeholder?: string
+  className?: string
+}) {
+  const [isFocused, setIsFocused] = useState(false)
+  const [inputValue, setInputValue] = useState(String(value || ""))
+
+  // Sync internal state when external value changes (e.g., from form reset)
+  useEffect(() => {
+    if (!isFocused) {
+      setInputValue(String(value || ""))
+    }
+  }, [value, isFocused])
+
+  const handleFocus = () => {
+    setIsFocused(true)
+    setInputValue(value === 0 ? "" : String(value))
+  }
+
+  const handleBlur = () => {
+    setIsFocused(false)
+    const numericValue = Number.parseFloat(inputValue) || 0
+    onChange(numericValue)
+    setInputValue(String(numericValue || ""))
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    // Allow only numbers and decimal point
+    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+      setInputValue(val)
+    }
+  }
+
+  const displayValue = isFocused ? inputValue : value ? value.toLocaleString("ja-JP") : ""
+
+  return (
+    <Input
+      type={isFocused ? "text" : "text"}
+      inputMode="numeric"
+      value={displayValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      className={`${className} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+    />
+  )
 }
 
 export function OrderFormItems({ control, register, watch, setValue }: OrderFormItemsProps) {
@@ -112,20 +172,32 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
-                  <Input
-                    type="number"
-                    {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
-                    placeholder="0"
-                    className="elevation-1 border-0 bg-muted/30 font-mono"
+                  <Controller
+                    control={control}
+                    name={`items.${index}.unitPrice`}
+                    render={({ field }) => (
+                      <NumericInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="0"
+                        className="elevation-1 border-0 bg-muted/30 font-mono"
+                      />
+                    )}
                   />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
-                  <Input
-                    type="number"
-                    {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                    placeholder="1"
-                    className="elevation-1 border-0 bg-muted/30"
+                  <Controller
+                    control={control}
+                    name={`items.${index}.quantity`}
+                    render={({ field }) => (
+                      <NumericInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="1"
+                        className="elevation-1 border-0 bg-muted/30"
+                      />
+                    )}
                   />
                 </div>
                 <div>
