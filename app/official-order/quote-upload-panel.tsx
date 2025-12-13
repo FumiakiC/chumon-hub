@@ -69,11 +69,9 @@ export function QuoteUploadPanel({
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">見積書アップロード</h2>
         </div>
 
-        {processingStatus !== "idle" && (
-          <div className="mb-6">
-            <ProcessingStepper status={processingStatus} logs={logs} />
-          </div>
-        )}
+        <div className="mb-6">
+          <ProcessingStepper status={processingStatus} logs={logs} />
+        </div>
 
         {!selectedFile ? (
           <div
@@ -150,40 +148,43 @@ export function QuoteUploadPanel({
           </div>
         )}
 
-        {(logs.length > 0 || isLoading) && (
-          <div className="mt-6 rounded-xl bg-slate-50 border border-slate-100 dark:bg-slate-950 dark:border-slate-800 overflow-hidden">
-            <div
-              className={cn(
-                "flex items-center justify-between p-4 cursor-pointer transition-colors",
-                processingStatus === "error"
-                  ? "bg-red-50 hover:bg-red-100/70 dark:bg-red-900/20 dark:hover:bg-red-900/30"
-                  : "hover:bg-slate-100/50 dark:hover:bg-slate-900/50",
+        <div className="mt-6 rounded-xl bg-slate-50 border border-slate-100 dark:bg-slate-950 dark:border-slate-800 overflow-hidden">
+          <div
+            className={cn(
+              "flex items-center justify-between p-4 cursor-pointer transition-colors",
+              processingStatus === "error"
+                ? "bg-red-50 hover:bg-red-100/70 dark:bg-red-900/20 dark:hover:bg-red-900/30"
+                : "hover:bg-slate-100/50 dark:hover:bg-slate-900/50",
+            )}
+            onClick={() => setIsLogOpen(!isLogOpen)}
+          >
+            <div className="flex items-center gap-3 overflow-hidden">
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 animate-pulse shrink-0 whitespace-nowrap">
+                  <span className="h-2 w-2 rounded-full bg-current" />
+                  <span className="text-sm font-medium">処理中...</span>
+                </div>
+              ) : processingStatus === "complete" ? (
+                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">
+                  完了しました
+                </span>
+              ) : processingStatus === "error" ? (
+                <span className="text-sm font-medium text-red-600 dark:text-red-400 shrink-0 whitespace-nowrap">
+                  エラーが発生しました
+                </span>
+              ) : processingStatus === "cancelled" ? (
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400 shrink-0 whitespace-nowrap">
+                  キャンセルされました
+                </span>
+              ) : processingStatus === "idle" ? (
+                <span className="text-sm font-medium text-slate-500 dark:text-slate-500 shrink-0 whitespace-nowrap">
+                  準備完了
+                </span>
+              ) : (
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400 shrink-0 whitespace-nowrap">
+                  待機中
+                </span>
               )}
-              onClick={() => setIsLogOpen(!isLogOpen)}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                {isLoading ? (
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 animate-pulse shrink-0 whitespace-nowrap">
-                    <span className="h-2 w-2 rounded-full bg-current" />
-                    <span className="text-sm font-medium">処理中...</span>
-                  </div>
-                ) : processingStatus === "complete" ? (
-                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">
-                    完了しました
-                  </span>
-                ) : processingStatus === "error" ? (
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400 shrink-0 whitespace-nowrap">
-                    エラーが発生しました
-                  </span>
-                ) : processingStatus === "cancelled" ? (
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400 shrink-0 whitespace-nowrap">
-                    キャンセルされました
-                  </span>
-                ) : (
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400 shrink-0 whitespace-nowrap">
-                    待機中
-                  </span>
-                )}
 
                 {lastLog && !isLogOpen && (
                   <span className="text-sm text-slate-500 truncate border-l border-slate-200 pl-3 ml-1 dark:border-slate-700 min-w-0">
@@ -196,21 +197,22 @@ export function QuoteUploadPanel({
               </Button>
             </div>
 
+          <div
+            className={cn(
+              "overflow-hidden transition-all duration-300 ease-in-out bg-slate-950",
+              isLogOpen ? "max-h-[300px] border-t border-slate-200 dark:border-slate-800" : "max-h-0",
+            )}
+          >
             <div
-              className={cn(
-                "overflow-hidden transition-all duration-300 ease-in-out bg-slate-950",
-                isLogOpen ? "max-h-[300px] border-t border-slate-200 dark:border-slate-800" : "max-h-0",
-              )}
+              ref={logContainerRef}
+              className="p-4 font-mono text-xs text-slate-300 space-y-1.5 h-full max-h-[284px] overflow-y-auto custom-scrollbar"
             >
-              <div
-                ref={logContainerRef}
-                className="p-4 font-mono text-xs text-slate-300 space-y-1.5 h-full max-h-[284px] overflow-y-auto custom-scrollbar"
-              >
-                <div className="flex items-center gap-2 text-slate-500 mb-2 pb-2 border-b border-slate-800">
-                  <Terminal className="h-3 w-3" />
-                  <span>Processing Logs</span>
-                </div>
-                {logs.map((log, index) => (
+              <div className="flex items-center gap-2 text-slate-500 mb-2 pb-2 border-b border-slate-800">
+                <Terminal className="h-3 w-3" />
+                <span>Processing Logs</span>
+              </div>
+              {logs.length > 0 ? (
+                logs.map((log, index) => (
                   <div key={index} className="flex gap-3 animate-in fade-in slide-in-from-left-2 duration-300">
                     <span className="shrink-0 text-slate-600">[{log.timestamp}]</span>
                     <span
@@ -225,11 +227,15 @@ export function QuoteUploadPanel({
                       {log.message}
                     </span>
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <div className="text-slate-500 italic">
+                  ここに処理ログが表示されます...
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </Card>
 
       {previewUrl && selectedFile && (
