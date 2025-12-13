@@ -12,7 +12,7 @@ export default function NotFound() {
         poster="/404-poster.jpg"
         className="absolute inset-0 z-[-1] h-full w-full object-cover opacity-60"
       >
-        <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_sytANobx0QSKmtJHK5EbPt6pXukh/cRB5_Cul5QQlr_G2j4Sa6S/public/404-bg.webm" type="video/webm" />
+        <source src="/404-bg.webm" type="video/webm" />
       </video>
 
       {/* Dark Overlay */}
