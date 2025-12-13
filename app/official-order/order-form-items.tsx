@@ -38,12 +38,12 @@ function NumericInput({
   className?: string
 }) {
   const [isFocused, setIsFocused] = useState(false)
-  const [inputValue, setInputValue] = useState(String(value || ""))
+  const [inputValue, setInputValue] = useState(String(value ?? ""))
 
   // Sync internal state when external value changes (e.g., from form reset)
   useEffect(() => {
     if (!isFocused) {
-      setInputValue(String(value || ""))
+      setInputValue(String(value ?? ""))
     }
   }, [value, isFocused])
 
@@ -56,7 +56,7 @@ function NumericInput({
     setIsFocused(false)
     const numericValue = Number.parseFloat(inputValue) || 0
     onChange(numericValue)
-    setInputValue(String(numericValue || ""))
+    setInputValue(String(numericValue))
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +67,7 @@ function NumericInput({
     }
   }
 
-  const displayValue = isFocused ? inputValue : value ? value.toLocaleString("ja-JP") : ""
+  const displayValue = isFocused ? inputValue : value != null ? value.toLocaleString("ja-JP") : ""
 
   return (
     <Input

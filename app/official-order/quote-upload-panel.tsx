@@ -229,7 +229,7 @@ export function QuoteUploadPanel({
                   </div>
                 ))
               ) : (
-                <div className="text-slate-400 italic p-4 text-center">
+                <div className="text-slate-500 italic pl-1">
                   待機中...
                 </div>
               )}

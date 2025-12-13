@@ -273,6 +273,12 @@ export function useOrderProcessing() {
       if (err instanceof DOMException && err.name === "AbortError") {
         addLog("ユーザーの操作により処理を停止しました", "info")
         setProcessingStatus("cancelled")
+        
+        // 3秒後に自動的にidleステータスに戻す
+        setTimeout(() => {
+          setProcessingStatus("idle")
+          setLogs([])
+        }, 3000)
       } else {
         setProcessingStatus("error")
         addLog("エラーが発生しました", "error")
