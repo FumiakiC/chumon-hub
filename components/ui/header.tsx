@@ -1,12 +1,13 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { ChevronLeft, Settings, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type HeaderProps = {
-  title?: string
+  title?: ReactNode
   showBackButton?: boolean
   transparent?: boolean
 }
@@ -21,8 +22,9 @@ export function Header({ title, showBackButton = false, transparent = false }: H
 
   return (
     <header className={wrapperClass}>
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 md:px-8">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center px-4 md:px-8">
+        {/* Left: Back button */}
+        <div className="flex flex-1 items-center justify-start gap-3">
           {showBackButton && (
             <Link
               href="/"
@@ -32,11 +34,13 @@ export function Header({ title, showBackButton = false, transparent = false }: H
               <span className="text-sm font-bold">戻る</span>
             </Link>
           )}
-
-          {title && <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{title}</span>}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Center: Title */}
+        <div className="flex flex-none items-center justify-center px-2">{title}</div>
+
+        {/* Right: Icons */}
+        <div className="flex flex-1 items-center justify-end gap-2">
           <Link href="/admin">
             <Button
               variant="ghost"

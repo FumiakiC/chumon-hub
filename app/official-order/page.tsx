@@ -1,6 +1,7 @@
 "use client"
 
 import { Header } from "@/components/ui/header"
+import { FileText } from "lucide-react"
 import { useOrderProcessing } from "@/hooks/use-order-processing"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -99,7 +100,16 @@ export default function QuoteToOrderPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <Header transparent={false} showBackButton title="本注文書作成" />
+      <Header
+        transparent={false}
+        showBackButton
+        title={
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">本注文書作成</span>
+          </div>
+        }
+      />
 
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto max-w-[1600px]">
