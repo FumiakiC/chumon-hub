@@ -229,8 +229,8 @@ export function QuoteUploadPanel({
                   </div>
                 ))
               ) : (
-                <div className="text-slate-500 italic">
-                  ここに処理ログが表示されます...
+                <div className="text-slate-400 italic p-4 text-center">
+                  待機中...
                 </div>
               )}
             </div>
@@ -246,7 +246,7 @@ export function QuoteUploadPanel({
           </div>
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950">
             {selectedFile.type === "application/pdf" ? (
-              <iframe src={previewUrl} className="h-[800px] w-full" title="PDF Preview" />
+              <iframe src={previewUrl} className="h-[1024px] w-full" title="PDF Preview" />
             ) : (
               <img
                 src={previewUrl || "/placeholder.svg"}

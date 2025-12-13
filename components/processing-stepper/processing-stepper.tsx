@@ -24,7 +24,7 @@ const STEP_CONFIGS: StepConfig[] = [
 ]
 
 function getStepIndex(status: ProcessingStatus): number {
-  if (status === "idle") return 0 // idle時は最初のステップを準備完了状態として表示
+  if (status === "idle") return -1 // idle時はステップをグレー状態で表示
   if (status === "error" || status === "cancelled") return -1 // エラー時・キャンセル時は別途ハンドリング
   return STEP_ORDER.indexOf(status)
 }
