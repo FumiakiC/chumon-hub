@@ -1,38 +1,12 @@
 import Link from "next/link"
-import { FileText, FileClock, ClipboardList, Settings, User } from "lucide-react"
+import { FileText, FileClock, ClipboardList } from "lucide-react"
+import { Header } from "@/components/ui/header"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      {/* ▼ ヘッダーエリア (右側メニューボタンを目立たせないため背景はなし) */}
-      <header className="sticky top-0 z-50 flex h-16 items-center justify-end px-6">
-        {/* 右側のメニューエリア */}
-        <div className="flex items-center gap-2">
-          <Link href="/admin">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-slate-400 transition-all duration-300 ease-out hover:rotate-180 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            >
-              <Settings className="h-5 w-5" />
-              <span className="sr-only">設定（管理者）</span>
-            </Button>
-          </Link>
-
-          {/* ユーザーメニューボタン */}
-          <Link href="/profile">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full text-slate-400 transition-all duration-300 ease-out hover:scale-110 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            >
-              <User className="h-5 w-5" />
-              <span className="sr-only">ユーザーメニュー</span>
-            </Button>
-          </Link>
-        </div>
-      </header>
+      <Header transparent showBackButton={false} />
 
       {/* ▼ メインコンテンツ */}
       <main className="flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 px-4 py-12 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">

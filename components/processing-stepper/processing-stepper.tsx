@@ -4,7 +4,7 @@ import { StepItem } from "./step-item"
 import { ProgressBar } from "./progress-bar"
 import type { LucideIcon } from "lucide-react"
 
-export type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error"
+export type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error" | "cancelled"
 
 const STEP_ORDER: ProcessingStatus[] = ["uploading", "flash_check", "pro_extraction", "complete"]
 
@@ -24,8 +24,8 @@ const STEP_CONFIGS: StepConfig[] = [
 ]
 
 function getStepIndex(status: ProcessingStatus): number {
-  if (status === "idle") return -1
-  if (status === "error") return -1 // エラー時は別途ハンドリング
+  if (status === "idle") return -1 // idle時はステップをグレー状態で表示
+  if (status === "error" || status === "cancelled") return -1 // エラー時・キャンセル時は別途ハンドリング
   return STEP_ORDER.indexOf(status)
 }
 
