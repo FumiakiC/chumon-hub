@@ -1,30 +1,50 @@
-# Quote to Order Form
+# CHUMON HUB (Development Preview)
 
-*Automatically synced with your [v0.app](https://v0.app) deployments*
+CHUMON HUBは、見積書から注文書を自動生成・管理するための統合プラットフォームです。
+Google Gemini API (Multimodal AI) を活用し、画像やPDFの見積書から明細情報を高精度に抽出し、注文作成プロセスを効率化します。
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/sadtire7761-9948s-projects/v0-quote-to-order-form)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.app-black?style=for-the-badge)](https://v0.app/chat/prc7xYZ2TzC)
+**⚠️ 注意: 本プロジェクトは現在開発中（Work in Progress）です。**
 
-## Overview
+## 🚀 主な機能
 
-This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
+* **AI注文書作成**: アップロードされた見積書（画像/PDF）を最新の **Gemini 2.5 Flash** モデルで解析し、注文情報を自動入力します。
+* **ドラッグ＆ドロップ UI**: 直感的なファイル操作とプレビュー機能を提供します。
+* **リアルタイム編集**: AIが抽出したデータをフォーム上で修正・確認できます。
+* **モダンなUI**: Tailwind CSS, shadcn/ui を採用したレスポンシブデザインです。
 
-## Deployment
+## 🛠 技術スタック
 
-Your project is live at:
+* **Framework**: Next.js 16 (App Router)
+* **Language**: TypeScript
+* **AI/LLM**: Google Generative AI SDK (`gemini-2.5-flash`)
+* **UI Components**: shadcn/ui, Radix UI, Lucide React
+* **Styling**: Tailwind CSS v4
+* **Validation**: Zod, React Hook Form
+* **Package Manager**: pnpm
 
-**[https://vercel.com/sadtire7761-9948s-projects/v0-quote-to-order-form](https://vercel.com/sadtire7761-9948s-projects/v0-quote-to-order-form)**
+## ⚙️ インフラストラクチャ & デプロイ
 
-## Build your app
+現在、以下の構成で運用・開発を行っています。
 
-Continue building your app on:
+* **Hosting**: AWS Lightsail
+* **Security/Access Control**: Cloudflare Access (Zero Trust)
+    * 開発環境およびステージング環境へのアクセスはCloudflareによって保護されています。
 
-**[https://v0.app/chat/prc7xYZ2TzC](https://v0.app/chat/prc7xYZ2TzC)**
+### 今後のロードマップ
+* **コンテナ化**: Dockerによるアプリケーションのコンテナ化
+* **オーケストレーション**: Kubernetes (K8s) への移行・運用を検討中
+* **注文管理機能**: 履歴管理、ステータス追跡機能の実装
 
-## How It Works
+## 💻 ローカルでの開発手順
 
-1. Create and modify your project using [v0.app](https://v0.app)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+### 前提条件
+* Node.js (v18以上推奨)
+* pnpm
+* Google AI Studio の API Key
+
+### セットアップ
+
+1. **リポジトリのクローン**
+   ```bash
+   git clone <repository-url>
+   cd <repository-name>
