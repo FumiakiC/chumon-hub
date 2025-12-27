@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true, // ビルド時のESLintエラーを無視
-  },
+  // eeslint: {ignoreDuringBuilds: true,},のブロックを削除しました
   typescript: {
     ignoreBuildErrors: true,　// ビルド時のTypeScriptエラーを無視
   },
