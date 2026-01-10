@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chumon-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chumon-hub
+  template:
+    metadata:
+      labels:
+        app: chumon-hub
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: chumon-hub
+          # 重要: ユーザー名はすべて小文字にする
+          image: ghcr.io/your-github-user/chumon-hub:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chumon-hub-secret
+                  key: GOOGLE_API_KEY

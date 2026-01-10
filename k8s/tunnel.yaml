@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          # 環境変数としてトークンを注入
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tunnel-credentials # 手順1で作ったSecret名
+                  key: TUNNEL_TOKEN
+          args:
+            - tunnel
+            - --no-autoupdate
+            - run
+            # --token オプションは削除します（環境変数から読まれるため）
