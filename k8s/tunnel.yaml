@@ -20,7 +20,7 @@ spec:
             - name: TUNNEL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: tunnel-credentials # 手順1で作ったSecret名
+                  name: tunnel-credentials
                   key: TUNNEL_TOKEN
           args:
             - tunnel
