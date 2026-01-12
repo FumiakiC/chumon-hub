@@ -91,12 +91,12 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
-## セキュリティ設定 (Cloudflare Zero Trust)
+## 🔒 セキュリティ設定 (Cloudflare Zero Trust)
 
 本システムは外部からの直接アクセス（ポート開放）を行わず、**Cloudflare Tunnel** を経由して安全に公開されています。
 また、**Cloudflare Access** を利用して、認可されたメールアドレスを持つユーザーのみにアクセスを制限しています。
 
-### Cloudflare Tunnel の接続設定
+### 1. Cloudflare Tunnel の接続設定
 
 サーバーから Cloudflare エッジへの安全なトンネルを確立するための設定です。
 
@@ -110,6 +110,30 @@ kubectl apply -f k8s/service.yaml
    kubectl create secret generic tunnel-credentials \
      --from-literal=TUNNEL_TOKEN=<YOUR_TUNNEL_TOKEN>
    ```
+
+3. **Tunnel の起動（重要）**:
+   以下のコマンドでトンネル用コンテナを起動します。
+   ```bash
+   kubectl apply -f k8s/tunnel.yaml
+   ```
+
+4. **Public Hostname の設定**:
+   Cloudflare Dashboard 上で、公開ドメイン（例: chumon.example.com）と内部サービスを紐付けます。
+   - Service: HTTP
+   - URL: `chumon-hub-service:3000`
+
+### 2. Cloudflare Access の設定（認証の強制）
+
+1. **アプリケーションの追加**:
+   Dashboard > Access > Applications > "Add an application"
+   - Type: Self-hosted
+   - Application Domain: Tunnelで設定したドメインを入力
+
+2. **アクセスポリシーの作成**:
+   - Action: Allow
+   - Rules: Emails または Emails Ending in で許可したいメールアドレスを指定
+
+これにより、許可されたメールアドレス以外からのアクセスを完全に遮断します。
 
 ## 📂 ディレクトリ構成
 
