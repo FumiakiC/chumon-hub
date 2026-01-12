@@ -96,7 +96,7 @@ kubectl apply -f k8s/service.yaml
 本システムは外部からの直接アクセス（ポート開放）を行わず、**Cloudflare Tunnel** を経由して安全に公開されています。
 また、**Cloudflare Access** を利用して、認可されたメールアドレスを持つユーザーのみにアクセスを制限しています。
 
-### 1. Cloudflare Tunnel の接続設定
+### Cloudflare Tunnel の接続設定
 
 サーバーから Cloudflare エッジへの安全なトンネルを確立するための設定です。
 
@@ -111,7 +111,7 @@ kubectl apply -f k8s/service.yaml
      --from-literal=TUNNEL_TOKEN=<YOUR_TUNNEL_TOKEN>
    ```
 
-## �📂 ディレクトリ構成
+##　�📂 ディレクトリ構成
 
 ```
 .
