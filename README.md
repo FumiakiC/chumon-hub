@@ -91,7 +91,27 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
-## 📂 ディレクトリ構成
+## � セキュリティ設定 (Cloudflare Zero Trust)
+
+本システムは外部からの直接アクセス（ポート開放）を行わず、**Cloudflare Tunnel** を経由して安全に公開されています。
+また、**Cloudflare Access** を利用して、認可されたメールアドレスを持つユーザーのみにアクセスを制限しています。
+
+### 1. Cloudflare Tunnel の接続設定
+
+サーバーから Cloudflare エッジへの安全なトンネルを確立するための設定です。
+
+1. **Tunnel の作成**:
+   [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/) > Access > Tunnels から新しい Tunnel を作成し、発行されたトークンをコピーします。
+
+2. **K8s Secret の作成**:
+   取得したトークンを Kubernetes クラスターに登録します。
+   ```bash
+   # <YOUR_TUNNEL_TOKEN> を実際のトークンに置き換えて実行
+   kubectl create secret generic tunnel-credentials \
+     --from-literal=TUNNEL_TOKEN=<YOUR_TUNNEL_TOKEN>
+   ```
+
+## �📂 ディレクトリ構成
 
 ```
 .
