@@ -4,7 +4,7 @@ const nextConfig = {
   output: "standalone", // スタンドアロン出力を有効化
   
   typescript: {
-    ignoreBuildErrors: true, // ビルド時のTypeScriptエラーを無視
+    ignoreBuildErrors: false, // ビルド時のTypeScriptエラーを無視しない
   },
   images: {
     unoptimized: true,
