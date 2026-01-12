@@ -62,7 +62,7 @@ function NumericInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     // Allow only numbers and decimal point
-    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+    if (val === "" || /^-?[0-9]*\.?[0-9]*$/.test(val)) {
       setInputValue(val)
     }
   }
