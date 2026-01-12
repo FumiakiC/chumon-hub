@@ -3,7 +3,7 @@
 import { Header } from "@/components/ui/header"
 import { FileText } from "lucide-react"
 import { useOrderProcessing } from "@/hooks/use-order-processing"
-import { useForm } from "react-hook-form"
+import { useForm, type UseFormReturn } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { orderFormSchema, type OrderFormData } from "./schema"
 import { QuoteUploadPanel } from "./quote-upload-panel"
@@ -25,7 +25,7 @@ export default function QuoteToOrderPage() {
     handleTranscription,
   } = useOrderProcessing()
 
-  const form = useForm<OrderFormData>({
+  const form = useForm({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       orderNo: "",
@@ -129,7 +129,11 @@ export default function QuoteToOrderPage() {
               />
             </div>
 
-            <OrderForm form={form} isCopied={isCopied} setIsCopied={setIsCopied} />
+            <OrderForm 
+              form={form as unknown as UseFormReturn<OrderFormData>} 
+              isCopied={isCopied} 
+              setIsCopied={setIsCopied} 
+            />
           </div>
         </div>
       </div>

@@ -1,50 +1,118 @@
-# CHUMON HUB (Development Preview)
+# Chumon Hub (Order Management System)
 
-CHUMON HUBは、見積書から注文書を自動生成・管理するための統合プラットフォームです。
-Google Gemini API (Multimodal AI) を活用し、画像やPDFの見積書から明細情報を高精度に抽出し、注文作成プロセスを効率化します。
-
-**⚠️ 注意: 本プロジェクトは現在開発中（Work in Progress）です。**
+AI（Google Gemini API）を活用した注文管理・データ抽出システムです。PDFや画像の注文書から自動的にデータを構造化し、処理プロセスを効率化します。
 
 ## 🚀 主な機能
 
-* **AI注文書作成**: アップロードされた見積書（画像/PDF）を最新の **Gemini 2.5 Flash** モデルで解析し、注文情報を自動入力します。
-* **ドラッグ＆ドロップ UI**: 直感的なファイル操作とプレビュー機能を提供します。
-* **リアルタイム編集**: AIが抽出したデータをフォーム上で修正・確認できます。
-* **モダンなUI**: Tailwind CSS, shadcn/ui を採用したレスポンシブデザインです。
+- **AI データ抽出**: Google Gemini API を使用して、注文書（PDF/画像）から注文詳細を自動抽出
+- **注文管理フォーム**: Shadcn UI を採用したモダンな入力インターフェース
+- **ドキュメント判定**: アップロードされたファイルが適切な注文書かどうかを自動判定
 
 ## 🛠 技術スタック
 
-* **Framework**: Next.js 16 (App Router)
-* **Language**: TypeScript
-* **AI/LLM**: Google Generative AI SDK (`gemini-2.5-flash`)
-* **UI Components**: shadcn/ui, Radix UI, Lucide React
-* **Styling**: Tailwind CSS v4
-* **Validation**: Zod, React Hook Form
-* **Package Manager**: pnpm
+- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS, Shadcn UI
+- **AI**: Google Generative AI SDK (Gemini)
+- **Container**: Docker (Multi-stage builds)
+- **Orchestration**: Kubernetes (K3s)
+- **CI/CD**: GitHub Actions
 
-## ⚙️ インフラストラクチャ & デプロイ
-
-現在、以下の構成で運用・開発を行っています。
-
-* **Hosting**: AWS Lightsail
-* **Security/Access Control**: Cloudflare Access (Zero Trust)
-    * 開発環境およびステージング環境へのアクセスはCloudflareによって保護されています。
-
-### 今後のロードマップ
-* **コンテナ化**: Dockerによるアプリケーションのコンテナ化
-* **オーケストレーション**: Kubernetes (K8s) への移行・運用を検討中
-* **注文管理機能**: 履歴管理、ステータス追跡機能の実装
-
-## 💻 ローカルでの開発手順
+## 💻 ローカル開発環境のセットアップ
 
 ### 前提条件
-* Node.js (v18以上推奨)
-* pnpm
-* Google AI Studio の API Key
 
-### セットアップ
+- Node.js 20+
+- pnpm
 
-1. **リポジトリのクローン**
-   ```bash
-   git clone <repository-url>
-   cd <repository-name>
+### インストール
+
+```bash
+# リポジトリのクローン
+git clone https://github.com/fumiakic/v0-gemini-api-test.git
+cd v0-gemini-api-test
+
+# 依存関係のインストール
+pnpm install
+```
+
+### 環境変数の設定
+
+プロジェクトルートに `.env.local` ファイルを作成し、以下の変数を設定してください。
+
+```bash
+GOOGLE_API_KEY=your_gemini_api_key_here
+```
+
+### 開発サーバーの起動
+
+```bash
+pnpm dev
+```
+
+ブラウザで http://localhost:3000 を開いて確認します。
+
+## 🐳 Docker ビルドと実行
+
+ローカルでコンテナ動作を確認する場合の手順です。
+
+```bash
+# Dockerイメージのビルド
+docker build -t chumon-hub .
+
+# コンテナの実行
+docker run -p 3000:3000 -e GOOGLE_API_KEY=your_api_key chumon-hub
+```
+
+## ☸️ K3s へのデプロイ
+
+本番環境は K3s クラスタ上で動作しており、GitHub Actions を通じて自動デプロイされます。
+
+### CI/CD パイプライン概要
+
+- **Build & Push**: main ブランチへのプッシュをトリガーに Docker イメージをビルドし、GHCR (GitHub Container Registry) へプッシュします
+- **Deploy**: SSH 経由で K3s ホストに接続し、`kubectl rollout restart` を実行して最新のイメージを反映させます
+
+### マニフェストの適用（初期セットアップ時）
+
+```bash
+# Secretの作成（Gemini APIキー）
+kubectl create secret generic chumon-hub-secret --from-literal=GOOGLE_API_KEY=your_key
+
+# GHCR認証用Secretの作成（必要な場合）
+# K3sの場合、registries.yamlで設定するか、以下のコマンドでSecretを作成します
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=your_github_username \
+  --docker-password=your_github_token
+
+# アプリケーションのデプロイ
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+## 📂 ディレクトリ構成
+
+```
+.
+├── app/                       # Next.js App Router ページ
+│   ├── api/                   # API Routes
+│   │   ├── check-document-type/
+│   │   └── extract-order/
+│   └── official-order/        # 注文フォームページ
+├── components/                # UIコンポーネント (Shadcn UI等)
+│   ├── processing-stepper/    # ステッパーコンポーネント
+│   └── ui/                    # 基本UIコンポーネント
+├── hooks/                     # カスタムフック
+├── k8s/                       # Kubernetes (K3s) マニフェスト
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── tunnel.yaml
+├── lib/                       # ユーティリティ関数
+├── public/                    # 静的ファイル
+├── types/                     # 型定義
+├── .github/workflows/         # CI/CD 設定
+├── Dockerfile                 # コンテナ定義
+├── next.config.mjs            # Next.js 設定 (Standaloneモード有効化)
+└── package.json               # 依存関係管理
+```
