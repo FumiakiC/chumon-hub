@@ -1,38 +1,75 @@
-# Created by https://www.toptal.com/developers/gitignore/api/nextjs
-# Edit at https://www.toptal.com/developers/gitignore?templates=nextjs
-
-### NextJS ###
-# dependencies
+# --- Dependencies ---
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
+# --- Testing ---
 /coverage
 
-# next.js
+# --- Next.js Build Output ---
 /.next/
 /out/
 
-# production
+# --- Production Build ---
 /build
 
-# misc
-.DS_Store
+# --- Security & Credentials (最重要: 鍵・証明書・環境変数) ---
+# SSH鍵、公開鍵、証明書ファイルを完全に除外
 *.pem
+*.pub
+*.key
+id_rsa
+id_rsa.pub
+*.cer
+*.crt
 
-# debug
+# 環境変数ファイル
+# 標準の .env.local だけでなく、誤って作成されたコピーやバックアップ(.env.copyなど)も全て防ぎます
+.env
+.env*.local
+.env.production
+.env.development
+.env.test
+
+# 同期ツールやエディタが勝手に作る「.env」で始まるゴミファイル対策
+.env*
+
+# 【例外】Next.jsの型定義ファイルだけは許可（これは環境変数ではないため）
+!next-env.d.ts
+# 【例外】チーム共有用のサンプルファイルがある場合は許可（必要なければ削除OK）
+!.env.example
+
+# --- Logs & Debug ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files
-.env*.local
+# --- OS Generated Files (勝手なファイル生成対策) ---
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
 
-# vercel
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editor / IDE ---
+# VS Code (個人の設定ファイルは除外、共有設定は許可)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# JetBrains (WebStorm etc)
+.idea
+
+# --- Vercel ---
 .vercel
 
-# typescript
+# --- TypeScript ---
 *.tsbuildinfo
-next-env.d.ts
