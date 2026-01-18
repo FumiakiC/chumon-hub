@@ -128,7 +128,7 @@ export function useOrderProcessing() {
   }
 
   const handleApiResponse = async (response: Response, defaultMessage: string) => {
-    if (response.ok) return response
+    if (response.ok) return response.json()
     let errorMessage = defaultMessage
     try {
       const data = await response.json()
@@ -194,7 +194,7 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      const checkResult = await (await handleApiResponse(checkResponse, "判定APIエラー")).json()
+      const checkResult = await handleApiResponse(checkResponse, "判定APIエラー")
       if (signal.aborted) {
         throw new DOMException("処理が中断されました", "AbortError")
       }
@@ -223,7 +223,7 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      const result = await (await handleApiResponse(response, "APIリクエストが失敗しました")).json()
+      const result = await handleApiResponse(response, "APIリクエストが失敗しました")
       if (signal.aborted) {
         throw new DOMException("処理が中断されました", "AbortError")
       }

@@ -22,7 +22,7 @@ export const ERROR_DEFINITIONS: Record<string, { ja: string; action: string }> =
 }
 
 export function resolveError(error: unknown) {
-  const rawMessage = error instanceof Error ? (error.message || "予期せぬエラー") : "予期せぬエラー"
+  const rawMessage = (error instanceof Error ? error.message : typeof error === "string" ? error : null) || "予期せぬエラー"
 
   for (const [key, info] of Object.entries(ERROR_DEFINITIONS)) {
     if (rawMessage.includes(key)) {
