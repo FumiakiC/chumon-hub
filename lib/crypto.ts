@@ -1,33 +1,24 @@
 import crypto from 'crypto'
 
-const DEFAULT_SECRET = 'dev-default-secret-change-in-production'
-
-// Lazy evaluation: check environment variables at runtime, not at build time
+const DEFAULT_SECRET = 'dev-default-secret'
 let cachedSecret: string | null = null
 
+// Lazy evaluation: resolve secret at runtime to avoid build-time failures
 function getSecret(): string {
-  // Return cached secret if already initialized
-  if (cachedSecret) {
-    return cachedSecret
-  }
+  if (cachedSecret) return cachedSecret
 
   const apiSecret = process.env.API_SECRET
   const isProduction = process.env.NODE_ENV === 'production'
 
-  // If API_SECRET is set, cache and return it
   if (apiSecret) {
     cachedSecret = apiSecret
-    return cachedSecret
-  }
-
-  // In production, API_SECRET is mandatory (fail at runtime, not build time)
-  if (isProduction) {
+  } else if (isProduction) {
     throw new Error('Production security check failed: API_SECRET is missing')
+  } else {
+    console.warn('⚠️  API_SECRET is not set. Using development default value.')
+    cachedSecret = DEFAULT_SECRET
   }
 
-  // In development, warn and use default value
-  console.warn('⚠️  API_SECRET is not set. Using development default value.')
-  cachedSecret = DEFAULT_SECRET
   return cachedSecret
 }
 
