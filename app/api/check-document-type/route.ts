@@ -127,7 +127,8 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     })
   } catch (error) {
     console.error("Check document error:", error)
-    return Response.json({ error: "Failed to check document type" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Failed to check document type"
+    return Response.json({ error: errorMessage }, { status: 500 })
   } finally {
     // Cleanup tmp file if it still exists
     if (tmpFilePath) {
