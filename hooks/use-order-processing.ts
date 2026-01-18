@@ -127,6 +127,20 @@ export function useOrderProcessing() {
     setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
   }
 
+  const handleApiResponse = async (response: Response, defaultMessage: string) => {
+    if (response.ok) return response
+    let errorMessage = defaultMessage
+    try {
+      const data = await response.json()
+      if (data?.error) {
+        errorMessage = typeof data.error === "string" ? data.error : JSON.stringify(data.error)
+      }
+    } catch (_) {
+      // ignore JSON parse errors and fall back to default message
+    }
+    throw new Error(errorMessage)
+  }
+
   const handleTranscription = async (
     onExtracted: (data: {
       orderNo?: string
@@ -180,8 +194,7 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      if (!checkResponse.ok) throw new Error("判定APIエラー")
-      const checkResult = await checkResponse.json()
+      const checkResult = await (await handleApiResponse(checkResponse, "判定APIエラー")).json()
       if (signal.aborted) {
         throw new DOMException("処理が中断されました", "AbortError")
       }
@@ -210,11 +223,7 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      if (!response.ok) {
-        throw new Error("APIリクエストが失敗しました")
-      }
-
-      const result = await response.json()
+      const result = await (await handleApiResponse(response, "APIリクエストが失敗しました")).json()
       if (signal.aborted) {
         throw new DOMException("処理が中断されました", "AbortError")
       }
@@ -282,8 +291,10 @@ export function useOrderProcessing() {
         }, 3000)
       } else {
         setProcessingStatus("error")
-        const message = resolveError(err)
-        addLog(message, "error")
+        const { message, action, raw } = resolveError(err)
+        addLog(`エラー: ${message}`, "error")
+        addLog(`対応: ${action}`, "error")
+        addLog(`詳細: ${raw}`, "info")
         setError(message)
       }
     } finally {
