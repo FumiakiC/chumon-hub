@@ -1,19 +1,15 @@
-// Simple in-memory cache for file data
+// Simple in-memory cache for Google AI File Manager references
 // Note: This is reset on server restart. For production, consider Redis or similar.
 
 interface CachedFile {
-  fileBase64: string
+  fileUri: string // Google AI File Manager URI
+  name: string // File identifier (files/xxx)
   mimeType: string
   timestamp: number
-  approxBytes: number
 }
 
 const cache = new Map<string, CachedFile>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // 50MB per file
-const MAX_TOTAL_CACHE_BYTES = 100 * 1024 * 1024 // 100MB total cap
-
-let totalCachedBytes = 0
 
 // Use globalThis to ensure singleton across module instances in serverless/runtime
 type GlobalCacheControls = {
@@ -33,26 +29,31 @@ export function generateFileId(): string {
   return `file_${crypto.randomUUID()}`
 }
 
-export function cacheFile(fileId: string, fileBase64: string, mimeType: string): void {
-  const approxBytes = estimateBase64Bytes(fileBase64)
-
-  if (approxBytes > MAX_SINGLE_FILE_BYTES) {
-    throw new Error(`File too large for cache: ${approxBytes} bytes > ${MAX_SINGLE_FILE_BYTES}`)
+export function cacheFile(
+  fileId: string,
+  fileUri: string,
+  name: string,
+  mimeType: string
+): void {
+  // Evict oldest entries if we have too many (simple limit)
+  if (cache.size >= 100) {
+    const entries = Array.from(cache.entries())
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+    const oldestKey = entries[0]?.[0]
+    if (oldestKey) {
+      cache.delete(oldestKey)
+    }
   }
 
-  // Evict oldest entries until we have room
-  ensureCacheHasRoom(approxBytes)
-
   cache.set(fileId, {
-    fileBase64,
+    fileUri,
+    name,
     mimeType,
     timestamp: Date.now(),
-    approxBytes,
   })
-  totalCachedBytes += approxBytes
 }
 
-export function getCachedFile(fileId: string): { fileBase64: string; mimeType: string } | null {
+export function getCachedFile(fileId: string): { fileUri: string; name: string; mimeType: string } | null {
   const cached = cache.get(fileId)
   
   if (!cached) {
@@ -61,12 +62,13 @@ export function getCachedFile(fileId: string): { fileBase64: string; mimeType: s
   
   // Check if expired
   if (Date.now() - cached.timestamp > CACHE_TTL) {
-    evict(fileId, cached)
+    cache.delete(fileId)
     return null
   }
   
   return {
-    fileBase64: cached.fileBase64,
+    fileUri: cached.fileUri,
+    name: cached.name,
     mimeType: cached.mimeType,
   }
 }
@@ -75,7 +77,7 @@ function cleanupExpiredCache(): void {
   const now = Date.now()
   for (const [key, value] of cache.entries()) {
     if (now - value.timestamp > CACHE_TTL) {
-      evict(key, value)
+      cache.delete(key)
     }
   }
 }
@@ -100,37 +102,9 @@ export function stopFileCacheMaintenance(): void {
   globalControls.maintenanceStarted = false
 }
 
-function estimateBase64Bytes(b64: string): number {
-  // Base64 expands by ~4/3; strip padding and compute
-  const len = b64.length
-  const padding = (b64.endsWith('==') ? 2 : (b64.endsWith('=') ? 1 : 0))
-  return Math.floor((len * 3) / 4) - padding
-}
-
-function ensureCacheHasRoom(incomingBytes: number): void {
-  // Evict oldest until total + incoming <= cap
-  if (totalCachedBytes + incomingBytes <= MAX_TOTAL_CACHE_BYTES) return
-
-  const entries = Array.from(cache.entries())
-  entries.sort((a, b) => a[1].timestamp - b[1].timestamp) // oldest first
-  for (const [key, value] of entries) {
-    evict(key, value)
-    if (totalCachedBytes + incomingBytes <= MAX_TOTAL_CACHE_BYTES) break
-  }
-}
-
-function evict(key: string, value: CachedFile): void {
-  if (cache.delete(key)) {
-    totalCachedBytes = Math.max(0, totalCachedBytes - (value.approxBytes || 0))
-  }
-}
-
 export function getCacheStats() {
   return {
     items: cache.size,
-    totalBytes: totalCachedBytes,
     ttlMs: CACHE_TTL,
-    maxSingleFileBytes: MAX_SINGLE_FILE_BYTES,
-    maxTotalBytes: MAX_TOTAL_CACHE_BYTES,
   }
 }

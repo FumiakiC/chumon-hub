@@ -2,10 +2,9 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { getCachedFile, startFileCacheMaintenance } from "@/lib/fileCache"
+import { GoogleAIFileManager } from "@google/generative-ai/server"
 
 export const maxDuration = 60
-
-// Lazy start in handler to avoid multiple timers in serverless
 
 // Define the schema for the order form extraction
 const orderSchema = z.object({
@@ -29,6 +28,8 @@ const orderSchema = z.object({
 })
 
 export async function POST(req: Request) {
+  let fileManagerName: string | null = null
+
   try {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
@@ -51,24 +52,13 @@ export async function POST(req: Request) {
       return Response.json({ error: 'File cache expired' }, { status: 410 })
     }
 
-    const { fileBase64, mimeType } = cached
-    console.log('[v0] extract-order: using cached file', fileId)
-
-    // Validate size before proceeding
-    const approxBytes = Math.floor((fileBase64.length * 3) / 4)
-    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
-    if (approxBytes > MAX_SINGLE_FILE_BYTES) {
-      console.error('[v0] extract-order: file too large', { approxBytes })
-      return Response.json({ error: 'File too large' }, { status: 413 })
-    }
-
-    // normalize to data URL for image input
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`
-    console.log('[v0] extract-order request:', { mimeType, dataUrlLength: dataUrl.length })
+    const { fileUri, name, mimeType } = cached
+    fileManagerName = name // Store for cleanup in finally
+    console.log('[v0] extract-order: using cached file', { fileId, fileUri, name })
 
     const google = createGoogleGenerativeAI({ apiKey })
 
-    // Use Gemini 2.5 Pro for high-accuracy extraction
+    // Use Gemini 2.5 Flash for high-accuracy extraction
     const result = await generateObject({
       model: google("gemini-2.5-flash"),
       schema: orderSchema,
@@ -104,8 +94,9 @@ CRITICAL INSTRUCTIONS for line items:
 Return only valid JSON matching the schema.`,
             },
             {
-              type: "image",
-              image: dataUrl,
+              type: "file",
+              data: fileUri,
+              mediaType: mimeType,
             },
           ],
         },
@@ -116,5 +107,19 @@ Return only valid JSON matching the schema.`,
   } catch (error) {
     console.error("Extraction error:", error)
     return Response.json({ error: "Failed to extract order details" }, { status: 500 })
+  } finally {
+    // Always delete the file from Google AI File Manager
+    if (fileManagerName) {
+      try {
+        const apiKey = process.env.GOOGLE_API_KEY
+        if (apiKey) {
+          const fileManager = new GoogleAIFileManager(apiKey)
+          await fileManager.deleteFile(fileManagerName)
+          console.log('[v0] extract-order: deleted file from Google AI', fileManagerName)
+        }
+      } catch (err) {
+        console.error('[v0] extract-order: failed to delete file from Google AI', err)
+      }
+    }
   }
 }

@@ -2,12 +2,15 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/fileCache"
+import { GoogleAIFileManager } from "@google/generative-ai/server"
+import { writeFile, unlink } from "fs/promises"
+import path from "path"
 
 export const maxDuration = 60
 
-// Lazy start cache maintenance per request to avoid multiple timers in serverless
-
 export async function POST(req: Request) {
+  let tmpFilePath: string | null = null
+
   try {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
@@ -28,28 +31,41 @@ export async function POST(req: Request) {
     }
 
     // Validate size before processing
-    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // keep in sync with lib/fileCache
+    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // 50MB
     if (file.size > MAX_SINGLE_FILE_BYTES) {
       console.error('[v0] check-document-type: file too large', { fileSize: file.size })
       return Response.json({ error: 'File too large' }, { status: 413 })
     }
-
-    // Convert File to ArrayBuffer, then to Base64
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    const fileBase64 = buffer.toString('base64')
-
-    // Normalize to a data URL. Some SDKs/models expect `data:<mime>;base64,<data>`.
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`
-    // log a small sample to help debugging (avoid full dump)
-    console.log('[v0] check-document-type: dataUrl sample length', dataUrl.length)
-    console.log('[v0] check-document-type: dataUrl prefix', dataUrl.slice(0, 120))
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
       console.error('[v0] GOOGLE_API_KEY is not set')
       return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
     }
+
+    // Write file to /tmp directory
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const ext = file.name.split('.').pop() || 'bin'
+    tmpFilePath = path.join('/tmp', `upload_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
+    await writeFile(tmpFilePath, buffer)
+    console.log('[v0] check-document-type: written to tmp', tmpFilePath)
+
+    // Upload to Google AI File Manager
+    const fileManager = new GoogleAIFileManager(apiKey)
+    const uploadResult = await fileManager.uploadFile(tmpFilePath, {
+      mimeType,
+      displayName: file.name,
+    })
+    console.log('[v0] check-document-type: uploaded to Google AI', {
+      name: uploadResult.file.name,
+      uri: uploadResult.file.uri,
+    })
+
+    // Delete local tmp file immediately
+    await unlink(tmpFilePath)
+    tmpFilePath = null
+    console.log('[v0] check-document-type: deleted local tmp file')
 
     const google = createGoogleGenerativeAI({ apiKey })
 
@@ -87,24 +103,19 @@ export async function POST(req: Request) {
 documentType には具体的な書類種別を記載してください（例: 見積書、注文書、請求書、その他）。
 reason フィールドには判定理由を日本語で簡潔に記載してください（例: 「見積書のタイトルと金額明細が確認できるため」「請求書のため除外」など）。`,
             },
-              {
-                type: "image",
-                // provide the data URL form so the model/SDK receives mime info
-                image: dataUrl,
-              },
+            {
+              type: "file",
+              data: uploadResult.file.uri,
+              mediaType: mimeType,
+            },
           ],
         },
       ],
     })
 
-    // Cache the file for subsequent API calls
+    // Cache the file reference for subsequent API calls
     const fileId = generateFileId()
-    try {
-      cacheFile(fileId, fileBase64, mimeType)
-    } catch (e) {
-      console.error('[v0] check-document-type: cacheFile error', e)
-      return Response.json({ error: 'Failed to cache file' }, { status: 500 })
-    }
+    cacheFile(fileId, uploadResult.file.uri, uploadResult.file.name, mimeType)
     console.log('[v0] check-document-type: cached file with ID', fileId)
 
     return Response.json({
@@ -114,5 +125,15 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
   } catch (error) {
     console.error("Check document error:", error)
     return Response.json({ error: "Failed to check document type" }, { status: 500 })
+  } finally {
+    // Cleanup tmp file if it still exists
+    if (tmpFilePath) {
+      try {
+        await unlink(tmpFilePath)
+        console.log('[v0] check-document-type: cleaned up tmp file in finally')
+      } catch (err) {
+        console.error('[v0] check-document-type: failed to cleanup tmp file', err)
+      }
+    }
   }
 }
