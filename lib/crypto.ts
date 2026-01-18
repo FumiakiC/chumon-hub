@@ -1,6 +1,8 @@
 import crypto from 'crypto'
 
-function initializeSecret(): string {
+const DEFAULT_SECRET = 'dev-default-secret-change-in-production'
+
+const SECRET = (() => {
   const apiSecret = process.env.API_SECRET
   const isProduction = process.env.NODE_ENV === 'production'
 
@@ -16,17 +18,11 @@ function initializeSecret(): string {
 
   // In development, warn and use default value
   console.warn('⚠️  API_SECRET is not set. Using development default value.')
-  return 'dev-default-secret-change-in-production'
-}
-
-const SECRET = initializeSecret()
-
-function getSecret(): string {
-  return SECRET
-}
+  return DEFAULT_SECRET
+})()
 
 export function signFileId(fileId: string): string {
-  const hmac = crypto.createHmac('sha256', getSecret())
+  const hmac = crypto.createHmac('sha256', SECRET)
   hmac.update(fileId)
   const signature = hmac.digest('hex')
   return `${fileId}.${signature}`
@@ -38,7 +34,7 @@ export function verifyFileId(token: string): string | null {
   const [fileId, signature] = parts
   if (!fileId || !signature) return null
 
-  const hmac = crypto.createHmac('sha256', getSecret())
+  const hmac = crypto.createHmac('sha256', SECRET)
   hmac.update(fileId)
   const expected = hmac.digest('hex')
 
