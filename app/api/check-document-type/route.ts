@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/fileCache"
+import { signFileId } from "@/lib/crypto"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 import { writeFile, unlink } from "fs/promises"
 import crypto from "crypto"
@@ -117,11 +118,12 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     // Cache the file reference for subsequent API calls
     const fileId = generateFileId()
     cacheFile(fileId, uploadResult.file.uri, uploadResult.file.name, mimeType)
+    const signedFileId = signFileId(fileId)
     console.log('[v0] check-document-type: cached file with ID', fileId)
 
     return Response.json({
       ...result.object,
-      fileId, // Return fileId for the next API call
+      fileId: signedFileId, // Return signed fileId for the next API call
     })
   } catch (error) {
     console.error("Check document error:", error)

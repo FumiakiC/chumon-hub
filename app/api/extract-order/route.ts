@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
 import { getCachedFile, startFileCacheMaintenance } from "@/lib/fileCache"
+import { verifyFileId } from "@/lib/crypto"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 
 export const maxDuration = 60
@@ -33,10 +34,15 @@ export async function POST(req: Request) {
   try {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
-    const { fileId } = await req.json()
-
-    if (!fileId) {
+    const body = await req.json()
+    const token = body?.fileId
+    if (!token) {
       return Response.json({ error: 'fileId is required' }, { status: 400 })
+    }
+
+    const rawFileId = verifyFileId(String(token))
+    if (!rawFileId) {
+      return Response.json({ error: 'Invalid fileId' }, { status: 401 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
@@ -46,15 +52,15 @@ export async function POST(req: Request) {
     }
 
     // Resolve file data from cache
-    const cached = getCachedFile(fileId)
+    const cached = getCachedFile(rawFileId)
     if (!cached) {
-      console.error('[v0] extract-order: cache miss for fileId', fileId)
+      console.error('[v0] extract-order: cache miss for fileId', rawFileId)
       return Response.json({ error: 'File cache expired' }, { status: 410 })
     }
 
     const { fileUri, name, mimeType } = cached
     fileManagerName = name // Store for cleanup in finally
-    console.log('[v0] extract-order: using cached file', { fileId, fileUri, name })
+    console.log('[v0] extract-order: using cached file', { fileId: rawFileId, fileUri, name })
 
     const google = createGoogleGenerativeAI({ apiKey })
 
