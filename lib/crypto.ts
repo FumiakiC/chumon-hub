@@ -84,8 +84,11 @@ export function decryptFileToken(token: string): FileTokenData | null {
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
     decipher.setAuthTag(authTag)
 
-    let plaintext = decipher.update(encrypted).toString('utf8')
-    plaintext += decipher.final('utf8')
+    // Use Buffer.concat to safely handle multi-byte characters at boundaries
+    const plaintext = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]).toString('utf8')
 
     const data: FileTokenData = JSON.parse(plaintext)
 
