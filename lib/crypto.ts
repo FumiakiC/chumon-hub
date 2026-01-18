@@ -1,7 +1,18 @@
 import crypto from 'crypto'
 
-const DEFAULT_SECRET = 'dev-default-secret'
+const DEFAULT_SECRET = 'dev-default-secret-for-encryption'
 let cachedSecret: string | null = null
+let cachedEncryptionKey: Buffer | null = null
+
+const TOKEN_TTL = 5 * 60 * 1000 // 5 minutes
+
+// File token data structure
+export interface FileTokenData {
+  fileUri: string
+  name: string
+  mimeType: string
+  timestamp: number
+}
 
 // Lazy evaluation: resolve secret at runtime to avoid build-time failures
 function getSecret(): string {
@@ -22,27 +33,70 @@ function getSecret(): string {
   return cachedSecret
 }
 
-export function signFileId(fileId: string): string {
-  const hmac = crypto.createHmac('sha256', getSecret())
-  hmac.update(fileId)
-  const signature = hmac.digest('hex')
-  return `${fileId}.${signature}`
+// Derive 32-byte encryption key from secret
+function getEncryptionKey(): Buffer {
+  if (cachedEncryptionKey) return cachedEncryptionKey
+
+  const secret = getSecret()
+  // Use SHA-256 to derive a 32-byte key from the secret
+  cachedEncryptionKey = crypto.createHash('sha256').update(secret).digest()
+
+  return cachedEncryptionKey
 }
 
-export function verifyFileId(token: string): string | null {
-  const parts = token.split('.')
-  if (parts.length !== 2) return null
-  const [fileId, signature] = parts
-  if (!fileId || !signature) return null
+// Encrypt file token with AES-256-GCM
+export function encryptFileToken(data: FileTokenData): string {
+  const key = getEncryptionKey()
+  const iv = crypto.randomBytes(12) // 96-bit IV for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
 
-  const hmac = crypto.createHmac('sha256', getSecret())
-  hmac.update(fileId)
-  const expected = hmac.digest('hex')
+  // Serialize data to JSON
+  const plaintext = JSON.stringify(data)
 
-  const expectedBuf = Buffer.from(expected, 'hex')
-  const sigBuf = Buffer.from(signature, 'hex')
-  if (expectedBuf.length !== sigBuf.length) return null
+  // Encrypt
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
 
-  const isValid = crypto.timingSafeEqual(expectedBuf, sigBuf)
-  return isValid ? fileId : null
+  // Get auth tag
+  const authTag = cipher.getAuthTag()
+
+  // Format: IV.AuthTag.EncryptedData (all hex-encoded)
+  return `${iv.toString('hex')}.${authTag.toString('hex')}.${encrypted}`
+}
+
+// Decrypt file token with AES-256-GCM
+export function decryptFileToken(token: string): FileTokenData | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+
+    const [ivHex, authTagHex, encryptedHex] = parts
+
+    const iv = Buffer.from(ivHex, 'hex')
+    const authTag = Buffer.from(authTagHex, 'hex')
+    const encrypted = Buffer.from(encryptedHex, 'hex')
+
+    // Validate lengths
+    if (iv.length !== 12) return null // 96-bit IV
+    if (authTag.length !== 16) return null // 128-bit auth tag
+
+    const key = getEncryptionKey()
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
+    decipher.setAuthTag(authTag)
+
+    let plaintext = decipher.update(encrypted).toString('utf8')
+    plaintext += decipher.final('utf8')
+
+    const data: FileTokenData = JSON.parse(plaintext)
+
+    // Validate timestamp - check if token is within TTL
+    if (Date.now() - data.timestamp > TOKEN_TTL) {
+      return null // Token expired
+    }
+
+    return data
+  } catch (error) {
+    console.error('Failed to decrypt file token:', error)
+    return null
+  }
 }
