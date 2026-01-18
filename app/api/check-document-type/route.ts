@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     }
 
     // Validate size before processing
-    const MAX_SINGLE_FILE_BYTES = 50 * 1024 * 1024 // 50MB
+    const MAX_SINGLE_FILE_BYTES = 25 * 1024 * 1024 // 25MB
     if (file.size > MAX_SINGLE_FILE_BYTES) {
       console.error('[v0] check-document-type: file too large', { fileSize: file.size })
       return Response.json({ error: 'File too large' }, { status: 413 })
