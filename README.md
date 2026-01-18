@@ -42,7 +42,10 @@ pnpm install
 
 ```bash
 GOOGLE_API_KEY=your_gemini_api_key_here
+API_SECRET=your_generated_random_hex_here  # openssl rand -hex 32 で生成
 ```
+
+**API_SECRET について**: fileId のセキュリティ強化のため、サーバーサイドで HMAC 署名を付与します。`openssl rand -hex 32` などでランダムな文字列を生成し、本番環境でも設定してください。未設定の場合は開発用デフォルト値が使用されます。
 
 ### 開発サーバーの起動
 
@@ -76,8 +79,10 @@ docker run -p 3000:3000 -e GOOGLE_API_KEY=your_api_key chumon-hub
 ### マニフェストの適用（初期セットアップ時）
 
 ```bash
-# Secretの作成（Gemini APIキー）
-kubectl create secret generic chumon-hub-secret --from-literal=GOOGLE_API_KEY=your_key
+# Secretの作成（Gemini APIキーとAPI_SECRET）
+kubectl create secret generic chumon-hub-secret \
+  --from-literal=GOOGLE_API_KEY=your_key \
+  --from-literal=API_SECRET=your_generated_random_hex
 
 # GHCR認証用Secretの作成（必要な場合）
 # K3sの場合、registries.yamlで設定するか、以下のコマンドでSecretを作成します
