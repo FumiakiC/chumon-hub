@@ -4,6 +4,7 @@ import { z } from "zod"
 import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/fileCache"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 import { writeFile, unlink } from "fs/promises"
+import crypto from "crypto"
 import path from "path"
 
 export const maxDuration = 60
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     const ext = file.name.split('.').pop() || 'bin'
-    tmpFilePath = path.join('/tmp', `upload_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
+    tmpFilePath = path.join('/tmp', `upload_${crypto.randomUUID()}.${ext}`)
     await writeFile(tmpFilePath, buffer)
     console.log('[v0] check-document-type: written to tmp', tmpFilePath)
 

@@ -37,9 +37,14 @@ export function cacheFile(
 ): void {
   // Evict oldest entries if we have too many (simple limit)
   if (cache.size >= 100) {
-    const entries = Array.from(cache.entries())
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
-    const oldestKey = entries[0]?.[0]
+    let oldestKey: string | null = null
+    let oldestTimestamp = Infinity
+    for (const [key, value] of cache.entries()) {
+      if (value.timestamp < oldestTimestamp) {
+        oldestTimestamp = value.timestamp
+        oldestKey = key
+      }
+    }
     if (oldestKey) {
       cache.delete(oldestKey)
     }
