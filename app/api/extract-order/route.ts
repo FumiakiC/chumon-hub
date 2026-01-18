@@ -35,14 +35,14 @@ export async function POST(req: Request) {
     // Ensure cache maintenance is running (singleton via globalThis)
     startFileCacheMaintenance()
     const body = await req.json()
-    const token = body?.fileId
-    if (!token) {
-      return Response.json({ error: 'fileId is required' }, { status: 400 })
+    const fileIdToken = body?.fileId
+    if (typeof fileIdToken !== 'string' || fileIdToken.trim() === '') {
+      return Response.json({ error: 'fileId must be a non-empty string' }, { status: 400 })
     }
 
-    const rawFileId = verifyFileId(String(token))
+    const rawFileId = verifyFileId(fileIdToken)
     if (!rawFileId) {
-      return Response.json({ error: 'Invalid fileId' }, { status: 401 })
+      return Response.json({ error: 'fileId signature verification failed or expired' }, { status: 401 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY

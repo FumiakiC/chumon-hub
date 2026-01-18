@@ -1,9 +1,28 @@
 import crypto from 'crypto'
 
-const DEFAULT_SECRET = 'dev-default-secret'
+function initializeSecret(): string {
+  const apiSecret = process.env.API_SECRET
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  // If API_SECRET is set, always use it
+  if (apiSecret) {
+    return apiSecret
+  }
+
+  // In production, API_SECRET is mandatory
+  if (isProduction) {
+    throw new Error('Production security check failed: API_SECRET is missing')
+  }
+
+  // In development, warn and use default value
+  console.warn('⚠️  API_SECRET is not set. Using development default value.')
+  return 'dev-default-secret-change-in-production'
+}
+
+const SECRET = initializeSecret()
 
 function getSecret(): string {
-  return process.env.API_SECRET || DEFAULT_SECRET
+  return SECRET
 }
 
 export function signFileId(fileId: string): string {
