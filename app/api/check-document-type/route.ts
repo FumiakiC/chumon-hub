@@ -1,8 +1,7 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
-import { generateFileId, cacheFile, startFileCacheMaintenance } from "@/lib/fileCache"
-import { signFileId } from "@/lib/crypto"
+import { encryptFileToken } from "@/lib/crypto"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 import { writeFile, unlink } from "fs/promises"
 import crypto from "crypto"
@@ -14,9 +13,6 @@ export async function POST(req: Request) {
   let tmpFilePath: string | null = null
 
   try {
-    // Ensure cache maintenance is running (singleton via globalThis)
-    startFileCacheMaintenance()
-    
     const formData = await req.formData()
     const file = formData.get("file") as File
     const mimeType = formData.get("mimeType") as string
@@ -115,15 +111,18 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
       ],
     })
 
-    // Cache the file reference for subsequent API calls
-    const fileId = generateFileId()
-    cacheFile(fileId, uploadResult.file.uri, uploadResult.file.name, mimeType)
-    const signedFileId = signFileId(fileId)
-    console.log('[v0] check-document-type: cached file with ID', fileId)
+    // Generate encrypted token containing file reference
+    const fileToken = encryptFileToken({
+      fileUri: uploadResult.file.uri,
+      name: uploadResult.file.name,
+      mimeType,
+      timestamp: Date.now(),
+    })
+    console.log('[v0] check-document-type: generated encrypted token')
 
     return Response.json({
       ...result.object,
-      fileId: signedFileId, // Return signed fileId for the next API call
+      fileId: fileToken, // Return encrypted token for the next API call
     })
   } catch (error) {
     console.error("Check document error:", error)
@@ -140,3 +139,4 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     }
   }
 }
+

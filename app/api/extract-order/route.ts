@@ -1,8 +1,7 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { z } from "zod"
-import { getCachedFile, startFileCacheMaintenance } from "@/lib/fileCache"
-import { verifyFileId } from "@/lib/crypto"
+import { decryptFileToken } from "@/lib/crypto"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 
 export const maxDuration = 60
@@ -32,17 +31,17 @@ export async function POST(req: Request) {
   let fileManagerName: string | null = null
 
   try {
-    // Ensure cache maintenance is running (singleton via globalThis)
-    startFileCacheMaintenance()
     const body = await req.json()
     const fileIdToken = body?.fileId
     if (typeof fileIdToken !== 'string' || fileIdToken.trim() === '') {
       return Response.json({ error: 'fileId must be a non-empty string' }, { status: 400 })
     }
 
-    const rawFileId = verifyFileId(fileIdToken)
-    if (!rawFileId) {
-      return Response.json({ error: 'fileId signature verification failed or expired' }, { status: 401 })
+    // Decrypt the file token to get file information
+    const fileTokenData = decryptFileToken(fileIdToken)
+    if (!fileTokenData) {
+      console.error('[v0] extract-order: failed to decrypt fileId token')
+      return Response.json({ error: 'Invalid or expired fileId' }, { status: 401 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
@@ -51,16 +50,9 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
     }
 
-    // Resolve file data from cache
-    const cached = getCachedFile(rawFileId)
-    if (!cached) {
-      console.error('[v0] extract-order: cache miss for fileId', rawFileId)
-      return Response.json({ error: 'File cache expired' }, { status: 410 })
-    }
-
-    const { fileUri, name, mimeType } = cached
+    const { fileUri, name, mimeType } = fileTokenData
     fileManagerName = name // Store for cleanup in finally
-    console.log('[v0] extract-order: using cached file', { fileId: rawFileId, fileUri, name })
+    console.log('[v0] extract-order: using decrypted file token', { fileUri, name })
 
     const google = createGoogleGenerativeAI({ apiKey })
 
