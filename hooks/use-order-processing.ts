@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { z } from "zod"
 import type { LogEntry } from "@/types/logEntry"
+import { resolveError } from "@/lib/errorUtils"
 
 // APIレスポンスの各アイテムの検証スキーマ
 const ExtractedItemSchema = z.object({
@@ -281,8 +282,9 @@ export function useOrderProcessing() {
         }, 3000)
       } else {
         setProcessingStatus("error")
-        addLog("エラーが発生しました", "error")
-        setError(err instanceof Error ? err.message : "データの抽出に失敗しました")
+        const message = resolveError(err)
+        addLog(message, "error")
+        setError(message)
       }
     } finally {
       abortControllerRef.current = null
