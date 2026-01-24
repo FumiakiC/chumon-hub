@@ -37,8 +37,9 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      console.error('[v0] GOOGLE_API_KEY is not set')
-      return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
+      const error = new Error('Server misconfiguration: GOOGLE_API_KEY is not set');
+      (error as any).code = 'ERR_SYS_CONFIG';
+      throw error;
     }
 
     // Write file to /tmp directory
@@ -126,6 +127,22 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     })
   } catch (error) {
     console.error("Check document error:", error)
+    
+    // Check if error is a system configuration error by error code
+    const errorCode = (error as any).code
+    
+    if (errorCode === 'ERR_SYS_CONFIG') {
+      return Response.json(
+        { 
+          error: "System Configuration Error", 
+          code: "ERR_SYS_CONFIG", 
+          message: "Contact administrator" 
+        }, 
+        { status: 500 }
+      )
+    }
+    
+    // For other unexpected errors, return generic message without internal details
     return Response.json({ error: "Failed to check document type" }, { status: 500 })
   } finally {
     // Cleanup tmp file if it still exists
