@@ -83,7 +83,7 @@ export function QuoteUploadPanel({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,.pdf"
+              accept="image/*,.heic,.heif,.pdf"
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
