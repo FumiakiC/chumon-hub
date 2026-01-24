@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose"
 export async function verifyCloudflareAccess(request: NextRequest): Promise<boolean> {
   if (process.env.NODE_ENV === "development") {
     console.log("[auth] Skipping Cloudflare Access verification in development")
-    return true
+    return false
   }
 
   const TEAM_DOMAIN = process.env.CLOUDFLARE_TEAM_DOMAIN
