@@ -37,7 +37,9 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      throw new Error('Security check failed: GOOGLE_API_KEY is not set')
+      const error = new Error('Server misconfiguration: GOOGLE_API_KEY is not set');
+      (error as any).code = 'ERR_SYS_CONFIG';
+      throw error;
     }
 
     // Write file to /tmp directory
