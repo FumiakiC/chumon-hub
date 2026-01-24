@@ -128,17 +128,10 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
   } catch (error) {
     console.error("Check document error:", error)
     
-    // Extract error message for security check
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    // Check if error is a system configuration error by error code
+    const errorCode = (error as any).code
     
-    // Check if error is related to environment variables or security configuration
-    const isSensitiveError = 
-      errorMessage.includes('API_SECRET') ||
-      errorMessage.includes('GOOGLE_API_KEY') ||
-      errorMessage.includes('Security check') ||
-      errorMessage.includes('Security configuration')
-    
-    if (isSensitiveError) {
+    if (errorCode === 'ERR_SYS_CONFIG') {
       return Response.json(
         { 
           error: "System Configuration Error", 

@@ -21,7 +21,9 @@ function getSecret(): string {
 
   if (!apiSecret) {
     console.error('🚨 FATAL: API_SECRET is not set in environment variables.')
-    throw new Error('API_SECRET is not set in environment variables')
+    const error = new Error('API_SECRET is not set in environment variables');
+    (error as any).code = 'ERR_SYS_CONFIG';
+    throw error;
   }
 
   cachedSecret = apiSecret
