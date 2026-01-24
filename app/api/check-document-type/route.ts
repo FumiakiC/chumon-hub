@@ -6,6 +6,16 @@ import { GoogleAIFileManager } from "@google/generative-ai/server"
 import { writeFile, unlink } from "fs/promises"
 import crypto from "crypto"
 import path from "path"
+import { fileTypeFromBuffer } from "file-type"
+
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+])
 
 export const maxDuration = 60
 
@@ -45,15 +55,27 @@ export async function POST(req: Request) {
     // Write file to /tmp directory
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    const ext = file.name.split('.').pop() || 'bin'
-    tmpFilePath = path.join('/tmp', `upload_${crypto.randomUUID()}.${ext}`)
+
+    const detectedType = await fileTypeFromBuffer(buffer)
+    if (!detectedType || !ALLOWED_MIME_TYPES.has(detectedType.mime)) {
+      console.error("[v0] check-document-type: unsupported media type", {
+        detectedType,
+        claimedMimeType: mimeType,
+      })
+      return Response.json({ error: "Unsupported media type" }, { status: 415 })
+    }
+
+    const detectedMimeType = detectedType.mime
+    const detectedExt = detectedType.ext
+
+    tmpFilePath = path.join('/tmp', `upload_${crypto.randomUUID()}.${detectedExt}`)
     await writeFile(tmpFilePath, buffer)
     console.log('[v0] check-document-type: written to tmp', tmpFilePath)
 
     // Upload to Google AI File Manager
     const fileManager = new GoogleAIFileManager(apiKey)
     const uploadResult = await fileManager.uploadFile(tmpFilePath, {
-      mimeType,
+      mimeType: detectedMimeType,
       displayName: file.name,
     })
     console.log('[v0] check-document-type: uploaded to Google AI', {
@@ -105,7 +127,7 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
             {
               type: "file",
               data: uploadResult.file.uri,
-              mediaType: mimeType,
+              mediaType: detectedMimeType,
             },
           ],
         },
@@ -116,7 +138,7 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     const fileToken = encryptFileToken({
       fileUri: uploadResult.file.uri,
       name: uploadResult.file.name,
-      mimeType,
+      mimeType: detectedMimeType,
       timestamp: Date.now(),
     })
     console.log('[v0] check-document-type: generated encrypted token')
