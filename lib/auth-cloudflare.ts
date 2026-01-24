@@ -1,18 +1,23 @@
 import { type NextRequest } from "next/server"
 import { createRemoteJWKSet, jwtVerify } from "jose"
 
-const TEAM_DOMAIN = "fumifumic88"
-const AUDIENCE = "b12fcac3b93f67b7cdf66aabe1c6ac8b6738a46b9d545196b3794be17d376534"
-const ISSUER = `https://${TEAM_DOMAIN}.cloudflareaccess.com`
-const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`
-
-const jwks = createRemoteJWKSet(new URL(JWKS_URL))
-
 export async function verifyCloudflareAccess(request: NextRequest): Promise<boolean> {
   if (process.env.NODE_ENV === "development") {
     console.log("[auth] Skipping Cloudflare Access verification in development")
     return true
   }
+
+  const TEAM_DOMAIN = process.env.CLOUDFLARE_TEAM_DOMAIN
+  const AUDIENCE = process.env.CLOUDFLARE_AUDIENCE
+
+  if (!TEAM_DOMAIN || !AUDIENCE) {
+    console.error("[auth] Missing required environment variables: CLOUDFLARE_TEAM_DOMAIN or CLOUDFLARE_AUDIENCE")
+    return false
+  }
+
+  const ISSUER = `https://${TEAM_DOMAIN}.cloudflareaccess.com`
+  const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`
+  const jwks = createRemoteJWKSet(new URL(JWKS_URL))
 
   const token = request.headers.get("Cf-Access-Jwt-Assertion")
   if (!token) {
