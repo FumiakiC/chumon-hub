@@ -1,6 +1,5 @@
 import crypto from 'crypto'
 
-const DEFAULT_SECRET = 'dev-default-secret-for-encryption'
 let cachedSecret: string | null = null
 let cachedEncryptionKey: Buffer | null = null
 
@@ -19,17 +18,13 @@ function getSecret(): string {
   if (cachedSecret) return cachedSecret
 
   const apiSecret = process.env.API_SECRET
-  const isProduction = process.env.NODE_ENV === 'production'
 
-  if (apiSecret) {
-    cachedSecret = apiSecret
-  } else if (isProduction) {
-    throw new Error('Production security check failed: API_SECRET is missing')
-  } else {
-    console.warn('⚠️  API_SECRET is not set. Using development default value.')
-    cachedSecret = DEFAULT_SECRET
+  if (!apiSecret) {
+    console.error('🚨 FATAL: API_SECRET is not set in environment variables.')
+    throw new Error('API_SECRET is not set in environment variables')
   }
 
+  cachedSecret = apiSecret
   return cachedSecret
 }
 
