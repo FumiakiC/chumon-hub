@@ -8,7 +8,7 @@ export default function ForbiddenPage() {
       statusCode="403"
       title="ACCESS DENIED"
       message="必要な権限を持つアカウントで再認証してください。"
-      videoSrc="/403-bg.webm"
+      videoSrc="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/git-blob/prj_sytANobx0QSKmtJHK5EbPt6pXukh/m5p1UeRStQitB9F1DN6DhO/public/403-bg.webm"
       posterSrc="/403-poster.jpg"
       videoClassName="opacity-80"
       overlayClassName="bg-black/60"
