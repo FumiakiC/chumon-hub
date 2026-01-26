@@ -4,10 +4,6 @@ on:
   push:
     branches: ["main","chore/docker-setup"]
 
-env:
-  # ユーザー名は小文字に修正してください
-  IMAGE_NAME: ghcr.io/fumiakic/chumon-hub
-
 jobs:
   build-push:
     runs-on: ubuntu-latest
@@ -16,6 +12,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Set up Image Name
+        id: meta
+        run: echo "image_name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
       
       # ★★★ ここを追加しました ★★★
       # これによりキャッシュ機能(type=gha)が使えるドライバーがセットアップされます
@@ -34,7 +34,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.meta.outputs.image_name }}:latest
           # これを使うには setup-buildx-action が必須でした
           cache-from: type=gha
           cache-to: type=gha,mode=max
