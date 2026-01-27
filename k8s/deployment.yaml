@@ -65,3 +65,15 @@ spec:
                 secretKeyRef:
                   name: chumon-hub-secret
                   key: API_SECRET
+
+            - name: CLOUDFLARE_TEAM_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: chumon-hub-secret
+                  key: CLOUDFLARE_TEAM_DOMAIN
+
+            - name: CLOUDFLARE_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: chumon-hub-secret
+                  key: CLOUDFLARE_AUDIENCE

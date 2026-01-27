@@ -115,10 +115,14 @@ docker run -p 3000:3000 -e GOOGLE_API_KEY=your_api_key chumon-hub
 ### マニフェストの適用（初期セットアップ時）
 
 ```bash
-# Secretの作成（Gemini APIキーとAPI_SECRET）
+# Secretの作成（Gemini APIキー、API_SECRET、Cloudflare Access 用ドメイン/オーディエンス）
+# 必要な環境変数をまとめてSecretに登録します
+# API_SECRETは `openssl rand -hex 32` などで生成したランダムな文字列
 kubectl create secret generic chumon-hub-secret \
-  --from-literal=GOOGLE_API_KEY=your_key \
-  --from-literal=API_SECRET=your_generated_random_hex
+   --from-literal=GOOGLE_API_KEY=your_google_api_key \
+   --from-literal=API_SECRET=your_random_secret_string \
+   --from-literal=CLOUDFLARE_TEAM_DOMAIN=your-team-domain \
+   --from-literal=CLOUDFLARE_AUDIENCE=your-audience-tag
 
 # GHCR認証用Secretの作成（必要な場合）
 # K3sの場合、registries.yamlで設定するか、以下のコマンドでSecretを作成します
