@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "op run --env-file=.env.local -- next dev",
+    "dev": "if command -v op >/dev/null 2>&1; then op run --env-file=.env.local -- next dev; else next dev; fi",
     "lint": "eslint .",
     "start": "next start"
   },
