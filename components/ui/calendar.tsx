@@ -136,24 +136,14 @@ function Calendar({
           )
         },
         Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === 'left') {
-            return (
-              <ChevronLeft className={cn('size-4', className)} {...props} />
-            )
-          }
+          const Icon =
+            orientation === 'left'
+              ? ChevronLeft
+              : orientation === 'right'
+              ? ChevronRight
+              : ChevronDown
 
-          if (orientation === 'right') {
-            return (
-              <ChevronRight
-                className={cn('size-4', className)}
-                {...props}
-              />
-            )
-          }
-
-          return (
-            <ChevronDown className={cn('size-4', className)} {...props} />
-          )
+          return <Icon className={cn('size-4', className)} {...props} />
         },
         DayButton: CalendarDayButton,
         WeekNumber: ({ children, ...props }) => {
