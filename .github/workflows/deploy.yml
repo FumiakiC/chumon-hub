@@ -51,4 +51,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # 最新の画像をプルして再起動
+            export KUBECONFIG=~/.kube/config
             kubectl rollout restart deployment/chumon-hub
