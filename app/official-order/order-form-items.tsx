@@ -40,13 +40,6 @@ function NumericInput({
   const [isFocused, setIsFocused] = useState(false)
   const [inputValue, setInputValue] = useState(String(value ?? ""))
 
-  // Sync internal state when external value changes (e.g., from form reset)
-  useEffect(() => {
-    if (!isFocused) {
-      setInputValue(String(value ?? ""))
-    }
-  }, [value, isFocused])
-
   const handleFocus = () => {
     setIsFocused(true)
     setInputValue(value === 0 ? "" : String(value))
