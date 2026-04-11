@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  lodash: '>=4.17.23'
+  lodash: '>=4.18.1'
 
 importers:
 
@@ -13,13 +13,13 @@ importers:
     dependencies:
       '@ai-sdk/google':
         specifier: latest
-        version: 3.0.55(zod@3.25.76)
+        version: 3.0.61(zod@3.25.76)
       '@google/generative-ai':
         specifier: latest
         version: 0.24.1
       '@hookform/resolvers':
         specifier: latest
-        version: 5.2.2(react-hook-form@7.72.0(react@19.2.4))
+        version: 5.2.2(react-hook-form@7.72.1(react@19.2.4))
       '@radix-ui/react-accordion':
         specifier: 1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.0(react@19.2.4))(react@19.2.4)
@@ -91,7 +91,7 @@ importers:
         version: 2.0.1(next@16.1.7(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.4))(react@19.2.4))(react@19.2.4)
       ai:
         specifier: latest
-        version: 6.0.143(zod@3.25.76)
+        version: 6.0.158(zod@3.25.76)
       autoprefixer:
         specifier: ^10.4.27
         version: 10.4.27(postcss@8.5.6)
@@ -139,7 +139,7 @@ importers:
         version: 19.2.0(react@19.2.4)
       react-hook-form:
         specifier: latest
-        version: 7.72.0(react@19.2.4)
+        version: 7.72.1(react@19.2.4)
       recharts:
         specifier: 2.15.4
         version: 2.15.4(react-dom@19.2.0(react@19.2.4))(react@19.2.4)
@@ -201,20 +201,20 @@ importers:
 
 packages:
 
-  '@ai-sdk/gateway@3.0.85':
-    resolution: {integrity: sha512-oPvs3bYnxndBY/O0gFSFuc5aA/QKCJbk/CaJaRnKgA/ZPH17jeVvEtiUBE6/N8hWhK7XgX53NFI7F3CGmDfm1g==}
+  '@ai-sdk/gateway@3.0.95':
+    resolution: {integrity: sha512-ZmUNNbZl3V42xwQzPaNUi+s8eqR2lnrxf0bvB6YbLXpLjHYv0k2Y78t12cNOfY0bxGeuVVTLyk856uLuQIuXEQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google@3.0.55':
-    resolution: {integrity: sha512-lIID7kDdeqzSR/eg+LrEFJGoe/mIwuW4eBdjS84Bi0cIY4cmGwSsvwYILSdiad0197Ha+DUbCxOUuSOnORUx7g==}
+  '@ai-sdk/google@3.0.61':
+    resolution: {integrity: sha512-jEKU1Mjcy5CoicejdJQIzM0ntYwyXR8vtYgAZYriKaOuLAiAhiiU538++fGU3CC9HJH/mL1OfsCwMM3gFiCNsw==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@4.0.21':
-    resolution: {integrity: sha512-MtFUYI1/8mgDvRmaBDjbLJPFFrMG777AvSgyIFQtZHIMzm88R/12vYBBpnk7pfiWLFE1DSZzY4WDYzGbKAcmiw==}
+  '@ai-sdk/provider-utils@4.0.23':
+    resolution: {integrity: sha512-z8GlDaCmRSDlqkMF2f4/RFgWxdarvIbyuk+m6WXT1LYgsnGiXRJGTD2Z1+SDl3LqtFuRtGX1aghYvQLoHL/9pg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1783,8 +1783,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  ai@6.0.143:
-    resolution: {integrity: sha512-wVDb7StQ1EPQ9GDAOmi1AsuAXQRSii+zZT2sFK+MCisH4vV7XNEAdzXL+sKsUAFhhq+EtVFWWlB4mCk4hcoIMw==}
+  ai@6.0.158:
+    resolution: {integrity: sha512-gLTp1UXFtMqKUi3XHs33K7UFglbvojkxF/aq337TxnLGOhHIW9+GyP2jwW4hYX87f1es+wId3VQoPRRu9zEStQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2258,8 +2258,8 @@ packages:
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
 
-  lodash@4.17.23:
-    resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+  lodash@4.18.1:
+    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -2451,8 +2451,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  react-hook-form@7.72.0:
-    resolution: {integrity: sha512-V4v6jubaf6JAurEaVnT9aUPKFbNtDgohj5CIgVGyPHvT9wRx5OZHVjz31GsxnPNI278XMu+ruFz+wGOscHaLKw==}
+  react-hook-form@7.72.1:
+    resolution: {integrity: sha512-RhwBoy2ygeVZje+C+bwJ8g0NjTdBmDlJvAUHTxRjTmSUKPYsKfMphkS2sgEMotsY03bP358yEYlnUeZy//D9Ig==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -2691,20 +2691,20 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@3.0.85(zod@3.25.76)':
+  '@ai-sdk/gateway@3.0.95(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.21(zod@3.25.76)
+      '@ai-sdk/provider-utils': 4.0.23(zod@3.25.76)
       '@vercel/oidc': 3.1.0
       zod: 3.25.76
 
-  '@ai-sdk/google@3.0.55(zod@3.25.76)':
+  '@ai-sdk/google@3.0.61(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.21(zod@3.25.76)
+      '@ai-sdk/provider-utils': 4.0.23(zod@3.25.76)
       zod: 3.25.76
 
-  '@ai-sdk/provider-utils@4.0.21(zod@3.25.76)':
+  '@ai-sdk/provider-utils@4.0.23(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@standard-schema/spec': 1.1.0
@@ -2933,10 +2933,10 @@ snapshots:
 
   '@google/generative-ai@0.24.1': {}
 
-  '@hookform/resolvers@5.2.2(react-hook-form@7.72.0(react@19.2.4))':
+  '@hookform/resolvers@5.2.2(react-hook-form@7.72.1(react@19.2.4))':
     dependencies:
       '@standard-schema/utils': 0.3.0
-      react-hook-form: 7.72.0(react@19.2.4)
+      react-hook-form: 7.72.1(react@19.2.4)
 
   '@humanfs/core@0.19.1': {}
 
@@ -4058,11 +4058,11 @@ snapshots:
 
   acorn@8.16.0: {}
 
-  ai@6.0.143(zod@3.25.76):
+  ai@6.0.158(zod@3.25.76):
     dependencies:
-      '@ai-sdk/gateway': 3.0.85(zod@3.25.76)
+      '@ai-sdk/gateway': 3.0.95(zod@3.25.76)
       '@ai-sdk/provider': 3.0.8
-      '@ai-sdk/provider-utils': 4.0.21(zod@3.25.76)
+      '@ai-sdk/provider-utils': 4.0.23(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
 
@@ -4515,7 +4515,7 @@ snapshots:
 
   lodash.merge@4.6.2: {}
 
-  lodash@4.17.23: {}
+  lodash@4.18.1: {}
 
   loose-envify@1.4.0:
     dependencies:
@@ -4655,7 +4655,7 @@ snapshots:
       react: 19.2.4
       scheduler: 0.27.0
 
-  react-hook-form@7.72.0(react@19.2.4):
+  react-hook-form@7.72.1(react@19.2.4):
     dependencies:
       react: 19.2.4
 
@@ -4717,7 +4717,7 @@ snapshots:
     dependencies:
       clsx: 2.1.1
       eventemitter3: 4.0.7
-      lodash: 4.17.23
+      lodash: 4.18.1
       react: 19.2.4
       react-dom: 19.2.0(react@19.2.4)
       react-is: 18.3.1
