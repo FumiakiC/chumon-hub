@@ -76,6 +76,11 @@
     "typescript": "^5.9.3"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ],
     "overrides": {
       "lodash": ">=4.18.1"
     }
