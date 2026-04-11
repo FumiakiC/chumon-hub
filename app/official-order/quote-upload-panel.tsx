@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable @next/next/no-img-element */
 
 import { useRef, useState, useEffect, type ChangeEvent, type DragEvent } from "react"
 import { Card } from "@/components/ui/card"
