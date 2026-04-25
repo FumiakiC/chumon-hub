@@ -8,12 +8,21 @@ import crypto from "crypto"
 
 export const maxDuration = 60
 
+function normalizeDrawingNo(drawingNo: string): string {
+  return /-\d{4}$/.test(drawingNo) ? drawingNo.slice(0, -1) : drawingNo
+}
+
 const drawingSchema = z.object({
   drawingNo: z.string().describe("Drawing Number (図面番号)"),
   partName: z.string().describe("Part/Item Name (品名・部品名)"),
-  material: z.string().describe("Material (材質)"),
+  material: z
+    .string()
+    .describe("Material (材質) ※記載がない場合は必ず空文字(\"\")にすること。人名や日付を誤って入れないこと。"),
   quantity: z.coerce.number().describe("Quantity (数量) - numeric value"),
-  surfaceTreatment: z.string().optional().describe("Surface Treatment (表面処理)"),
+  surfaceTreatment: z
+    .string()
+    .optional()
+    .describe("Surface Treatment (表面処理) ※記載がない場合は必ず空文字(\"\")にすること。人名や日付を誤って入れないこと。"),
   notes: z.string().optional().describe("Notes/Remarks (備考)"),
   confidence: z.coerce.number().describe("Confidence level (0-100)")
 })
@@ -62,7 +71,7 @@ export async function POST(req: Request) {
     const google = createGoogleGenerativeAI({ apiKey })
 
     const result = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-2.5-flash-lite"),
       schema: drawingSchema,
       messages: [
         {
@@ -70,7 +79,7 @@ export async function POST(req: Request) {
           content: [
             {
               type: "text",
-              text: "あなたは日本の機械図面を読み取る熟練したAIです。提供された図面PDF(特に右下の表題欄)から、指定されたスキーマに従って情報を正確に抽出してください。\n\n【抽出ルール】\n1. drawingNo: [数字2桁][英字1桁][数字3桁]-[数字3桁] などの形式。\n2. quantity: 数値のみ。\n3. 該当がない場合は空文字を返す。\n4. confidence: 読み取りの自信度を0〜100で評価し、材質や図番が不明瞭な場合は大きく減点する。\n\nJSON形式のみを返してください。"
+              text: "あなたは日本の機械図面を読み取る熟練したAIです。提供された図面PDF(特に右下の表題欄)から、指定されたスキーマに従って情報を正確に抽出してください。\n\n【抽出ルール】\n1. drawingNo: 図面上に表記されている文字列をそのまま抽出してください。\n2. quantity: 数値のみ。\n3. 該当がない場合は空文字を返す。\n4. 空欄の厳格な扱い: 図面上に明確な記載がない項目（特に材質や表面処理）については、周囲の無関係なテキスト（設計者名、承認者名、日付など）を絶対に推測で当てはめず、必ず空文字（\"\"）を出力してください。\n5. confidence: 読み取りの自信度を0〜100で評価し、材質や図番が不明瞭な場合は大きく減点する。\n\nJSON形式のみを返してください。"
             },
             {
               type: "file",
@@ -82,7 +91,12 @@ export async function POST(req: Request) {
       ]
     })
 
-    return Response.json(result.object)
+    const normalizedResult = {
+      ...result.object,
+      drawingNo: normalizeDrawingNo(result.object.drawingNo),
+    }
+
+    return Response.json(normalizedResult)
   } catch (error) {
     console.error("Extraction error:", error)
     return Response.json({ error: "Failed to extract drawing details" }, { status: 500 })

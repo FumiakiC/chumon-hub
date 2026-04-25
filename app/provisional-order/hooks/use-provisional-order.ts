@@ -208,55 +208,58 @@ export function useProvisionalOrder() {
     }))
     setOrderItems((prev) => [...prev, ...initialItems])
 
-    for (const file of croppedReadyFiles) {
-      if (!file.base64) continue
-      try {
-        const blob = base64ToBlob(file.base64, "application/pdf")
-        const formData = new FormData()
-        formData.append("file", blob, file.fileName)
+    await Promise.all(
+      croppedReadyFiles.map(async (file) => {
+        if (!file.base64) return
 
-        setOrderItems((prev) =>
-          prev.map((i) =>
-            i.id === file.id ? { ...i, status: "processing", progress: 50 } : i
+        try {
+          const blob = base64ToBlob(file.base64, "application/pdf")
+          const formData = new FormData()
+          formData.append("file", blob, file.fileName)
+
+          setOrderItems((prev) =>
+            prev.map((item) =>
+              item.id === file.id ? { ...item, status: "processing", progress: 50 } : item
+            )
           )
-        )
 
-        const response = await fetch("/api/extract-drawing", {
-          method: "POST",
-          body: formData,
-        })
-        if (!response.ok) throw new Error("API Error")
-
-        const result = await response.json()
-        setOrderItems((prev) =>
-          prev.map((item) => {
-            if (item.id !== file.id) return item
-            return {
-              ...item,
-              drawingNo: result.drawingNo || "",
-              partName: result.partName || "",
-              material: result.material || "",
-              quantity: result.quantity || 1,
-              surfaceTreatment: result.surfaceTreatment || "",
-              notes: result.notes || "",
-              confidence: result.confidence || 0,
-              needsReview: (result.confidence || 0) < 85,
-              status: (result.confidence || 0) < 85 ? "review" : "completed",
-              progress: 100,
-            }
+          const response = await fetch("/api/extract-drawing", {
+            method: "POST",
+            body: formData,
           })
-        )
-      } catch (error) {
-        console.error(`Analysis failed for ${file.fileName}:`, error)
-        setOrderItems((prev) =>
-          prev.map((item) =>
-            item.id === file.id
-              ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
-              : item
+          if (!response.ok) throw new Error("API Error")
+
+          const result = await response.json()
+          setOrderItems((prev) =>
+            prev.map((item) => {
+              if (item.id !== file.id) return item
+              return {
+                ...item,
+                drawingNo: result.drawingNo || "",
+                partName: result.partName || "",
+                material: result.material || "",
+                quantity: result.quantity || 1,
+                surfaceTreatment: result.surfaceTreatment || "",
+                notes: result.notes || "",
+                confidence: result.confidence || 0,
+                needsReview: (result.confidence || 0) < 85,
+                status: (result.confidence || 0) < 85 ? "review" : "completed",
+                progress: 100,
+              }
+            })
           )
-        )
-      }
-    }
+        } catch (error) {
+          console.error(`Analysis failed for ${file.fileName}:`, error)
+          setOrderItems((prev) =>
+            prev.map((item) =>
+              item.id === file.id
+                ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
+                : item
+            )
+          )
+        }
+      })
+    )
   }, [croppedFiles])
 
   const handleVerify = useCallback(
