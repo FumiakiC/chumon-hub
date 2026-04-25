@@ -1,6 +1,5 @@
 "use client"
 
-import { useRef } from "react"
 import { UploadCloud, Trash2, Play, CheckCircle2, Crop } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import type { CroppedFile, CropStatus } from "../types"
+import type { CroppedFile, CropStatus } from "../schema"
 
 // ---------------------------------------------------------------------------
 // Sub-component: status badge

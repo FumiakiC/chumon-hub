@@ -1,13 +1,14 @@
-import { useState, useCallback, useRef } from "react"
+import React, { useState, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { verificationSchema, type VerificationFormData } from "../schema"
 import {
+  verificationSchema,
+  type VerificationFormData,
   type CroppedFile,
   type OrderItem,
   type OrderHeader,
   defaultOrderHeader,
-} from "../types"
+} from "../schema"
 
 // ---------------------------------------------------------------------------
 // Helpers (module-private)
