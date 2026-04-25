@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import {
   UploadCloud,
   CheckCircle2,
@@ -52,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Header } from "@/components/ui/header"
+import { verificationSchema, type VerificationFormData } from "./schema"
 
 // --- Types ---
 
@@ -121,18 +121,6 @@ const defaultOrderHeader: OrderHeader = {
   manager: "",
   approver: "",
 }
-
-// Zod schema
-const verificationSchema = z.object({
-  drawingNo: z.string().min(1, "図面番号は必須です"),
-  partName: z.string().min(1, "品名は必須です"),
-  material: z.string().min(1, "材質は必須です"),
-  quantity: z.coerce.number().min(1, "数量は1以上で入力してください"),
-  surfaceTreatment: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-type VerificationFormData = z.infer<typeof verificationSchema>
 
 // Helper: Base64 to Blob conversion
 const base64ToBlob = (base64: string, mimeType: string) => {
@@ -752,7 +740,7 @@ export default function ProvisionalOrderPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label>数量</Label>
-                      <Input type="number" {...verificationForm.register("quantity")} />
+                      <Input type="number" {...verificationForm.register("quantity", { valueAsNumber: true })} />
                     </div>
                  </div>
                  <Button type="submit" className="w-full">確認完了</Button>
