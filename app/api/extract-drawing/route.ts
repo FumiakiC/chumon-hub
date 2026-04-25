@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     const google = createGoogleGenerativeAI({ apiKey })
 
     const result = await generateObject({
-      model: google("gemini-2.5-flash-lite"),
+      model: google("gemini-3.1-flash-lite-preview"),
       schema: drawingSchema,
       messages: [
         {

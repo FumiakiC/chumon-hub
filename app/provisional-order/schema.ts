@@ -31,7 +31,7 @@ export interface OrderItem {
   material: string
   surfaceTreatment: string
   notes: string
-  quantity: number
+  quantity: number | null
   thumbnailUrl: string
   needsReview: boolean
   confidence: number
@@ -90,9 +90,10 @@ export const verificationSchema = z.object({
     ),
   partName: z.string().min(1, "品名は必須です"),
   material: z.string().min(1, "材質は必須です"),
-  quantity: z.number().min(1, "数量は1以上で入力してください"),
+  quantity: z.coerce.number().min(1, "数量は1以上で入力してください"),
   surfaceTreatment: z.string().optional(),
   notes: z.string().optional(),
 })
 
+export type VerificationFormInput = z.input<typeof verificationSchema>
 export type VerificationFormData = z.infer<typeof verificationSchema>

@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import {
   verificationSchema,
+  type VerificationFormInput,
   type VerificationFormData,
   type CroppedFile,
   type OrderItem,
@@ -54,13 +55,13 @@ export function useProvisionalOrder() {
   const [orderHeader, setOrderHeader] = useState<OrderHeader>(defaultOrderHeader)
 
   // --- Verification form ---
-  const verificationForm = useForm<VerificationFormData>({
+  const verificationForm = useForm<VerificationFormInput, unknown, VerificationFormData>({
     resolver: zodResolver(verificationSchema),
     defaultValues: {
       drawingNo: "",
       partName: "",
       material: "",
-      quantity: 1,
+      quantity: "" as unknown as number,
       surfaceTreatment: "",
       notes: "",
     },
@@ -200,7 +201,7 @@ export function useProvisionalOrder() {
       material: "",
       surfaceTreatment: "",
       notes: "",
-      quantity: 1,
+      quantity: null,
       thumbnailUrl: file.thumbnailUrl,
       needsReview: false,
       confidence: 0,
@@ -208,8 +209,11 @@ export function useProvisionalOrder() {
     }))
     setOrderItems((prev) => [...prev, ...initialItems])
 
-    await Promise.all(
-      croppedReadyFiles.map(async (file) => {
+    const chunkSize = 5
+    for (let i = 0; i < croppedReadyFiles.length; i += chunkSize) {
+      const chunk = croppedReadyFiles.slice(i, i + chunkSize)
+      await Promise.all(
+        chunk.map(async (file) => {
         if (!file.base64) return
 
         try {
@@ -227,7 +231,14 @@ export function useProvisionalOrder() {
             method: "POST",
             body: formData,
           })
-          if (!response.ok) throw new Error("API Error")
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            const errorMessage =
+              errorData?.error ||
+              errorData?.message ||
+              `API Error (${response.status})`
+            throw new Error(errorMessage)
+          }
 
           const result = await response.json()
           setOrderItems((prev) =>
@@ -238,7 +249,7 @@ export function useProvisionalOrder() {
                 drawingNo: result.drawingNo || "",
                 partName: result.partName || "",
                 material: result.material || "",
-                quantity: result.quantity || 1,
+                quantity: result.quantity ?? null,
                 surfaceTreatment: result.surfaceTreatment || "",
                 notes: result.notes || "",
                 confidence: result.confidence || 0,
@@ -258,8 +269,9 @@ export function useProvisionalOrder() {
             )
           )
         }
-      })
-    )
+        })
+      )
+    }
   }, [croppedFiles])
 
   const handleVerify = useCallback(
@@ -269,7 +281,7 @@ export function useProvisionalOrder() {
         drawingNo: item.drawingNo,
         partName: item.partName,
         material: item.material,
-        quantity: item.quantity,
+        quantity: item.quantity ?? ("" as unknown as number),
         surfaceTreatment: item.surfaceTreatment,
         notes: item.notes,
       })
@@ -299,7 +311,7 @@ export function useProvisionalOrder() {
   )
 
   const updateItemField = useCallback(
-    (itemId: string, field: keyof OrderItem, value: string | number) => {
+    (itemId: string, field: keyof OrderItem, value: string | number | null) => {
       setOrderItems((prev) =>
         prev.map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
       )

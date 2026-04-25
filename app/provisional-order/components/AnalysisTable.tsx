@@ -40,7 +40,7 @@ export interface AnalysisTableProps {
   completedCount: number
   reviewCount: number
   processingCount: number
-  onUpdateItemField: (itemId: string, field: keyof OrderItem, value: string | number) => void
+  onUpdateItemField: (itemId: string, field: keyof OrderItem, value: string | number | null) => void
   onVerify: (item: OrderItem) => void
   onDelete: (itemId: string) => void
 }
@@ -134,8 +134,14 @@ export function AnalysisTable({
                     <TableCell>
                       <Input
                         type="number"
-                        value={item.quantity}
-                        onChange={(e) => onUpdateItemField(item.id, "quantity", parseInt(e.target.value, 10) || 0)}
+                        value={item.quantity ?? ""}
+                        onChange={(e) =>
+                          onUpdateItemField(
+                            item.id,
+                            "quantity",
+                            e.target.value === "" ? null : Number(e.target.value)
+                          )
+                        }
                         className="h-8"
                       />
                     </TableCell>
