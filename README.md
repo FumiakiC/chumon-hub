@@ -47,7 +47,7 @@ Google Gemini 2.5 Flash による AI 解析の進捗をリアルタイムで表�
 
 ### 前提条件
 
-- Node.js 20+
+- Node.js 25+ （※2026年4月、型定義の更新およびCI環境との互換性向上のため v20 より引き上げ）
 - pnpm
 - 1Password CLI (`op`) が使用可能であること（シークレットを 1Password から注入する場合に必須）
 

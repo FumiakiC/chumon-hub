@@ -1,5 +1,5 @@
 # ステージ 1: 依存関係のインストール (Deps)
-FROM node:20-alpine AS deps
+FROM node:25-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -7,21 +7,30 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
 
 # pnpm を有効化して依存関係をインストール
-RUN corepack enable pnpm && pnpm i --frozen-lockfile
+# ----- 修正前 (Node.js v20) -----
+# RUN corepack enable pnpm && pnpm i --frozen-lockfile
+# ----- 修正前２ -----
+# RUN npm install -g corepack && corepack enable pnpm && pnpm i --frozen-lockfile
+# ----- 修正後 (corepackを使わず、直接pnpmをインストール) -----
+RUN npm install -g pnpm && pnpm i --frozen-lockfile
 
 # ステージ 2: ビルダー (Builder)
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Next.js のビルドを実行
-# 修正: ENV key=value 形式に変更
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN corepack enable pnpm && pnpm run build
+# ----- 修正前 (Node.js v20) -----
+# RUN corepack enable pnpm && pnpm run build
+# ----- 修正前２ -----
+# RUN npm install -g corepack && corepack enable pnpm && pnpm run build
+# ----- 修正後 (corepackを使わず、直接pnpmをインストール) -----
+RUN npm install -g pnpm && pnpm run build
 
 # ステージ 3: ランナー (Runner)
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 
 # 修正: ENV key=value 形式に変更
