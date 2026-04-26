@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import {
   verificationSchema,
+  type VerificationFormInput,
   type VerificationFormData,
   type CroppedFile,
   type OrderItem,
@@ -54,13 +55,13 @@ export function useProvisionalOrder() {
   const [orderHeader, setOrderHeader] = useState<OrderHeader>(defaultOrderHeader)
 
   // --- Verification form ---
-  const verificationForm = useForm<VerificationFormData>({
+  const verificationForm = useForm<VerificationFormInput, unknown, VerificationFormData>({
     resolver: zodResolver(verificationSchema),
     defaultValues: {
       drawingNo: "",
       partName: "",
       material: "",
-      quantity: 1,
+      quantity: "",
       surfaceTreatment: "",
       notes: "",
     },
@@ -200,7 +201,7 @@ export function useProvisionalOrder() {
       material: "",
       surfaceTreatment: "",
       notes: "",
-      quantity: 1,
+      quantity: null,
       thumbnailUrl: file.thumbnailUrl,
       needsReview: false,
       confidence: 0,
@@ -208,53 +209,71 @@ export function useProvisionalOrder() {
     }))
     setOrderItems((prev) => [...prev, ...initialItems])
 
-    for (const file of croppedReadyFiles) {
-      if (!file.base64) continue
-      try {
-        const blob = base64ToBlob(file.base64, "application/pdf")
-        const formData = new FormData()
-        formData.append("file", blob, file.fileName)
+    const chunkSize = 2
+    for (let i = 0; i < croppedReadyFiles.length; i += chunkSize) {
+      const chunk = croppedReadyFiles.slice(i, i + chunkSize)
+      await Promise.all(
+        chunk.map(async (file) => {
+        if (!file.base64) return
 
-        setOrderItems((prev) =>
-          prev.map((i) =>
-            i.id === file.id ? { ...i, status: "processing", progress: 50 } : i
+        try {
+          const blob = base64ToBlob(file.base64, "application/pdf")
+          const formData = new FormData()
+          formData.append("file", blob, file.fileName)
+
+          setOrderItems((prev) =>
+            prev.map((item) =>
+              item.id === file.id ? { ...item, status: "processing", progress: 50 } : item
+            )
           )
-        )
 
-        const response = await fetch("/api/extract-drawing", {
-          method: "POST",
-          body: formData,
-        })
-        if (!response.ok) throw new Error("API Error")
-
-        const result = await response.json()
-        setOrderItems((prev) =>
-          prev.map((item) => {
-            if (item.id !== file.id) return item
-            return {
-              ...item,
-              drawingNo: result.drawingNo || "",
-              partName: result.partName || "",
-              material: result.material || "",
-              quantity: result.quantity || 1,
-              surfaceTreatment: result.surfaceTreatment || "",
-              notes: result.notes || "",
-              confidence: result.confidence || 0,
-              needsReview: (result.confidence || 0) < 85,
-              status: (result.confidence || 0) < 85 ? "review" : "completed",
-              progress: 100,
-            }
+          const response = await fetch("/api/extract-drawing", {
+            method: "POST",
+            body: formData,
           })
-        )
-      } catch (error) {
-        console.error(`Analysis failed for ${file.fileName}:`, error)
-        setOrderItems((prev) =>
-          prev.map((item) =>
-            item.id === file.id
-              ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
-              : item
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            const errorMessage =
+              errorData?.error ||
+              errorData?.message ||
+              `API Error (${response.status})`
+            throw new Error(errorMessage)
+          }
+
+          const result = await response.json()
+          setOrderItems((prev) =>
+            prev.map((item) => {
+              if (item.id !== file.id) return item
+              return {
+                ...item,
+                drawingNo: result.drawingNo || "",
+                partName: result.partName || "",
+                material: result.material || "",
+                quantity: result.quantity ?? null,
+                surfaceTreatment: result.surfaceTreatment || "",
+                notes: result.notes || "",
+                confidence: result.confidence || 0,
+                needsReview: (result.confidence || 0) < 85,
+                status: (result.confidence || 0) < 85 ? "review" : "completed",
+                progress: 100,
+              }
+            })
           )
-        )
+        } catch (error) {
+          console.error(`Analysis failed for ${file.fileName}:`, error)
+          setOrderItems((prev) =>
+            prev.map((item) =>
+              item.id === file.id
+                ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
+                : item
+            )
+          )
+        }
+        })
+      )
+      // 次のチャンク処理前に2秒待機（API制限回避）
+      if (i + chunkSize < croppedReadyFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
   }, [croppedFiles])
@@ -266,7 +285,7 @@ export function useProvisionalOrder() {
         drawingNo: item.drawingNo,
         partName: item.partName,
         material: item.material,
-        quantity: item.quantity,
+        quantity: item.quantity ?? "",
         surfaceTreatment: item.surfaceTreatment,
         notes: item.notes,
       })
@@ -285,7 +304,14 @@ export function useProvisionalOrder() {
       setOrderItems((prev) =>
         prev.map((item) =>
           item.id === selectedItem.id
-            ? { ...item, ...data, status: "completed", needsReview: false, confidence: 100 }
+            ? {
+                ...item,
+                ...data,
+                quantity: data.quantity === "" ? null : data.quantity,
+                status: "completed",
+                needsReview: false,
+                confidence: 100,
+              }
             : item
         )
       )
@@ -296,7 +322,7 @@ export function useProvisionalOrder() {
   )
 
   const updateItemField = useCallback(
-    (itemId: string, field: keyof OrderItem, value: string | number) => {
+    (itemId: string, field: keyof OrderItem, value: string | number | null) => {
       setOrderItems((prev) =>
         prev.map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
       )

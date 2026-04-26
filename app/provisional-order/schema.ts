@@ -31,7 +31,7 @@ export interface OrderItem {
   material: string
   surfaceTreatment: string
   notes: string
-  quantity: number
+  quantity: number | null
   thumbnailUrl: string
   needsReview: boolean
   confidence: number
@@ -81,12 +81,22 @@ export const defaultOrderHeader: OrderHeader = {
 // ---------------------------------------------------------------------------
 
 export const verificationSchema = z.object({
-  drawingNo: z.string().min(1, "図面番号は必須です"),
+  drawingNo: z
+    .string()
+    .min(1, "図面番号は必須です")
+    .regex(
+      /^[A-Za-z0-9]+-\d{3}$/,
+      "図面番号の形式が正しくありません（例: 120925-101。末尾の用紙サイズが含まれていないか確認してください）",
+    ),
   partName: z.string().min(1, "品名は必須です"),
   material: z.string().min(1, "材質は必須です"),
-  quantity: z.number().min(1, "数量は1以上で入力してください"),
+  quantity: z.union([
+    z.number().min(1, "数量は1以上で入力してください"),
+    z.literal("").refine(() => false, { message: "数量を入力してください" }),
+  ]),
   surfaceTreatment: z.string().optional(),
   notes: z.string().optional(),
 })
 
+export type VerificationFormInput = z.input<typeof verificationSchema>
 export type VerificationFormData = z.infer<typeof verificationSchema>

@@ -112,7 +112,7 @@ export default function ProvisionalOrderPage() {
         isSheetOpen={isSheetOpen}
         onSheetOpenChange={setIsSheetOpen}
         selectedItem={selectedItem}
-        verificationForm={verificationForm}
+        verificationForm={verificationForm as any}
         onVerificationSubmit={handleVerificationSubmit}
       />
     </div>
