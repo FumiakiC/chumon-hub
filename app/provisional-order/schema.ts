@@ -90,9 +90,10 @@ export const verificationSchema = z.object({
     ),
   partName: z.string().min(1, "品名は必須です"),
   material: z.string().min(1, "材質は必須です"),
-  quantity: z
-    .number({ message: "数量を入力してください" })
-    .min(1, "数量は1以上で入力してください"),
+  quantity: z.union([
+    z.number().min(1, "数量は1以上で入力してください"),
+    z.literal("").refine(() => false, { message: "数量を入力してください" }),
+  ]),
   surfaceTreatment: z.string().optional(),
   notes: z.string().optional(),
 })

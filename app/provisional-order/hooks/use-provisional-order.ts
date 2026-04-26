@@ -61,7 +61,7 @@ export function useProvisionalOrder() {
       drawingNo: "",
       partName: "",
       material: "",
-      quantity: "" as unknown as number,
+      quantity: "",
       surfaceTreatment: "",
       notes: "",
     },
@@ -209,7 +209,7 @@ export function useProvisionalOrder() {
     }))
     setOrderItems((prev) => [...prev, ...initialItems])
 
-    const chunkSize = 5
+    const chunkSize = 2
     for (let i = 0; i < croppedReadyFiles.length; i += chunkSize) {
       const chunk = croppedReadyFiles.slice(i, i + chunkSize)
       await Promise.all(
@@ -271,6 +271,10 @@ export function useProvisionalOrder() {
         }
         })
       )
+      // 次のチャンク処理前に2秒待機（API制限回避）
+      if (i + chunkSize < croppedReadyFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
     }
   }, [croppedFiles])
 
@@ -281,7 +285,7 @@ export function useProvisionalOrder() {
         drawingNo: item.drawingNo,
         partName: item.partName,
         material: item.material,
-        quantity: item.quantity ?? ("" as unknown as number),
+        quantity: item.quantity ?? "",
         surfaceTreatment: item.surfaceTreatment,
         notes: item.notes,
       })
@@ -300,7 +304,14 @@ export function useProvisionalOrder() {
       setOrderItems((prev) =>
         prev.map((item) =>
           item.id === selectedItem.id
-            ? { ...item, ...data, status: "completed", needsReview: false, confidence: 100 }
+            ? {
+                ...item,
+                ...data,
+                quantity: data.quantity === "" ? null : data.quantity,
+                status: "completed",
+                needsReview: false,
+                confidence: 100,
+              }
             : item
         )
       )

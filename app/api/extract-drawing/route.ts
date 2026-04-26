@@ -18,7 +18,7 @@ const drawingSchema = z.object({
   material: z
     .string()
     .describe("Material (材質) ※記載がない場合は必ず空文字(\"\")にすること。人名や日付を誤って入れないこと。"),
-  quantity: z.coerce.number().describe("Quantity (数量) - numeric value"),
+  quantity: z.number().nullable().describe("Quantity (数量) - 表面粗さ記号(Raなど)の周辺にある独立した数字を探して抽出してください。どうしても見つからない場合のみ null を返します。"),
   surfaceTreatment: z
     .string()
     .optional()

@@ -103,97 +103,105 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const croppedFileResults = await Promise.all(
-      files.map(async (file): Promise<CroppedFile | null> => {
-        // PDFファイルかチェック
-        if (!file.type.includes("pdf") && !file.name.endsWith(".pdf")) {
-          console.warn(`Skipping non-PDF file: ${file.name}`)
-          return null
-        }
+    const croppedFileResults: (CroppedFile | null)[] = []
 
-        try {
-          // ファイルをArrayBufferとして読み込む
-          const arrayBuffer = await file.arrayBuffer()
-          const uint8Array = new Uint8Array(arrayBuffer)
-
-          // PDFドキュメントをロード
-          const pdfDoc = await PDFDocument.load(uint8Array)
-
-          // ページ数を確認
-          const pageCount = pdfDoc.getPageCount()
-          if (pageCount === 0) {
-            console.warn(`No pages found in: ${file.name}`)
+    // 5件ずつのチャンク分割してバッチ処理
+    const chunkSize = 5
+    for (let i = 0; i < files.length; i += chunkSize) {
+      const chunk = files.slice(i, i + chunkSize)
+      const chunkResults = await Promise.all(
+        chunk.map(async (file): Promise<CroppedFile | null> => {
+          // PDFファイルかチェック
+          if (!file.type.includes("pdf") && !file.name.endsWith(".pdf")) {
+            console.warn(`Skipping non-PDF file: ${file.name}`)
             return null
           }
 
-          // 1ページ目を取得
-          const page = pdfDoc.getPage(0)
-          const { width: pageWidth, height: pageHeight } = page.getSize()
+          try {
+            // ファイルをArrayBufferとして読み込む
+            const arrayBuffer = await file.arrayBuffer()
+            const uint8Array = new Uint8Array(arrayBuffer)
 
-          // ページサイズを検出
-          const detectedSize = detectPageSize(pageWidth, pageHeight)
-          const cropConfig = CROP_SETTINGS[detectedSize]
+            // PDFドキュメントをロード
+            const pdfDoc = await PDFDocument.load(uint8Array)
 
-          // ログ出力: 検出されたページサイズ
-          const widthMm = (pageWidth / MM_TO_POINTS).toFixed(1)
-          const heightMm = (pageHeight / MM_TO_POINTS).toFixed(1)
-          console.log(
-            `[${file.name}] Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm) | ` +
-              `Crop: ${cropConfig.width}mm x ${cropConfig.height}mm`
-          )
+            // ページ数を確認
+            const pageCount = pdfDoc.getPageCount()
+            if (pageCount === 0) {
+              console.warn(`No pages found in: ${file.name}`)
+              return null
+            }
 
-          // クロップ領域をポイント単位に変換
-          const cropWidth = cropConfig.width * MM_TO_POINTS
-          const cropHeight = cropConfig.height * MM_TO_POINTS
-          const offsetX = cropConfig.offsetX * MM_TO_POINTS
-          const offsetY = cropConfig.offsetY * MM_TO_POINTS
+            // 1ページ目を取得
+            const page = pdfDoc.getPage(0)
+            const { width: pageWidth, height: pageHeight } = page.getSize()
 
-          // クロップ領域が元のページサイズを超えないか確認
-          const actualCropWidth = Math.min(cropWidth, pageWidth)
-          const actualCropHeight = Math.min(cropHeight, pageHeight)
+            // ページサイズを検出
+            const detectedSize = detectPageSize(pageWidth, pageHeight)
+            const cropConfig = CROP_SETTINGS[detectedSize]
 
-          // 右下を原点とした座標を計算（PDFの原点は左下）
-          // cropX: 右端から左にoffsetX、そこからさらに左にcropWidth分
-          // cropY: 下端から上にoffsetY
-          const cropX = pageWidth - actualCropWidth - offsetX
-          const cropY = offsetY
+            // ログ出力: 検出されたページサイズ
+            const widthMm = (pageWidth / MM_TO_POINTS).toFixed(1)
+            const heightMm = (pageHeight / MM_TO_POINTS).toFixed(1)
+            console.log(
+              `[${file.name}] Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm) | ` +
+                `Crop: ${cropConfig.width}mm x ${cropConfig.height}mm`
+            )
 
-          // 新しいPDFドキュメントを作成
-          const croppedPdfDoc = await PDFDocument.create()
+            // クロップ領域をポイント単位に変換
+            const cropWidth = cropConfig.width * MM_TO_POINTS
+            const cropHeight = cropConfig.height * MM_TO_POINTS
+            const offsetX = cropConfig.offsetX * MM_TO_POINTS
+            const offsetY = cropConfig.offsetY * MM_TO_POINTS
 
-          // 元のページから新しいページにコピー
-          const [copiedPage] = await croppedPdfDoc.copyPages(pdfDoc, [0])
+            // クロップ領域が元のページサイズを超えないか確認
+            const actualCropWidth = Math.min(cropWidth, pageWidth)
+            const actualCropHeight = Math.min(cropHeight, pageHeight)
 
-          // クロップボックスを設定
-          copiedPage.setCropBox(cropX, cropY, actualCropWidth, actualCropHeight)
+            // 右下を原点とした座標を計算（PDFの原点は左下）
+            // cropX: 右端から左にoffsetX、そこからさらに左にcropWidth分
+            // cropY: 下端から上にoffsetY
+            const cropX = pageWidth - actualCropWidth - offsetX
+            const cropY = offsetY
 
-          // メディアボックスもクロップボックスに合わせて設定
-          copiedPage.setMediaBox(cropX, cropY, actualCropWidth, actualCropHeight)
+            // 新しいPDFドキュメントを作成
+            const croppedPdfDoc = await PDFDocument.create()
 
-          // 新しいページサイズを設定（実際のクロップ領域に合わせる）
-          copiedPage.setSize(actualCropWidth, actualCropHeight)
+            // 元のページから新しいページにコピー
+            const [copiedPage] = await croppedPdfDoc.copyPages(pdfDoc, [0])
 
-          // ページを追加
-          croppedPdfDoc.addPage(copiedPage)
+            // クロップボックスを設定
+            copiedPage.setCropBox(cropX, cropY, actualCropWidth, actualCropHeight)
 
-          // PDFをバイト配列として保存
-          const croppedPdfBytes = await croppedPdfDoc.save()
+            // メディアボックスもクロップボックスに合わせて設定
+            copiedPage.setMediaBox(cropX, cropY, actualCropWidth, actualCropHeight)
 
-          // Base64に変換（Data URI形式）
-          const base64String = Buffer.from(croppedPdfBytes).toString("base64")
-          const dataUri = `data:application/pdf;base64,${base64String}`
+            // 新しいページサイズを設定（実際のクロップ領域に合わせる）
+            copiedPage.setSize(actualCropWidth, actualCropHeight)
 
-          return {
-            fileName: file.name,
-            base64: dataUri,
+            // ページを追加
+            croppedPdfDoc.addPage(copiedPage)
+
+            // PDFをバイト配列として保存
+            const croppedPdfBytes = await croppedPdfDoc.save()
+
+            // Base64に変換（Data URI形式）
+            const base64String = Buffer.from(croppedPdfBytes).toString("base64")
+            const dataUri = `data:application/pdf;base64,${base64String}`
+
+            return {
+              fileName: file.name,
+              base64: dataUri,
+            }
+          } catch (fileError) {
+            console.error(`Error processing file ${file.name}:`, fileError)
+            // 個別のファイルエラーは警告として処理し、処理を続行
+            return null
           }
-        } catch (fileError) {
-          console.error(`Error processing file ${file.name}:`, fileError)
-          // 個別のファイルエラーは警告として処理し、処理を続行
-          return null
-        }
-      })
-    )
+        })
+      )
+      croppedFileResults.push(...chunkResults)
+    }
 
     const croppedFiles = croppedFileResults.filter(
       (croppedFile): croppedFile is CroppedFile => croppedFile !== null
