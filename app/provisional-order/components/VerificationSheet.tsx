@@ -43,7 +43,7 @@ export function VerificationSheet({
             <SheetTitle>プレビュー</SheetTitle>
           </SheetHeader>
           <div className="mt-4 aspect-video bg-muted rounded border overflow-hidden">
-            {previewFile?.base64 && <iframe src={previewFile.base64} className="w-full h-full" />}
+            {previewFile?.base64 && <iframe src={previewFile.base64} className="w-full h-full" title="図面プレビュー" />}
           </div>
         </SheetContent>
       </Sheet>
@@ -58,7 +58,7 @@ export function VerificationSheet({
             <div className="py-4 space-y-4">
               <div className="aspect-[16/9] bg-muted rounded border overflow-hidden relative">
                 {selectedItem.previewUrl ? (
-                  <iframe src={selectedItem.previewUrl} className="w-full h-full" />
+                  <iframe src={selectedItem.previewUrl} className="w-full h-full" title="抽出結果図面プレビュー" />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
                     プレビューなし
@@ -88,7 +88,9 @@ export function VerificationSheet({
                     <Label>数量</Label>
                     <Input
                       type="number"
-                      {...verificationForm.register("quantity", { valueAsNumber: true })}
+                      {...verificationForm.register("quantity", {
+                        setValueAs: (v) => (v === "" ? null : Number(v)),
+                      })}
                     />
                   </div>
                 </div>
