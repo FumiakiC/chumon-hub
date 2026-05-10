@@ -3,13 +3,16 @@ import { generateObject } from "ai"
 import { z } from "zod"
 import { GoogleAIFileManager } from "@google/generative-ai/server"
 import { writeFile, unlink } from "fs/promises"
+import os from "os"
 import path from "path"
 import crypto from "crypto"
 
 export const maxDuration = 60
 
-function normalizeDrawingNo(drawingNo: string): string {
-  return /-\d{4}$/.test(drawingNo) ? drawingNo.slice(0, -1) : drawingNo
+function normalizeDrawingNo(rawNo: string): string {
+  // "12D925-101②" や "12D925-2013" から、純粋な図番 "12D925-xxx" 部分だけを抽出
+  const match = rawNo.match(/^(\d{2}[A-Za-z]\d{3}-\d{3})/)
+  return match ? match[1] : rawNo
 }
 
 const drawingSchema = z.object({
@@ -18,7 +21,7 @@ const drawingSchema = z.object({
   material: z
     .string()
     .describe("Material (材質) ※記載がない場合は必ず空文字(\"\")にすること。人名や日付を誤って入れないこと。"),
-  quantity: z.number().nullable().describe("Quantity (数量) - 表面粗さ記号(Raなど)の周辺にある独立した数字を探して抽出してください。どうしても見つからない場合のみ null を返します。"),
+  quantity: z.number().nullable().describe("数量。※『数量』や『QTY』という項目名はありません。「粗さ記号（粗サ、▽など）」のすぐ上部に、何の脈絡もなく単独で記載されている数字が数量です。それを見つけて数値として抽出してください。"),
   surfaceTreatment: z
     .string()
     .optional()
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
     const mimeType = file.type || "application/pdf"
     const ext = path.extname(file.name) || ".pdf"
 
-    tmpFilePath = path.join("/tmp", `upload_${crypto.randomUUID()}${ext}`)
+    tmpFilePath = path.join(os.tmpdir(), `upload_${crypto.randomUUID()}${ext}`)
     await writeFile(tmpFilePath, buffer)
 
     const fileManager = new GoogleAIFileManager(apiKey)
@@ -79,7 +82,7 @@ export async function POST(req: Request) {
           content: [
             {
               type: "text",
-              text: "あなたは日本の機械図面を読み取る熟練したAIです。提供された図面PDF(特に右下の表題欄)から、指定されたスキーマに従って情報を正確に抽出してください。\n\n【抽出ルール】\n1. drawingNo: 図面上に表記されている文字列をそのまま抽出してください。\n2. quantity: 数値のみ。\n3. 該当がない場合は空文字を返す。\n4. 空欄の厳格な扱い: 図面上に明確な記載がない項目（特に材質や表面処理）については、周囲の無関係なテキスト（設計者名、承認者名、日付など）を絶対に推測で当てはめず、必ず空文字（\"\"）を出力してください。\n5. confidence: 読み取りの自信度を0〜100で評価し、材質や図番が不明瞭な場合は大きく減点する。\n\nJSON形式のみを返してください。"
+              text: "あなたは日本の機械図面を読み取る熟練したAIです。提供された図面PDF(特に右下の表題欄)から、指定されたスキーマに従って情報を正確に抽出してください。\n\n【抽出ルール】\n1. drawingNo: 図面上に表記されている文字列をそのまま抽出してください。\n2. quantity: 『数量』や『QTY』という項目名はありません。「粗さ記号（粗サ、▽など）」のすぐ上部に、何の脈絡もなく単独で記載されている数字が数量です。それを見つけて数値として抽出してください。\n3. 空欄の厳格な扱い: 図面上に明確な記載がない項目（特に材質や表面処理）については、周囲の無関係なテキスト（設計者名、承認者名、日付など）を絶対に推測で当てはめず、必ず空文字（\"\"）を出力してください。\n4. confidence: 読み取りの自信度を0〜100で評価し、材質や図番が不明瞭な場合は大きく減点する。\n\nJSON形式のみを返してください。"
             },
             {
               type: "file",
