@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { extractDrawingData } from "@/lib/api/drawing-api"
 import {
   verificationSchema,
   type VerificationFormInput,
@@ -218,8 +219,7 @@ export function useProvisionalOrder() {
 
         try {
           const blob = base64ToBlob(file.base64, "application/pdf")
-          const formData = new FormData()
-          formData.append("file", blob, file.fileName)
+          const fileObject = new File([blob], file.fileName, { type: "application/pdf" })
 
           setOrderItems((prev) =>
             prev.map((item) =>
@@ -227,20 +227,7 @@ export function useProvisionalOrder() {
             )
           )
 
-          const response = await fetch("/api/extract-drawing", {
-            method: "POST",
-            body: formData,
-          })
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            const errorMessage =
-              errorData?.error ||
-              errorData?.message ||
-              `API Error (${response.status})`
-            throw new Error(errorMessage)
-          }
-
-          const result = await response.json()
+          const result = await extractDrawingData(fileObject)
           setOrderItems((prev) =>
             prev.map((item) => {
               if (item.id !== file.id) return item
