@@ -48,10 +48,9 @@ export function useProvisionalOrder() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // Analysis hook
-  const { isAnalyzing, handleAnalyzeAll, totalProgress } = useDrawingAnalysis(
+  const { handleAnalyzeAll } = useDrawingAnalysis(
     croppedFiles,
     dispatch,
-    orderItems,
     setCroppedFiles
   )
 
@@ -257,9 +256,9 @@ export function useProvisionalOrder() {
   const croppingCount = croppedFiles.filter((f) => f.status === "cropping").length
   const croppedCount = croppedFiles.filter((f) => f.status === "cropped").length
   const completedCount = orderItems.filter((i) => i.status === "completed").length
-  const reviewCount = orderItems.filter((i) => i.status === "review").length
+  const reviewCount = orderItems.filter((i) => i.status === "needs_review").length
   const processingCount = orderItems.filter(
-    (i) => i.status === "uploading" || i.status === "processing"
+    (i) => i.status === "pending" || i.status === "cropping" || i.status === "analyzing"
   ).length
 
   return {

@@ -17,21 +17,20 @@ import {
 import { cn } from "@/lib/utils"
 import type { OrderItem, OrderItemStatus } from "../schema"
 
-function StatusIcon({ status, needsReview }: { status: OrderItemStatus; needsReview: boolean }) {
+function StatusIcon({ status }: { status: OrderItemStatus }) {
   switch (status) {
-    case "uploading":
-    case "processing":
+    case "pending":
+    case "cropping":
+    case "analyzing":
       return <Spinner className="size-5 text-blue-500" />
     case "completed":
       return <CheckCircle2 className="size-5 text-emerald-500" />
-    case "review":
+    case "needs_review":
       return <AlertTriangle className="size-5 text-amber-500" />
+    case "error":
+      return <AlertTriangle className="size-5 text-red-500" />
     default:
-      return needsReview ? (
-        <AlertTriangle className="size-5 text-amber-500" />
-      ) : (
-        <CheckCircle2 className="size-5 text-emerald-500" />
-      )
+      return null
   }
 }
 
@@ -107,7 +106,7 @@ export function AnalysisTable({
                   <TableRow key={item.id} className={cn(item.needsReview && "bg-amber-50/50 dark:bg-amber-950/10")}>
                     <TableCell>
                       <div className="flex justify-center">
-                        <StatusIcon status={item.status} needsReview={item.needsReview} />
+                        <StatusIcon status={item.status} />
                       </div>
                     </TableCell>
                     <TableCell>

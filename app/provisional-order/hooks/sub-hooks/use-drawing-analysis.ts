@@ -1,16 +1,16 @@
-import { useState, useCallback, Dispatch, SetStateAction } from "react"
+import { useCallback, Dispatch, SetStateAction } from "react"
 import { extractDrawingData } from "@/lib/api/drawing-api"
 import type { CroppedFile, OrderItem } from "../../schema"
 import type { OrderAction } from "./use-order-items"
 
-// Helper function
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const byteCharacters = atob(base64.split(",")[1])
-  const byteNumbers = new Array(byteCharacters.length)
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i)
-  }
-  return new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+/**
+ * Converts a Base64 string to a Blob
+ * Supports both with and without data URI prefix
+ */
+async function base64ToBlob(base64: string, mimeType: string): Promise<Blob> {
+  const base64String = base64.includes(",") ? base64.split(",")[1] : base64
+  const response = await fetch(`data:${mimeType};base64,${base64String}`)
+  return response.blob()
 }
 
 /**
@@ -19,10 +19,8 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
 export function useDrawingAnalysis(
   croppedFiles: CroppedFile[],
   dispatch: Dispatch<OrderAction>,
-  orderItems: OrderItem[],
   setCroppedFiles: Dispatch<SetStateAction<CroppedFile[]>>
 ) {
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   /**
    * Execute analysis for all cropped files
@@ -32,20 +30,11 @@ export function useDrawingAnalysis(
     const croppedReadyFiles = croppedFiles.filter((f) => f.status === "cropped" && f.base64)
     if (croppedReadyFiles.length === 0) return
 
-    setIsAnalyzing(true)
-
-    // Mark cropped files as completed
-    setCroppedFiles((prev) =>
-      prev.map((file) =>
-        file.status === "cropped" ? { ...file, status: "completed" } : file
-      )
-    )
-
     // Create initial order items
     const initialItems: OrderItem[] = croppedReadyFiles.map((file) => ({
       id: file.id,
       fileName: file.fileName,
-      status: "uploading",
+      status: "pending",
       progress: 0,
       drawingNo: "",
       partName: "",
@@ -69,13 +58,20 @@ export function useDrawingAnalysis(
           if (!file.base64) return
 
           try {
-            const blob = base64ToBlob(file.base64, "application/pdf")
-            const fileObject = new File([blob], file.fileName, { type: "application/pdf" })
-
-            // Update progress to "processing"
+            // Mark as cropping
             dispatch({
               type: "UPDATE_ITEM",
-              payload: { id: file.id, changes: { status: "processing", progress: 50 } },
+              payload: { id: file.id, changes: { status: "cropping", progress: 25 } },
+            })
+
+            // Convert Base64 to Blob
+            const blob = await base64ToBlob(file.base64, "application/pdf")
+            const fileObject = new File([blob], file.fileName, { type: "application/pdf" })
+
+            // Mark as analyzing
+            dispatch({
+              type: "UPDATE_ITEM",
+              payload: { id: file.id, changes: { status: "analyzing", progress: 50 } },
             })
 
             // Extract drawing data
@@ -95,18 +91,19 @@ export function useDrawingAnalysis(
                   notes: result.notes || "",
                   confidence: result.confidence || 0,
                   needsReview: (result.confidence || 0) < 85,
-                  status: (result.confidence || 0) < 85 ? "review" : "completed",
+                  status: (result.confidence || 0) < 85 ? "needs_review" : "completed",
                   progress: 100,
                 },
               },
             })
           } catch (error) {
             console.error(`Analysis failed for ${file.fileName}:`, error)
+            const errorMessage = error instanceof Error ? error.message : "予期しないエラーが発生しました"
             dispatch({
               type: "UPDATE_ITEM",
               payload: {
                 id: file.id,
-                changes: { status: "review", needsReview: true, notes: "解析エラー発生" },
+                changes: { status: "error", needsReview: true, notes: errorMessage },
               },
             })
           }
@@ -118,22 +115,9 @@ export function useDrawingAnalysis(
         await new Promise((resolve) => setTimeout(resolve, 2000))
       }
     }
-
-    setIsAnalyzing(false)
-  }, [croppedFiles, dispatch, setCroppedFiles])
-
-  /**
-   * Calculate analysis progress
-   */
-  const totalProgress = (() => {
-    if (orderItems.length === 0) return 0
-    const totalProgress = orderItems.reduce((sum, item) => sum + item.progress, 0)
-    return Math.round(totalProgress / orderItems.length)
-  })()
+  }, [croppedFiles, dispatch])
 
   return {
-    isAnalyzing,
     handleAnalyzeAll,
-    totalProgress,
   }
 }

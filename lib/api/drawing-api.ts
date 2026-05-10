@@ -6,9 +6,9 @@
 /**
  * Crops the title block from a PDF file
  * @param file The original File object to crop
- * @returns Promise resolving to a File object containing the cropped content
+ * @returns Promise resolving to the Base64 string of the cropped content
  */
-export async function cropTitleBlock(file: File): Promise<File> {
+export async function cropTitleBlock(file: File): Promise<string> {
   const formData = new FormData()
   formData.append("file", file)
 
@@ -21,8 +21,14 @@ export async function cropTitleBlock(file: File): Promise<File> {
     throw new Error(`Failed to crop PDF: ${response.status}`)
   }
 
-  const blob = await response.blob()
-  return new File([blob], file.name, { type: file.type })
+  const data = await response.json()
+  const base64 = data.croppedFiles?.[0]?.base64
+  
+  if (!base64) {
+    throw new Error("No cropped file data in response")
+  }
+
+  return base64
 }
 
 /**

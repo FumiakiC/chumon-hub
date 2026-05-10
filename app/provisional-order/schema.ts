@@ -19,7 +19,7 @@ export interface CroppedFile {
 // Phase 2: Analysis Results
 // ---------------------------------------------------------------------------
 
-export type OrderItemStatus = "uploading" | "processing" | "completed" | "review"
+export type OrderItemStatus = "pending" | "cropping" | "analyzing" | "completed" | "needs_review" | "error"
 
 export interface OrderItem {
   id: string
