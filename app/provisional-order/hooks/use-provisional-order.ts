@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { extractDrawingData } from "@/lib/api/drawing-api"
+import { useOrderItems } from "./sub-hooks/use-order-items"
+import { useDrawingAnalysis } from "./sub-hooks/use-drawing-analysis"
 import {
   verificationSchema,
   type VerificationFormInput,
@@ -26,31 +27,33 @@ function generateCroppedFile(fileName: string): CroppedFile {
   }
 }
 
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const byteCharacters = atob(base64.split(",")[1])
-  const byteNumbers = new Array(byteCharacters.length)
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i)
-  }
-  return new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
-}
-
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export function useProvisionalOrder() {
+  // --- Sub-hooks ---
+  const orderItemsHook = useOrderItems()
+  const { orderItems, setOrderItems, addItems, deleteItem, updateItemField } = orderItemsHook
+
   // --- Phase 1 ---
   const [croppedFiles, setCroppedFiles] = useState<CroppedFile[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // --- Phase 2 ---
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [previewFile, setPreviewFile] = useState<CroppedFile | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+
+  // Analysis hook
+  const { isAnalyzing, handleAnalyzeAll, totalProgress } = useDrawingAnalysis(
+    croppedFiles,
+    orderItems,
+    setOrderItems,
+    setCroppedFiles
+  )
 
   // --- Phase 3 ---
   const [orderHeader, setOrderHeader] = useState<OrderHeader>(defaultOrderHeader)
@@ -179,91 +182,8 @@ export function useProvisionalOrder() {
   }, [])
 
   // ---------------------------------------------------------------------------
-  // Phase 2: Analyze
+  // Phase 2: Verify & Update
   // ---------------------------------------------------------------------------
-
-  const handleAnalyzeAll = useCallback(async () => {
-    const croppedReadyFiles = croppedFiles.filter((f) => f.status === "cropped" && f.base64)
-    if (croppedReadyFiles.length === 0) return
-
-    setCroppedFiles((prev) =>
-      prev.map((file) =>
-        file.status === "cropped" ? { ...file, status: "completed" } : file
-      )
-    )
-
-    const initialItems: OrderItem[] = croppedReadyFiles.map((file) => ({
-      id: file.id,
-      fileName: file.fileName,
-      status: "uploading",
-      progress: 0,
-      drawingNo: "",
-      partName: "",
-      material: "",
-      surfaceTreatment: "",
-      notes: "",
-      quantity: null,
-      thumbnailUrl: file.thumbnailUrl,
-      needsReview: false,
-      confidence: 0,
-      previewUrl: file.base64,
-    }))
-    setOrderItems((prev) => [...prev, ...initialItems])
-
-    const chunkSize = 2
-    for (let i = 0; i < croppedReadyFiles.length; i += chunkSize) {
-      const chunk = croppedReadyFiles.slice(i, i + chunkSize)
-      await Promise.all(
-        chunk.map(async (file) => {
-        if (!file.base64) return
-
-        try {
-          const blob = base64ToBlob(file.base64, "application/pdf")
-          const fileObject = new File([blob], file.fileName, { type: "application/pdf" })
-
-          setOrderItems((prev) =>
-            prev.map((item) =>
-              item.id === file.id ? { ...item, status: "processing", progress: 50 } : item
-            )
-          )
-
-          const result = await extractDrawingData(fileObject)
-          setOrderItems((prev) =>
-            prev.map((item) => {
-              if (item.id !== file.id) return item
-              return {
-                ...item,
-                drawingNo: result.drawingNo || "",
-                partName: result.partName || "",
-                material: result.material || "",
-                quantity: result.quantity ?? null,
-                surfaceTreatment: result.surfaceTreatment || "",
-                notes: result.notes || "",
-                confidence: result.confidence || 0,
-                needsReview: (result.confidence || 0) < 85,
-                status: (result.confidence || 0) < 85 ? "review" : "completed",
-                progress: 100,
-              }
-            })
-          )
-        } catch (error) {
-          console.error(`Analysis failed for ${file.fileName}:`, error)
-          setOrderItems((prev) =>
-            prev.map((item) =>
-              item.id === file.id
-                ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
-                : item
-            )
-          )
-        }
-        })
-      )
-      // 次のチャンク処理前に2秒待機（API制限回避）
-      if (i + chunkSize < croppedReadyFiles.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-      }
-    }
-  }, [croppedFiles])
 
   const handleVerify = useCallback(
     (item: OrderItem) => {
@@ -282,8 +202,8 @@ export function useProvisionalOrder() {
   )
 
   const handleDelete = useCallback((itemId: string) => {
-    setOrderItems((prev) => prev.filter((item) => item.id !== itemId))
-  }, [])
+    deleteItem(itemId)
+  }, [deleteItem])
 
   const handleVerificationSubmit = useCallback(
     (data: VerificationFormData) => {
@@ -305,16 +225,7 @@ export function useProvisionalOrder() {
       setIsSheetOpen(false)
       setSelectedItem(null)
     },
-    [selectedItem]
-  )
-
-  const updateItemField = useCallback(
-    (itemId: string, field: keyof OrderItem, value: string | number | null) => {
-      setOrderItems((prev) =>
-        prev.map((item) => (item.id === itemId ? { ...item, [field]: value } : item))
-      )
-    },
-    []
+    [selectedItem, setOrderItems]
   )
 
   // ---------------------------------------------------------------------------
