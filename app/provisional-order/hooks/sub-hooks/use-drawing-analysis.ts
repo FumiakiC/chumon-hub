@@ -1,6 +1,7 @@
 import { useState, useCallback, Dispatch, SetStateAction } from "react"
 import { extractDrawingData } from "@/lib/api/drawing-api"
 import type { CroppedFile, OrderItem } from "../../schema"
+import type { OrderAction } from "./use-order-items"
 
 // Helper function
 function base64ToBlob(base64: string, mimeType: string): Blob {
@@ -17,8 +18,8 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
  */
 export function useDrawingAnalysis(
   croppedFiles: CroppedFile[],
+  dispatch: Dispatch<OrderAction>,
   orderItems: OrderItem[],
-  setOrderItems: Dispatch<SetStateAction<OrderItem[]>>,
   setCroppedFiles: Dispatch<SetStateAction<CroppedFile[]>>
 ) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -57,7 +58,7 @@ export function useDrawingAnalysis(
       confidence: 0,
       previewUrl: file.base64,
     }))
-    setOrderItems((prev) => [...prev, ...initialItems])
+    dispatch({ type: "ADD_ITEMS", payload: initialItems })
 
     // Process files in chunks (2 at a time)
     const chunkSize = 2
@@ -72,21 +73,20 @@ export function useDrawingAnalysis(
             const fileObject = new File([blob], file.fileName, { type: "application/pdf" })
 
             // Update progress to "processing"
-            setOrderItems((prev) =>
-              prev.map((item) =>
-                item.id === file.id ? { ...item, status: "processing", progress: 50 } : item
-              )
-            )
+            dispatch({
+              type: "UPDATE_ITEM",
+              payload: { id: file.id, changes: { status: "processing", progress: 50 } },
+            })
 
             // Extract drawing data
             const result = await extractDrawingData(fileObject)
 
             // Update item with extracted data
-            setOrderItems((prev) =>
-              prev.map((item) => {
-                if (item.id !== file.id) return item
-                return {
-                  ...item,
+            dispatch({
+              type: "UPDATE_ITEM",
+              payload: {
+                id: file.id,
+                changes: {
                   drawingNo: result.drawingNo || "",
                   partName: result.partName || "",
                   material: result.material || "",
@@ -97,18 +97,18 @@ export function useDrawingAnalysis(
                   needsReview: (result.confidence || 0) < 85,
                   status: (result.confidence || 0) < 85 ? "review" : "completed",
                   progress: 100,
-                }
-              })
-            )
+                },
+              },
+            })
           } catch (error) {
             console.error(`Analysis failed for ${file.fileName}:`, error)
-            setOrderItems((prev) =>
-              prev.map((item) =>
-                item.id === file.id
-                  ? { ...item, status: "review", needsReview: true, notes: "解析エラー発生" }
-                  : item
-              )
-            )
+            dispatch({
+              type: "UPDATE_ITEM",
+              payload: {
+                id: file.id,
+                changes: { status: "review", needsReview: true, notes: "解析エラー発生" },
+              },
+            })
           }
         })
       )
@@ -120,7 +120,7 @@ export function useDrawingAnalysis(
     }
 
     setIsAnalyzing(false)
-  }, [croppedFiles, setOrderItems, setCroppedFiles])
+  }, [croppedFiles, dispatch, setCroppedFiles])
 
   /**
    * Calculate analysis progress

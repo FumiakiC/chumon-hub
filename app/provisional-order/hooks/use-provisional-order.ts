@@ -34,7 +34,7 @@ function generateCroppedFile(fileName: string): CroppedFile {
 export function useProvisionalOrder() {
   // --- Sub-hooks ---
   const orderItemsHook = useOrderItems()
-  const { orderItems, setOrderItems, addItems, deleteItem, updateItemField } = orderItemsHook
+  const { orderItems, dispatch, removeFile, updateItemField } = orderItemsHook
 
   // --- Phase 1 ---
   const [croppedFiles, setCroppedFiles] = useState<CroppedFile[]>([])
@@ -50,8 +50,8 @@ export function useProvisionalOrder() {
   // Analysis hook
   const { isAnalyzing, handleAnalyzeAll, totalProgress } = useDrawingAnalysis(
     croppedFiles,
+    dispatch,
     orderItems,
-    setOrderItems,
     setCroppedFiles
   )
 
@@ -202,30 +202,29 @@ export function useProvisionalOrder() {
   )
 
   const handleDelete = useCallback((itemId: string) => {
-    deleteItem(itemId)
-  }, [deleteItem])
+    removeFile(itemId)
+  }, [removeFile])
 
   const handleVerificationSubmit = useCallback(
     (data: VerificationFormData) => {
       if (!selectedItem) return
-      setOrderItems((prev) =>
-        prev.map((item) =>
-          item.id === selectedItem.id
-            ? {
-                ...item,
-                ...data,
-                quantity: data.quantity === "" ? null : data.quantity,
-                status: "completed",
-                needsReview: false,
-                confidence: 100,
-              }
-            : item
-        )
-      )
+      dispatch({
+        type: "UPDATE_ITEM",
+        payload: {
+          id: selectedItem.id,
+          changes: {
+            ...data,
+            quantity: data.quantity === "" ? null : data.quantity,
+            status: "completed",
+            needsReview: false,
+            confidence: 100,
+          },
+        },
+      })
       setIsSheetOpen(false)
       setSelectedItem(null)
     },
-    [selectedItem, setOrderItems]
+    [dispatch, selectedItem]
   )
 
   // ---------------------------------------------------------------------------
