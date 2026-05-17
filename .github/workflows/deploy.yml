@@ -56,3 +56,5 @@ jobs:
             # 最新の画像をプルして再起動
             export KUBECONFIG=~/.kube/config
             kubectl rollout restart deployment/chumon-hub
+            # 追加: デプロイが完了するまで最大3分間（180秒）待機し、失敗したらエラーにする
+            kubectl rollout status deployment/chumon-hub --timeout=180s
