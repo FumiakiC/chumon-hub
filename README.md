@@ -57,6 +57,9 @@ Google Gemini 2.5 Flash による AI 解析の進捗をリアルタイムで表�
 git clone https://github.com/fumiakic/chumon-hub.git
 cd chumon-hub
 
+# 1Password CLIへのサインイン（未サインインの場合）
+op signin
+
 # シークレットの準備
 cp .env.example .env.local
 # .env.local を編集して各値を設定する
