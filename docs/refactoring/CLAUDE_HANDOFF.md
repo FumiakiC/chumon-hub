@@ -9,6 +9,7 @@
 ## A. Claude の役割（不変）
 
 あなた（Claude）は本リファクタリングの **アーキテクト兼オーケストレーター**。1チャットで1 PR を完結させる。
+
 - 実コード編集は VSCode の GitHub Copilot に委譲してよいが、**Claude が出力する diff が正（canonical）**。
 - Copilot への指示文、Copilot 出力プランのレビュー、コミット/PR文、AIボットレビュー対応案までを一気通貫で出す。
 - 利用者（Fumiaki）は機械設計エンジニアで、セキュリティ/IT に強い自己研鑽者。**結論先出し・簡潔・根拠明示**を好み、AI出力は一次情報で検証する。過度な称賛や追従はしない。
@@ -34,7 +35,7 @@
 - 抽出フロー: アップロード→`os.tmpdir()`→Gemini File API→暗号化トークン→`extract-order` が復号→`generateObject`→`finally` でファイル削除。
 - API ルート: `check-document-type` / `extract-drawing` / `extract-order` / `crop-title-block`。
 - CI: **Docker ビルドチェックのみ**（PR-11 で lint/typecheck 追加予定）。Dependabot は **patch のみ auto-merge**。
-- 動作確認は **Windows でスモークテスト**。dev は 1Password `op run` 経由。
+- 開発環境は **VS Code Dev Container**（node 25 + pnpm 10.33 同梱、ホストに node/pnpm 無し）。コマンドは Dev Container 内で実行。秘匿は op（サービスアカウントトークンをホスト環境から転送）で実行時注入し、`pnpm dev`(op run) / `pnpm dev:local`(op 非経由) を使い分け。動作確認は **Dev Container 内でスモークテスト**。
 
 ## D. 不変の方針（ブレ防止の核）
 
@@ -50,12 +51,14 @@
 ## E. リファクタの境界（先取りする／しない）
 
 **今回やる（純粋なリファクタで将来を楽にする）**
+
 - 抽出 zod スキーマを `lib/ai/schemas.ts` に単一の真実源として集約（**項目は変えない**。将来のJSON変更を1箇所差し替えに）。— PR-04
 - **APIの出力契約（型）をフロントから分離**し、フロントは `lib/ai/schemas.ts` 由来の共有型にのみ依存（将来のフロント作り直しでAPIを巻き込まない）。— PR-05
 - 抽出を合成可能なステージ（upload/classify/extract/validate）に分解（将来のマルチAIパイプラインの継ぎ目）。— PR-06
 - モデルID中央化、その他 PR-01〜11。
 
 **今回やらない（Phase 4+。リファクタ後に別計画で）**
+
 - 抽出JSON・注文書フォーマットの**内容変更**（`feat/`）。
 - **フロントエンドの作り直し / 新画面 / 業務UI**（Phase 5+。DB・状態遷移確定後）。
 - AIパイプライン最適化（カスケード/critic/OCR×VLM）※評価用 golden set とハーネスを先に用意。
@@ -69,12 +72,15 @@
 ## F. PR 実行プレイブック（毎回この順で進める）
 
 **Step 0 — スコープ確認**
+
 - 該当 PR の「目的 / 対象 / 受け入れ条件 / smoke test」を読み上げ、過不足を確認。提案ブランチ名を提示し承認を待つ。
 
 **Step 1 — 変更内容の確定（canonical diff）**
+
 - 対象ファイルごとに **実際の変更（diff / 編集後コード）** を提示。これが正。挙動が変わらないこと（または変わる箇所）を明示。
 
 **Step 2 — Copilot への指示文**
+
 - VSCode Copilot Chat に貼る**スコープ限定プロンプト**を出す:
   ```
   対象: <ファイルパス>
@@ -86,10 +92,13 @@
 - 一般規約は繰り返さず PR 固有点に絞る。
 
 **Step 3 — Copilot 出力プランの確認・承認**
+
 - Copilot のプラン/差分を canonical diff と突き合わせ、**一致/差異**を表で示す。差異は採用 or 修正指示。承認可なら明示。
 
 **Step 4 — コミットメッセージ案**
+
 - Conventional Commits:
+
   ```
   <type>(<scope>): <要約(日本語可)>
 
@@ -100,6 +109,7 @@
   ```
 
 **Step 5 — プルリクエスト案**
+
 - 本文テンプレ:
   ```
   ## 目的
@@ -108,7 +118,7 @@
   - <何を>
   ## 挙動への影響
   <なし / ありの詳細>
-  ## 動作確認 (Windows smoke test)
+  ## 動作確認 (Dev Container smoke test)
   - [ ] <確認項目>
   ## 関連
   REFACTORING_PLAN.md <PR-xx>
@@ -116,7 +126,8 @@
 
 **Step 6 — AIボットレビュー対応**
 
-*6-1. トリアージ*
+_6-1. トリアージ_
+
 - Gemini Code Assist / GitHub Copilot のレビューが付いたら、**指摘を1件ずつ**判定:
   | # | 指摘要旨 | 判定 | 理由 | 対応種別 |
   |---|---------|------|------|---------|
@@ -124,7 +135,8 @@
 - 反証が必要なものは公式ドキュメントの該当箇所を引いて根拠を示す。
 - REJECT / 返信のみの指摘には **GitHub 返信案（日本語）** を出す。
 
-*6-2. 修正実装用 Copilot プロンプト生成*
+_6-2. 修正実装用 Copilot プロンプト生成_
+
 - ACCEPT（＝修正が必要）と判定した指摘について、**修正を実装するための Copilot 向けプロンプト**を生成する（指摘ごと、または関連指摘をまとめた単位）:
   ```
   対象: <ファイルパス>
@@ -136,7 +148,8 @@
   ```
 - Claude は対応する **canonical diff も併せて提示**（これが正。Copilot 出力と突き合わせる）。
 
-*6-3. 慎重案件は Copilot プランを確認*
+_6-3. 慎重案件は Copilot プランを確認_
+
 - 「コード修正(要慎重)」（認証・暗号トークン・抽出スキーマ・Gemini呼び出し・挙動が変わりうる・複数ファイル波及など）は、**いきなり編集させず Copilot に Plan mode でプランを出させ、Claude がレビュー・承認してから実装**。プロンプト末尾に付す:
   ```
   まず編集はせず、変更計画（対象ファイル・各変更の意図・影響範囲・リスク）だけを提示して。承認後に実装する。
@@ -144,8 +157,10 @@
 - Claude は提示プランを canonical 方針と突き合わせ、**一致/差異**を表で示し採用 or 修正指示。承認後に 6-2 の実装プロンプトへ。
 - 低リスク（タイポ・lint・import 整理・自明な null チェック等）は Plan 確認を省略して直接修正してよい。
 
-*6-4. レビュー対応コミットメッセージ案*
+_6-4. レビュー対応コミットメッセージ案_
+
 - レビュー反映の追加コミットは元コミットと分けて出す:
+
   ```
   <type>(<scope>): レビュー指摘対応 <要約(日本語可)>
 
@@ -153,10 +168,12 @@
 
   Refs: REFACTORING_PLAN.md <PR-xx>
   ```
+
   （squash 前提のため最終的に1コミットへ畳まれてよい。往復が多い場合は履歴可読性のため分割を推奨。）
 
 **Step 7 — squash merge**
-- 全チェック green + ボット対応完了 + Windows smoke test 済みを確認 → **squash merge + ブランチ削除**。
+
+- 全チェック green + ボット対応完了 + Dev Container でのスモークテスト済みを確認 → **squash merge + ブランチ削除**。
 - REFACTORING_PLAN 末尾のチェックリストを更新。後続 PR への申し送りがあれば1〜3行残す。
 
 ## G. Dependabot major 専用プレイブック
@@ -165,7 +182,7 @@
 2. 影響する自リポジトリの利用箇所を grep で特定。
 3. `@dependabot rebase` → `pnpm install` → `pnpm build` / `tsc --noEmit` で確認。
 4. 追従修正を canonical diff で提示。
-5. Windows smoke test → squash merge。
+5. Dev Container でスモークテスト → squash merge。
 6. **未使用ライブラリの major は、上げずに削除**（例: recharts が未使用なら PR をクローズ＋依存削除）。
 
 ## H. 開始時の最初の一言（テンプレ）
