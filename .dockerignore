@@ -5,3 +5,9 @@ npm-debug.log
 README.md
 .next
 .git
+compose.yml
+.env
+.env*.local
+.env.production
+.env.development
+.env.test

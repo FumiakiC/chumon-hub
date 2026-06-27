@@ -1,0 +1,26 @@
+# chumon-hub 開発用 Docker Compose
+# 起動コマンド: op run --env-file=.env.local -- docker compose up
+#
+# ホスト側の op run が .env.local を展開し、
+# environment: セクション経由でコンテナに注入する。
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps
+    command: npx next dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - GOOGLE_API_KEY
+      - CLOUDFLARE_TEAM_DOMAIN
+      - CLOUDFLARE_AUDIENCE
+      - API_SECRET
+      - HOSTNAME=0.0.0.0
