@@ -53,11 +53,15 @@ macOS では Dock/Spotlight 起動の VS Code はシェルの環境変数を継�
 
 ```bash
 chumon() {
+  # ↓ あなたのクローン先に置き換える（例: "$HOME/src/chumon-hub" や "$HOME/dev/chumon-hub"）
+  local repo="$HOME/src/chumon-hub"
   local t
   t="$(op read 'op://Personal/chumon-hub-sa/credential')" || { echo "op read 失敗（Touch ID/連携を確認）"; return 1; }
-  OP_SERVICE_ACCOUNT_TOKEN="$t" code "$HOME/Documents/Git/chumon-hub"
+  OP_SERVICE_ACCOUNT_TOKEN="$t" code "$repo"
 }
 ```
+
+- リポジトリ内で実行する運用なら、パス指定をやめて `code .`（カレントディレクトリを開く）でも可。
 
 - `source ~/.zshrc` 後、**`chumon`** で「Touch ID → トークン注入 → VS Code 起動」。
 - トークンは 1Password と当該 VS Code プロセスのメモリにのみ存在し、ファイル/レジストリには残りません。
