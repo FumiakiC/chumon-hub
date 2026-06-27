@@ -83,6 +83,25 @@ pnpm dev                                          # op run が .env.local を解
 
 `op` を介さず起動したいときは、`.env.local` に **実値（プレーンテキスト）** を手動で設定する必要があります。`op://` 参照のままだと名前解決されず、そのままリテラル文字列として渡ってしまうためです（このファイルは絶対にコミットしない）。設定後 `pnpm dev:local` で起動します。
 
+## 5. macOS で高速化する（任意）: ワークスペースを volume にクローン
+
+macOS では bind-mount の I/O が遅く、`node_modules` / `.next` / `.pnpm-store` の読み書きがボトルネックになりがちです。
+これを根本的に解消するなら、ホストのフォルダを bind-mount する代わりに、**リポジトリを名前付き volume にクローンして開く**方式が最もクリーンです（個別の symlink 不要で3つとも高速化）。
+
+手順：
+1. VS Code を **op トークン付きで起動**（`chumon` で起動、または `OP_SERVICE_ACCOUNT_TOKEN="$(op read '...')" code`）。トークンは clone-in-volume でも `${localEnv:OP_SERVICE_ACCOUNT_TOKEN}` でコンテナへ転送される。
+2. コマンドパレット（`Cmd+Shift+P`）→ **「Dev Containers: Clone Repository in Container Volume...」** → リポジトリを選択／URL 入力。
+3. VS Code が名前付き volume を作成し、その中へクローンしてコンテナを起動。ワークスペース全体が volume 上になるため、`node_modules` / `.next` / `.pnpm-store` がすべて高速。
+4. 2回目以降は Recent から同じ volume-backed ワークスペースを開く。
+
+クローン後、コンテナ内で `.env.local`（op:// 参照）を作成し、§3 の検証 → `pnpm dev` へ。
+
+トレードオフ（理解した上で選ぶ）：
+- ソースは**ホストのファイルシステムに存在せず、Docker volume 内**にある。Git 操作は VS Code のソース管理／コンテナ内ターミナルで完結する。
+- ホスト側の Finder/他エディタからは見えない（コンテナ内で完結して開発する前提なら問題なし）。
+
+bind-mount 版（`chumon` でローカルフォルダを開く）も引き続き有効です。速度が気にならなければそちらで構いません。
+
 ## トラブルシュート早見表
 
 | 症状 | 原因 | 対処 |
