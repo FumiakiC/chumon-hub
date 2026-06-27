@@ -33,7 +33,7 @@
 - 秘匿: `GOOGLE_API_KEY` / `API_SECRET`(AES-256-GCM, `lib/crypto.ts`, TTL 5分) / `CLOUDFLARE_TEAM_DOMAIN` / `CLOUDFLARE_AUDIENCE`。
 - 抽出フロー: アップロード→`os.tmpdir()`→Gemini File API→暗号化トークン→`extract-order` が復号→`generateObject`→`finally` でファイル削除。
 - API ルート: `check-document-type` / `extract-drawing` / `extract-order` / `crop-title-block`。
-- CI: **Docker ビルドチェックのみ**（PR-10 で lint/typecheck 追加予定）。Dependabot は **patch のみ auto-merge**。
+- CI: **Docker ビルドチェックのみ**（PR-11 で lint/typecheck 追加予定）。Dependabot は **patch のみ auto-merge**。
 - 動作確認は **Windows でスモークテスト**。dev は 1Password `op run` 経由。
 
 ## D. 不変の方針（ブレ防止の核）

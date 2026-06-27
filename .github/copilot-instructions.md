@@ -27,12 +27,12 @@
   `errorUtils` の判定キーは **実際に throw される文言/コードと必ず一致** させる。
 
 ## AI / Gemini
-- モデル ID を route 内にハードコードしない。**`lib/ai/models.ts` の中央 config** から参照する。
-- 抽出の zod スキーマは route に直書きせず **`lib/ai/schemas.ts` を単一の真実源** とする。
+- モデル ID を route 内にハードコードしない（PR-04 で `lib/ai/models.ts` を導入予定）。導入後は **`lib/ai/models.ts` の中央 config** から参照する。
+- 抽出の zod スキーマは route に直書きしない（PR-04 で `lib/ai/schemas.ts` を導入予定）。導入後は **`lib/ai/schemas.ts` を単一の真実源** とする。
   スキーマ項目の **内容変更はリファクタPRで行わない**（別途 `feat/` で扱う）。
 - 抽出処理は「upload → classify → extract → validate」の **関数単位（合成可能なステージ）** で書く。1ファイルの巨大ハンドラにしない。
 - **フロントエンドは抽出APIのレスポンス型を `lib/ai/schemas.ts` 由来（`z.infer`）の共有型からのみ参照** する。route 内部の実装型やその場限りの inline 型に直接依存しない。表示整形は API 応答の構造から分離し presentation 層に置く（将来フロントを作り直してもAPIを巻き込まないため）。
-- Gemini SDK は **`@google/genai`（統合SDK）** を使う。レガシーの **`@google/generative-ai` は使わない**（公式に非推奨）。
+- Gemini SDK は原則 **`@google/genai`（統合SDK）** を使う。現状ファイルアップロードは `@google/generative-ai/server` を併用しているため（PR-07 で移行予定）、**新規実装では legacy を増やさない**。
 - ファイルアップロード受け口では必ず **`file-type` によるマジックバイト検証** を行い、許可 MIME 以外は 415 を返す。
 - 一時ファイルは `os.tmpdir()` を使い、`finally` で確実に削除する。Gemini File API にアップロードしたファイルも `finally` で削除する。
 
@@ -42,7 +42,7 @@
 - （将来の DB / 状態管理は Phase 4+。今は上記の前提を壊さないことだけ守る。）
 
 ## ロギング / セキュリティ
-- `[v0]` 接頭辞を新規に追加しない。`lib/logger.ts` の薄いラッパを使う。
+- `[v0]` 接頭辞を新規に追加しない。`lib/logger.ts` が存在する場合はそれを使う（PR-10 で導入予定）。
 - **秘匿情報をログに出さない**: API キー、`API_SECRET`、暗号化トークン、Gemini の `fileUri` / `file.name`、アップロードファイル名など。
 - 秘匿値の受け渡しは AES-256-GCM トークン（`lib/crypto.ts`）。TTL とフォーマット検証を壊さない。
 
