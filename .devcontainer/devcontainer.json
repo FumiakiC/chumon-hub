@@ -1,0 +1,38 @@
+{
+  // chumon-hub 開発用 Dev Container 設定
+  // フォーマット: https://aka.ms/devcontainer.json
+  "name": "chumon-hub-dev",
+  // 開発用 Dockerfile を明示参照（パスは devcontainer.json からの相対）。
+  // リポジトリ直下の本番 Dockerfile とは別物。取り違え防止のため名前で区別する。
+  "build": { "dockerfile": "Dockerfile.dev" },
+  "workspaceFolder": "/workspaces/chumon-hub",
+  "remoteUser": "node",
+
+  // Next.js 開発サーバ
+  "forwardPorts": [3000],
+
+  // 依存はコンテナ作成時に frozen-lockfile で導入（再現性）
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+
+  // ===== 秘匿情報の扱い（ハードコード厳禁） =====
+  // ここに API キー等の実値は一切書かない。
+  // ブートストラップ用の 1Password サービスアカウントトークン「1個だけ」をホスト環境変数から転送する。
+  // 実際のシークレット（GOOGLE_API_KEY / API_SECRET / CLOUDFLARE_*）は .env.local の op:// 参照を
+  // `pnpm dev`（= op run --env-file=.env.local -- next dev）が実行時に解決する。
+  // OP_SERVICE_ACCOUNT_TOKEN はリポジトリに残らず、ホスト環境にのみ存在する。
+  "remoteEnv": {
+    "OP_SERVICE_ACCOUNT_TOKEN": "${localEnv:OP_SERVICE_ACCOUNT_TOKEN}"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

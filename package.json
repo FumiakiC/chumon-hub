@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "op run --env-file=.env.local -- docker compose up",
+    "dev": "op run --env-file=.env.local -- next dev",
+    "dev:local": "next dev",
     "lint": "eslint .",
     "start": "next start"
   },

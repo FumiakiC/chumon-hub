@@ -47,8 +47,8 @@ Google Gemini 2.5 Flash による AI 解析の進捗をリアルタイムで表�
 
 ### 前提条件
 
-- Docker Desktop（または Docker Engine + Docker Compose Plugin）
-- 1Password CLI (`op`)
+- Dev Container が利用できる環境（VS Code + Dev Containers 拡張）
+- pnpm
 
 ### セットアップ手順
 
@@ -57,15 +57,15 @@ Google Gemini 2.5 Flash による AI 解析の進捗をリアルタイムで表�
 git clone https://github.com/fumiakic/chumon-hub.git
 cd chumon-hub
 
-# 1Password CLIへのサインイン（未サインインの場合）
-op signin
+# Dev Container でワークスペースを開く
+# VS Code コマンド: "Dev Containers: Reopen in Container"
 
 # シークレットの準備
 cp .env.example .env.local
 # .env.local を編集して各値を設定する
 
-# 開発サーバーの起動（初回はイメージビルドが走るため数分かかる）
-op run --env-file=.env.local -- docker compose up
+# 開発サーバーの起動
+pnpm dev
 
 # ブラウザで http://localhost:3000 を開く
 ```
@@ -73,7 +73,7 @@ op run --env-file=.env.local -- docker compose up
 ### 停止
 
 ```bash
-docker compose down
+# 開発サーバーを起動しているターミナルで Ctrl + C
 ```
 
 ## 🐳 Docker ビルドと実行
