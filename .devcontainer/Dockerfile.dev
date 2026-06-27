@@ -1,0 +1,23 @@
+# chumon-hub 開発用コンテナ（Dev Container 専用）
+# ※ これは「開発用」イメージ。本番イメージはリポジトリ直下の Dockerfile（別物・standalone/非root/alpine）。
+#    ファイル名を Dockerfile.dev とすることで、本番 Dockerfile との取り違えを防ぐ。
+# 目的:
+#   - ホストに node/pnpm を置かず、VSCode Dev Container 内で完結して開発する
+#   - 秘匿情報はハードコードせず、1Password CLI (op) で実行時に注入する
+
+FROM node:25-bookworm-slim
+
+# プロジェクト方針に合わせ pnpm を直接インストール（corepack は使わない）。再現性のためバージョン固定。
+RUN npm install -g pnpm@10.33.0
+
+# 開発に必要な最小ツール
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# 1Password CLI (op): 公式イメージからバイナリをコピーする方式。
+# Docker Hub 上の実在タグ 2.34.1 にピン留め（":latest" は使わない＝プロジェクト方針）。
+COPY --from=1password/op:2.34.1 /usr/local/bin/op /usr/local/bin/op
+
+# 非 root（node ユーザー）で作業する
+USER node
