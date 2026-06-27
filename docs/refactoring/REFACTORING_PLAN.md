@@ -19,7 +19,7 @@
 - 現状の Gemini ファイルアップロードのみ **レガシーの `@google/generative-ai/server`** を併用（PR-07 で `@google/genai` に一本化）。
 - デプロイ: Docker → GHCR → **K3s**、**Cloudflare Zero Trust(Access)** + Tunnel。
 - CI: 現状 **Docker ビルドチェックのみ**（lint / typecheck / test なし）。Dependabot は **patch のみ auto-merge**。
-- 開発環境: **VS Code Dev Container**（node 25 + pnpm 10.33 はコンテナ同梱、ホストに node/pnpm は無い）。`pnpm` 等のコマンドは **Dev Container 内のターミナルで実行**。秘匿は 1Password (op) で実行時注入（`pnpm dev` = op run → next dev、`pnpm dev:local` は op 非経由）。
+- 開発環境: **VS Code Dev Container**（node 25 + pnpm 10.33 はコンテナ同梱、ホストに node/pnpm は無い）。`pnpm` 等のコマンドは **Dev Container 内のターミナルで実行**。秘匿は 1Password (op) で実行時注入（`pnpm dev` = op run → next dev、`pnpm dev:local` は op 非経由で `.env.local` に実値を手動設定）。
 - 動作確認: マージ前に **Dev Container 内でスモークテスト**（注文書/図面PDFをアップロードし抽出が通ること）。
 
 ---

@@ -35,7 +35,7 @@
 - 抽出フロー: アップロード→`os.tmpdir()`→Gemini File API→暗号化トークン→`extract-order` が復号→`generateObject`→`finally` でファイル削除。
 - API ルート: `check-document-type` / `extract-drawing` / `extract-order` / `crop-title-block`。
 - CI: **Docker ビルドチェックのみ**（PR-11 で lint/typecheck 追加予定）。Dependabot は **patch のみ auto-merge**。
-- 開発環境は **VS Code Dev Container**（node 25 + pnpm 10.33 同梱、ホストに node/pnpm 無し）。コマンドは Dev Container 内で実行。秘匿は op（サービスアカウントトークンをホスト環境から転送）で実行時注入し、`pnpm dev`(op run) / `pnpm dev:local`(op 非経由) を使い分け。動作確認は **Dev Container 内でスモークテスト**。
+- 開発環境は **VS Code Dev Container**（node 25 + pnpm 10.33 同梱、ホストに node/pnpm 無し）。コマンドは Dev Container 内で実行。秘匿は op（サービスアカウントトークンをホスト環境から転送）で実行時注入し、`pnpm dev`(op run) / `pnpm dev:local`(op 非経由・この場合 `.env.local` に実値を手動設定) を使い分け。動作確認は **Dev Container 内でスモークテスト**。
 
 ## D. 不変の方針（ブレ防止の核）
 
