@@ -85,16 +85,16 @@ pnpm dev                                          # op run が .env.local を解
 
 ## 5. macOS で高速化する（任意）: ワークスペースを volume にクローン
 
-macOS では bind-mount の I/O が遅く、`node_modules` / `.next` / `.pnpm-store` の読み書きがボトルネックになりがちです。
-これを根本的に解消するなら、ホストのフォルダを bind-mount する代わりに、**リポジトリを名前付き volume にクローンして開く**方式が最もクリーンです（個別の symlink 不要で3つとも高速化）。
+macOS では bind-mount の I/O が遅く、ワークスペース配下の `node_modules` / `.next` の読み書きがボトルネックになりがちです（pnpm の store がワークスペース内に作られている場合はそれも）。
+これを根本的に解消するなら、ホストのフォルダを bind-mount する代わりに、**リポジトリを名前付き volume にクローンして開く**方式が最もクリーンです（個別の symlink 不要でまとめて高速化）。
 
 手順：
-1. VS Code を **op トークン付きで起動**（`chumon` で起動、または `OP_SERVICE_ACCOUNT_TOKEN="$(op read '...')" code`）。トークンは clone-in-volume でも `${localEnv:OP_SERVICE_ACCOUNT_TOKEN}` でコンテナへ転送される。
+1. VS Code を **op トークン付きで起動**する。clone-in-volume の初回はローカルに clone が無いので、フォルダを開かず次で起動：`OP_SERVICE_ACCOUNT_TOKEN="$(op read 'op://Personal/chumon-hub-sa/credential')" code`（ローカル clone が既にあれば `chumon` でも可）。トークンは clone-in-volume でも `${localEnv:OP_SERVICE_ACCOUNT_TOKEN}` でコンテナへ転送される。
 2. コマンドパレット（`Cmd+Shift+P`）→ **「Dev Containers: Clone Repository in Container Volume...」** → リポジトリを選択／URL 入力。
-3. VS Code が名前付き volume を作成し、その中へクローンしてコンテナを起動。ワークスペース全体が volume 上になるため、`node_modules` / `.next` / `.pnpm-store` がすべて高速。
+3. VS Code が名前付き volume を作成し、その中へクローンしてコンテナを起動。ワークスペース全体が volume 上になるため、`node_modules` / `.next`（および pnpm store がワークスペース内に作られる場合はそれも）が高速。
 4. 2回目以降は Recent から同じ volume-backed ワークスペースを開く。
 
-クローン後、コンテナ内で `.env.local`（op:// 参照）を作成し、§3 の検証 → `pnpm dev` へ。
+クローン後、コンテナ内で `.env.local`（op:// 参照）を作成し、§3 の検証 → `pnpm dev` へ（op を使わない場合の `.env.local` の扱いは §4 を参照）。
 
 トレードオフ（理解した上で選ぶ）：
 - ソースは**ホストのファイルシステムに存在せず、Docker volume 内**にある。Git 操作は VS Code のソース管理／コンテナ内ターミナルで完結する。
