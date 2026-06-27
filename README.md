@@ -47,49 +47,31 @@ Google Gemini 2.5 Flash による AI 解析の進捗をリアルタイムで表�
 
 ### 前提条件
 
-- Node.js 25+ （※2026年4月、型定義の更新およびCI環境との互換性向上のため v20 より引き上げ）
-- pnpm
-- 1Password CLI (`op`) が使用可能であること（シークレットを 1Password から注入する場合に必須）
+- Docker Desktop（または Docker Engine + Docker Compose Plugin）
+- 1Password CLI (`op`)
 
-### インストール
+### セットアップ手順
 
 ```bash
 # リポジトリのクローン
 git clone https://github.com/fumiakic/chumon-hub.git
 cd chumon-hub
 
-# 依存関係のインストール
-pnpm install
+# シークレットの準備
+cp .env.example .env.local
+# .env.local を編集して各値を設定する
+
+# 開発サーバーの起動（初回はイメージビルドが走るため数分かかる）
+op run --env-file=.env.local -- docker compose up
+
+# ブラウザで http://localhost:3000 を開く
 ```
 
-### 環境変数の設定
-
-プロジェクトルートに `.env.local` ファイルを作成し、以下の変数を設定してください。
+### 停止
 
 ```bash
-GOOGLE_API_KEY=your_gemini_api_key_here
-API_SECRET=your_generated_random_hex_here  # openssl rand -hex 32 で生成
+docker compose down
 ```
-
-**API_SECRET について**: fileId のセキュリティ強化のため、サーバーサイドで HMAC 署名を付与します。`openssl rand -hex 32` などでランダムな文字列を生成し、本番環境でも設定してください。未設定の場合は開発用デフォルト値が使用されます。
-
-### 開発サーバーの起動
-
-1Password CLI を利用して `.env.local` を読み込む場合（推奨）:
-
-```bash
-pnpm dev
-# スクリプト内で実行される実体: op run --env-file=.env.local -- next dev
-```
-
-1Password CLI を使わない場合（手元に平文で環境変数を保持している場合）:
-
-```bash
-next dev
-# または pnpm exec next dev
-```
-
-どちらの場合も、ブラウザで http://localhost:3000 を開いて確認します。`op` を使う場合は事前に `op signin` を完了させてください。
 
 ## 🐳 Docker ビルドと実行
 
