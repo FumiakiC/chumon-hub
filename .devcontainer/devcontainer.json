@@ -14,6 +14,11 @@
   // 依存はコンテナ作成時に frozen-lockfile で導入（再現性）
   "postCreateCommand": "pnpm install --frozen-lockfile",
 
+  // node_modules は named volume に分離し、ホスト bind-mount の I/O 負荷を低減
+  "mounts": [
+    "source=chumon-hub-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+  ],
+
   // ===== 秘匿情報の扱い（ハードコード厳禁） =====
   // ここに API キー等の実値は一切書かない。
   // ブートストラップ用の 1Password サービスアカウントトークン「1個だけ」をホスト環境変数から転送する。

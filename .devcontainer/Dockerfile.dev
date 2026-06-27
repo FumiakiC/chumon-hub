@@ -21,5 +21,9 @@ RUN apt-get update \
 # digest 再取得例: docker buildx imagetools inspect 1password/op:2.34.1 --format '{{json .Manifest.Digest}}'
 COPY --from=1password/op:2.34.1@sha256:08503f72b054f2673537d42b5f016e377c351a0f07336f7d7519ba5234c697c3 /usr/local/bin/op /usr/local/bin/op
 
+# named volume のマウント先を事前作成し、node ユーザーで書き込み可能にする
+RUN mkdir -p /workspaces/chumon-hub/node_modules \
+ && chown node:node /workspaces/chumon-hub/node_modules
+
 # 非 root（node ユーザー）で作業する
 USER node
