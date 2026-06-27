@@ -5,7 +5,8 @@
 #   - ホストに node/pnpm を置かず、VSCode Dev Container 内で完結して開発する
 #   - 秘匿情報はハードコードせず、1Password CLI (op) で実行時に注入する
 
-FROM node:25-bookworm-slim
+# digest 再取得例: docker buildx imagetools inspect node:25-bookworm-slim --format '{{json .Manifest.Digest}}'
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
 
 # プロジェクト方針に合わせ pnpm を直接インストール（corepack は使わない）。再現性のためバージョン固定。
 RUN npm install -g pnpm@10.33.0
@@ -17,7 +18,8 @@ RUN apt-get update \
 
 # 1Password CLI (op): 公式イメージからバイナリをコピーする方式。
 # Docker Hub 上の実在タグ 2.34.1 にピン留め（":latest" は使わない＝プロジェクト方針）。
-COPY --from=1password/op:2.34.1 /usr/local/bin/op /usr/local/bin/op
+# digest 再取得例: docker buildx imagetools inspect 1password/op:2.34.1 --format '{{json .Manifest.Digest}}'
+COPY --from=1password/op:2.34.1@sha256:08503f72b054f2673537d42b5f016e377c351a0f07336f7d7519ba5234c697c3 /usr/local/bin/op /usr/local/bin/op
 
 # 非 root（node ユーザー）で作業する
 USER node
