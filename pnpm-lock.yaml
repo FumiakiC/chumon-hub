@@ -13,13 +13,13 @@ importers:
   .:
     dependencies:
       '@ai-sdk/google':
-        specifier: latest
+        specifier: ^3.0.79
         version: 3.0.79(zod@4.3.6)
       '@google/generative-ai':
-        specifier: latest
+        specifier: ^0.24.1
         version: 0.24.1
       '@hookform/resolvers':
-        specifier: latest
+        specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.76.1(react@19.2.5))
       '@radix-ui/react-accordion':
         specifier: 1.2.12
@@ -52,7 +52,7 @@ importers:
         specifier: 1.1.16
         version: 1.1.16(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-popover':
-        specifier: latest
+        specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-progress':
         specifier: 1.1.8
@@ -73,7 +73,7 @@ importers:
         specifier: 1.3.6
         version: 1.3.6(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-slot':
-        specifier: latest
+        specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
       '@radix-ui/react-tabs':
         specifier: 1.1.13
@@ -88,10 +88,10 @@ importers:
         specifier: 1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@vercel/analytics':
-        specifier: latest
+        specifier: ^2.0.1
         version: 2.0.1(next@16.2.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
       ai:
-        specifier: latest
+        specifier: ^6.0.191
         version: 6.0.191(zod@4.3.6)
       autoprefixer:
         specifier: ^10.5.0
@@ -106,7 +106,7 @@ importers:
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       date-fns:
-        specifier: latest
+        specifier: ^4.3.0
         version: 4.3.0
       embla-carousel-react:
         specifier: 8.6.0
@@ -127,7 +127,7 @@ importers:
         specifier: 16.2.6
         version: 16.2.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       next-themes:
-        specifier: latest
+        specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       pdf-lib:
         specifier: ^1.17.1
@@ -145,7 +145,7 @@ importers:
         specifier: 19.2.5
         version: 19.2.5(react@19.2.5)
       react-hook-form:
-        specifier: latest
+        specifier: ^7.76.1
         version: 7.76.1(react@19.2.5)
       recharts:
         specifier: 2.15.4
