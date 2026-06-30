@@ -184,6 +184,7 @@ _6-4. レビュー対応コミットメッセージ案_
 4. 追従修正を canonical diff で提示。
 5. Dev Container でスモークテスト → squash merge。
 6. **未使用ライブラリの major は、上げずに削除**（例: recharts が未使用なら PR をクローズ＋依存削除）。
+7. **ランタイム結合の major は単独で上げない**。@types/node の major(26) は Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセットで上げる。単独では型/ランタイム skew になるため保留中。
 
 ## H. 開始時の最初の一言（テンプレ）
 
