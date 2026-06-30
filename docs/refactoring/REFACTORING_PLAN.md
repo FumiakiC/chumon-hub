@@ -130,6 +130,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - 対象: #165 date-fns, #153 tailwindcss, #147 zod, #154 tailwind-merge, #143 prettier-plugin-tailwindcss, #164 @types/node など（Phase 0 後に生き残ったもの）。
 - 手順: 各 PR を rebase（`@dependabot rebase`）→ CHANGELOG 確認 → ビルド green → squash merge。
 - 1チャットでまとめてトリアージしてよい。破壊的変更が疑われるものは major 扱いに格上げ。
+- 実績: 全 PR が Phase 0 前 main から未 rebase で巻き戻し（latest 復活/削除依存復活/next 16.2.6→16.2.4）を含んでいたため rebase をマージ前必須として実施。rebase 後 #164 @types/node が 25→26 の major に化けたため batch 除外し、Node ランタイム(25)移行とセットの別 PR へ送り（クローズ）。#165 date-fns は no-op 想定が 4.4 実マイナーに化けたが利用 API(format/parse/isValid/locale)は安定 core で挙動不変・tsc green。recharts はクローズ、postcss は #175(8.5.16) で別途マージ、js-yaml(indirect) 解消。
 
 ### DB-major（1つ1チャット）
 
@@ -234,10 +235,10 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 
 ## 付録: 完了管理
 
-- [ ] PR-01 pin-dependencies
-- [ ] PR-02 remove-dead-code
-- [ ] PR-03 prune-unused-deps
-- [ ] Dependabot minor 群
+- [x] PR-01 pin-dependencies
+- [x] PR-02 remove-dead-code
+- [x] PR-03 prune-unused-deps
+- [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。postcss 8.5.16 は #175 で別途、@types/node 26 は保留）
 - [ ] Dependabot major（file-type / typescript / lucide / recharts）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
