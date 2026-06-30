@@ -137,9 +137,9 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 着手順の推奨: **file-type → typescript → (生存していれば) lucide-react → recharts**。
 
 - **#116 file-type 21→22**: major。ESM/API 変更を公式 release note で確認。`check-document-type` の `fileTypeFromBuffer` に影響しうる。
-- 実績(#116, merged): **コード変更ゼロ**で追従。v22 破壊的変更（Node22必須 / `fileTypeFromStream`等が web `ReadableStream` のみ受理 / サブエクスポート廃止 / 一部MIME正規化 lz・lnk 等）は唯一の利用箇所 `fileTypeFromBuffer(buffer)` に非該当。`engines.node>=22` は本番/Dev Container の `node:25` で充足。`ALLOWED_MIME_TYPES`(jpeg/png/webp/heic/heif/pdf) は正規化対象外で判定挙動不変。build green + スモーク OK。
+- 実績(#116, merged): **コード変更ゼロ**で追従。v22 破壊的変更（Node22必須 / `fileTypeFromStream`等が web `ReadableStream` のみ受理 / サブエクスポート廃止 / 一部MIME正規化 lz・lnk 等）は唯一の利用箇所 `fileTypeFromBuffer(buffer)` に非該当。**file-type が要求する** `engines.node>=22` は本番/Dev Container の `node:25`（≥22）で充足（プロジェクト側 `package.json` に `engines` 指定は無し）。`ALLOWED_MIME_TYPES`(jpeg/png/webp/heic/heif/pdf) は正規化対象外で判定挙動不変。build green + スモーク OK。
 - **#124 typescript 5→6**: major。`tsc --noEmit` で型エラーを洗い出してから。
-- **#161 lucide-react 0.x→1**: アイコン import 名の変更有無を確認。
+- **#189 lucide-react 0.x→1**: アイコン import 名の変更有無を確認（旧 #161 は #189 に superseded されクローズ済み）。
 - **#125 recharts 2→3**: **未使用なら PR-03 で削除済み**。残す判断をした場合のみ対応。
 - 各 major は CLAUDE_HANDOFF の「Dependabot major 用プレイブック」に従う。
 
