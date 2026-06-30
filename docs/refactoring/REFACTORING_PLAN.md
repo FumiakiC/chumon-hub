@@ -238,7 +238,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-01 pin-dependencies
 - [x] PR-02 remove-dead-code
 - [x] PR-03 prune-unused-deps
-- [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。postcss 8.5.16 は #175 で別途、@types/node 26 は保留）
+- [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。詳細は「DB-minor」の実績セクションを参照）
 - [ ] Dependabot major（file-type / typescript / lucide / recharts）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
