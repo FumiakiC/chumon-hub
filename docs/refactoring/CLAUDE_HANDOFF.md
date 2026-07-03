@@ -28,7 +28,7 @@
 
 ## C. 不変の前提（プロジェクト事実）
 
-- Next.js **16.2.6**（App Router、ミドルウェアは **`proxy.ts`** 規約 / `middleware.ts` ではない）、React 19.2.5、TypeScript、**pnpm 10.33**、Tailwind v4、shadcn-ui(Radix)、zod、Vercel AI SDK(`ai` + `@ai-sdk/google`)。
+- Next.js **16.2.6**（App Router、ミドルウェアは **`proxy.ts`** 規約 / `middleware.ts` ではない）、React 19.2.5、**TypeScript 6**、**pnpm 10.33**、Tailwind v4、shadcn-ui(Radix)、zod、Vercel AI SDK(`ai` + `@ai-sdk/google`)。
 - Gemini ファイルアップロードのみ現状 **レガシー `@google/generative-ai/server`** を併用 → PR-07 で `@google/genai` に一本化予定。
 - デプロイ: Docker → GHCR → **K3s**、**Cloudflare Zero Trust(Access)** + Tunnel。認証は `proxy.ts` → `lib/auth-cloudflare.ts`（jose で `Cf-Access-Jwt-Assertion` を検証）。
 - 秘匿: `GOOGLE_API_KEY` / `API_SECRET`(AES-256-GCM, `lib/crypto.ts`, TTL 5分) / `CLOUDFLARE_TEAM_DOMAIN` / `CLOUDFLARE_AUDIENCE`。
@@ -185,6 +185,11 @@ _6-4. レビュー対応コミットメッセージ案_
 5. Dev Container でスモークテスト → squash merge。
 6. **未使用ライブラリの major は、上げずに削除**（例: recharts が未使用なら PR をクローズ＋依存削除）。
 7. **ランタイム結合の major は単独で上げない**。@types/node の major(26) は Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセットで上げる。単独では型/ランタイム skew になるため保留中。
+
+   **直近実績 & 次候補（申し送り）**
+
+- **TypeScript 5→6 適用済み**（#124）。TS6 で `types` 既定が `[]` になったのに対し、`tsconfig.json` に **`types: ["node"]` を明示**（`process`/`Buffer` 等の node グローバルを、ソースの node builtin import の有無に依存させない）。挙動不変・`tsc --noEmit` 0 エラー・**6.0 の deprecation 警告 0** を確認済み。TS7（native/Go 版）は次期メジャー。
+- **次の major 候補（カップリング）**: `ai` 6→7 と `@ai-sdk/google` 3→4 は **同一 PR で一緒に**上げる（コアの Gemini パイプライン。着手時に両者の migration guide を一次確認）。`@types/node` 26 は上記 7 の通り Node ランタイム移行とセット（単独保留）。
 
 ## H. 開始時の最初の一言（テンプレ）
 
