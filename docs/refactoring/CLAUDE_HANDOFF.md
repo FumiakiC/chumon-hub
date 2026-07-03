@@ -28,7 +28,7 @@
 
 ## C. 不変の前提（プロジェクト事実）
 
-- Next.js **16.2.6**（App Router、ミドルウェアは **`proxy.ts`** 規約 / `middleware.ts` ではない）、React 19.2.5、**TypeScript 6**、**pnpm 10.33**、Tailwind v4、shadcn-ui(Radix)、zod、Vercel AI SDK(`ai` + `@ai-sdk/google`)。
+- Next.js **16.2.9**（App Router、ミドルウェアは **proxy.ts** 規約 / middleware.ts ではない）、React 19.2.5、**TypeScript 6**、**pnpm 10.33**、Tailwind v4、shadcn-ui(Radix)、zod、Vercel AI SDK(ai + @ai-sdk/google)。
 - Gemini ファイルアップロードのみ現状 **レガシー `@google/generative-ai/server`** を併用 → PR-07 で `@google/genai` に一本化予定。
 - デプロイ: Docker → GHCR → **K3s**、**Cloudflare Zero Trust(Access)** + Tunnel。認証は `proxy.ts` → `lib/auth-cloudflare.ts`（jose で `Cf-Access-Jwt-Assertion` を検証）。
 - 秘匿: `GOOGLE_API_KEY` / `API_SECRET`(AES-256-GCM, `lib/crypto.ts`, TTL 5分) / `CLOUDFLARE_TEAM_DOMAIN` / `CLOUDFLARE_AUDIENCE`。
