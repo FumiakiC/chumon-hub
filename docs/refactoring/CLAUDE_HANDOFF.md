@@ -190,7 +190,8 @@ _6-4. レビュー対応コミットメッセージ案_
 
 - **TypeScript 5→6 適用済み**（#124）。TS6 で `types` 既定が `[]` になったのに対し、`tsconfig.json` に **`types: ["node"]` を明示**（`process`/`Buffer` 等の node グローバルを、ソースの node builtin import の有無に依存させない）。挙動不変・`tsc --noEmit` 0 エラー・**6.0 の deprecation 警告 0** を確認済み。TS7（native/Go 版）は次期メジャー。
 - **lucide-react 0.x→1 適用済み**（#189）。`package.json` / `pnpm-lock.yaml` の更新のみ（0.577.0→1.23.0）で、既存アイコン import 名の追従修正は不要。挙動不変・build green・スモーク OK を確認済み。
-- **次の major 候補（カップリング）**: `ai` 6→7 と `@ai-sdk/google` 3→4 は **同一 PR で一緒に**上げる（コアの Gemini パイプライン。着手時に両者の migration guide を一次確認）。`@types/node` 26 は上記 7 の通り Node ランタイム移行とセット（単独保留）。
+- **ai 6→7 + @ai-sdk/google 3→4 適用済み**（#195, カップリング）。両者は `@ai-sdk/provider@4.0.2` を共有するため同一 PR（#188/#186 統合、#186 クローズ）。コード変更は `createGoogleGenerativeAI` → `createGoogle` リネーム3ルートのみ。`ai@7.0.14` / `@ai-sdk/google@4.0.8` / `provider@4.0.2` 単一系。挙動不変・build green・scoped lint 0・スモーク OK。**教訓**: rebase で `package.json` の `ai` 行が巻き戻る事故 → coupled major は rebase 後に両依存行の grep 確認を必須化。format-on-save の Prettier 整形が混入 → canonical（リネームのみ）へ縮小し原子性維持。
+- **次の major 候補**: `@types/node` 26 は上記 7 の通り Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセット（単独保留）。
 
 ## H. 開始時の最初の一言（テンプレ）
 

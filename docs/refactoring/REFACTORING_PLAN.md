@@ -141,6 +141,8 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **#124 typescript 5→6**: major。`tsc --noEmit` で型エラーを洗い出してから。
 - **#189 lucide-react 0.x→1**: アイコン import 名の変更有無を確認（旧 #161 は #189 に superseded されクローズ済み）。
 - 実績(#189, merged): **コード変更ゼロ**で追従。`lucide-react` 0.577.0→1.23.0 の更新は `package.json` / `pnpm-lock.yaml` のみで、既存アイコン import 名の追従修正は不要。build green + スモーク OK。
+- **#195 ai 6→7 + @ai-sdk/google 3→4（カップリング）**: コアの Gemini 抽出パイプライン。両者は `@ai-sdk/provider` の spec を共有するため同一 PR（#188 ai / #186 google を統合、#186 クローズ）。
+- 実績(#195, merged): **コード変更は最小**（`createGoogleGenerativeAI` → `createGoogle` リネーム 3ルートのみ）。v7 破壊的変更（Node22+/ESM-only/system→instructions/multi-step result/telemetry の `@ai-sdk/otel` 分離）はいずれも非該当または既充足（Node25 / 全ESM / `role:"user"` のみ / `generateObject().object` は対象外 / file part は `{type:"file",data,mediaType}` で既に v7 正準形）。`ai@7.0.14` + `@ai-sdk/google@4.0.8` + `@ai-sdk/provider@4.0.2` の単一系に整合。片方だけ上げると provider spec skew（`LanguageModelV4` vs ≤`V3`）で型エラーのためカップリング必須。build green + 変更3ルートの scoped lint 0 + スモーク OK。**特記**: rebase で `package.json` の `ai` 行が main 側へ巻き戻る事故があり復旧（→ coupled major は rebase 後に両依存行の grep 確認を必須化）。format-on-save の Prettier 全体整形が混入したため canonical（リネームのみ）へ縮小し原子性を維持。Copilot 11指摘は全て既存コードでスコープ外につき REJECT（フォローアップへ）。
 - **#125 recharts 2→3**: **未使用なら PR-03 で削除済み**。残す判断をした場合のみ対応。
 - 各 major は CLAUDE_HANDOFF の「Dependabot major 用プレイブック」に従う。
 
@@ -241,7 +243,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-02 remove-dead-code
 - [x] PR-03 prune-unused-deps
 - [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。詳細は「DB-minor」の実績セクションを参照）
-- [ ] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 完了。残タスク: ai+@ai-sdk/google（同一PR）と @types/node（Nodeランタイム移行とセット）。詳細は「DB-major」参照。ただし #124 typescript の実績は DB-major には無く CLAUDE_HANDOFF「G. 直近実績」に記載）
+- [ ] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 / ai+@ai-sdk/google #195 完了。残タスク: @types/node（Nodeランタイム移行とセット）。詳細は「DB-major」参照。ただし #124 typescript の実績は DB-major には無く CLAUDE_HANDOFF「G. 直近実績」に記載）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
 - [ ] PR-06 gemini-file-helper
