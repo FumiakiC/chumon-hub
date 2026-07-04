@@ -189,6 +189,7 @@ _6-4. レビュー対応コミットメッセージ案_
    **直近実績 & 次候補（申し送り）**
 
 - **TypeScript 5→6 適用済み**（#124）。TS6 で `types` 既定が `[]` になったのに対し、`tsconfig.json` に **`types: ["node"]` を明示**（`process`/`Buffer` 等の node グローバルを、ソースの node builtin import の有無に依存させない）。挙動不変・`tsc --noEmit` 0 エラー・**6.0 の deprecation 警告 0** を確認済み。TS7（native/Go 版）は次期メジャー。
+- **lucide-react 0.x→1 適用済み**（#189）。`package.json` / `pnpm-lock.yaml` の更新のみ（0.577.0→1.23.0）で、既存アイコン import 名の追従修正は不要。挙動不変・build green・スモーク OK を確認済み。
 - **次の major 候補（カップリング）**: `ai` 6→7 と `@ai-sdk/google` 3→4 は **同一 PR で一緒に**上げる（コアの Gemini パイプライン。着手時に両者の migration guide を一次確認）。`@types/node` 26 は上記 7 の通り Node ランタイム移行とセット（単独保留）。
 
 ## H. 開始時の最初の一言（テンプレ）
