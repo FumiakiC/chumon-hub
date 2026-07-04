@@ -5,8 +5,8 @@
 #   - ホストに node/pnpm を置かず、VSCode Dev Container 内で完結して開発する
 #   - 秘匿情報はハードコードせず、1Password CLI (op) で実行時に注入する
 
-# digest 再取得例: docker buildx imagetools inspect node:25-bookworm-slim --format '{{json .Manifest.Digest}}'
-FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
+# digest 再取得例: docker buildx imagetools inspect node:26-bookworm-slim --format '{{json .Manifest.Digest}}'
+FROM node:26-bookworm-slim@sha256:b16ca7b4dcfb20184e1c70f9ee30c6a75ed1da669cfafd6d2add4761b123d79f
 
 # プロジェクト方針に合わせ pnpm を直接インストール（corepack は使わない）。再現性のためバージョン固定。
 RUN npm install -g pnpm@10.33.0
