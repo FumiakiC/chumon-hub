@@ -6,7 +6,7 @@
 #   - 秘匿情報はハードコードせず、1Password CLI (op) で実行時に注入する
 
 # digest 再取得例: docker buildx imagetools inspect node:26-bookworm-slim --format '{{json .Manifest.Digest}}'
-FROM node:26-bookworm-slim@sha256:<★要差し替え>
+FROM node:26-bookworm-slim@sha256:b16ca7b4dcfb20184e1c70f9ee30c6a75ed1da669cfafd6d2add4761b123d79f
 
 # プロジェクト方針に合わせ pnpm を直接インストール（corepack は使わない）。再現性のためバージョン固定。
 RUN npm install -g pnpm@10.33.0
