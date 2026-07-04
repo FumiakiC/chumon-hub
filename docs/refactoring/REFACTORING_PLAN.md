@@ -82,7 +82,8 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 | PR-08         | `refactor/error-handling`        | 型安全エラー + errorUtils 整合 + 情報漏えい防止          | 中     | なし       |
 | PR-09         | `perf/auth-jwks-singleton`       | `createRemoteJWKSet` をモジュールスコープへ              | 低     | なし       |
 | PR-10         | `refactor/logger`                | `[v0]` 接頭辞除去 + 簡易logger化 + 秘匿情報のログ抑止    | 中     | PR-08      |
-| PR-11         | `ci/add-lint-typecheck`          | CI に lint + `tsc --noEmit` を追加                       | 低     | 上記完了後 |
+| PR-11         | `fix/lint-baseline`              | 既存 lint エラー解消（set-state-in-effect）→ lint green  | 低     | なし       |
+| PR-12         | `ci/add-lint-typecheck`          | CI に lint + `tsc --noEmit` を追加                       | 低     | 上記完了後 |
 
 ---
 
@@ -180,6 +181,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **主な変更**:
   - `withUploadedFile(file, handler)` 的なヘルパに tmp生成→アップロード→`finally`で削除を集約。
   - **マジックバイト検証（`file-type`）を全ファイル受け口に統一**（現状 `extract-drawing` は未検証）。許可MIMEの定数も共有。
+  - FormData 値が実際に `File` かを `instanceof File` で検証してから処理（非File・null を早期に弾く。現状 `formData.get('file') as File` はランタイム検証を素通り。#195 Copilot 指摘）。
   - tmp ディレクトリは `os.tmpdir()` に統一。
   - 抽出処理を「upload → classify → extract → validate」の **関数単位** に整理（呼び出しは現状の1経路のままで挙動不変。多段化＝Phase 4）。
 - **やらないこと**: 複数モデルのカスケードや critic の実装（Phase 4）。
@@ -202,7 +204,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **主な変更**:
   - `(error as any).code` を撤廃し **型付きエラー**（例: `class ConfigError extends Error { readonly code = 'ERR_SYS_CONFIG' }`）に。
   - `errorUtils` のキー不一致を修正（定義 `"API_SECRET is missing"` ↔ 実 throw `"API_SECRET is not set..."`）。includes マッチではなく **コード/型での分岐** へ。
-  - `extract-drawing` がクライアントに返す内部メッセージ（`Server misconfiguration: GOOGLE_API_KEY...`）を **汎用メッセージ** に統一。
+  - `extract-drawing` / `extract-order` がクライアントに返す内部メッセージ（`Server misconfiguration: GOOGLE_API_KEY...`）を **汎用メッセージ** に統一。
 - **受け入れ条件**: 5xx 応答に内部詳細が含まれない / 既知エラーが日本語で正しくマップされる。
 - **smoke test**: API_SECRET 未設定など異常系を1ケース確認。
 
@@ -218,7 +220,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 
 - **目的**: `[v0]` 接頭辞除去、ログ整理、秘匿情報のログ抑止。
 - **対象**: `app/`, `lib/`（`console.log`/`[v0]` 約29箇所）。
-- **主な変更**: `lib/logger.ts`（環境で出力制御する薄いラッパ）を導入。fileUri / token / displayName 等の **秘匿値をログに出さない**。
+- **主な変更**: `lib/logger.ts`（環境で出力制御する薄いラッパ）を導入。fileUri / token / displayName 等の **秘匿値をログに出さない**（#195 Copilot High で具体化: `extract-order`/`extract-drawing` の復号トークン内容(`fileUri`,`name`)・`fileManagerName` 出力を含む）。
 - **受け入れ条件**: `[v0]` が0件 / 本番想定でデバッグログが抑制される。
 - **smoke test**: 主要フローでログに秘匿値が出ないことを目視。
 
@@ -226,8 +228,19 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 
 ## Phase 3 — 品質ゲート
 
-### PR-11 `ci/add-lint-typecheck`
+### PR-11 `fix/lint-baseline`
 
+- **目的**: PR-12 の lint ゲート導入前に、既存の lint エラーを解消して `pnpm lint` を green にする。
+- **対象**: `hooks/use-order-processing.ts`（現状唯一の lint エラー箇所。着手時に `pnpm lint` で全件を再確認）。
+- **背景**: #195 の repo 全体 lint で `react-hooks/set-state-in-effect`（`hooks/use-order-processing.ts:64` の effect 内同期 `setPreviewUrl(null)`）が顕在化。react-hooks v7 の既定ルールで、既存コードのアンチパターン。本件は依存更新とは独立。
+- **主な変更**: preview URL を effect 内同期 setState ではなく、`URL.createObjectURL` のライフサイクル（生成/`revokeObjectURL` cleanup）を保ちつつ派生値化 or effect 構造見直しで解消。プレビュー表示の挙動は不変。
+- **やらないこと**: フックの機能変更・UI変更（Phase 4+/対象外）。lint エラー解消の最小修正に限定。
+- **受け入れ条件**: `pnpm lint` が 0 error / プレビュー表示が従来通り。
+- **smoke test**: ファイル選択→プレビュー表示、選択解除→消去が従来通り。
+
+### PR-12 `ci/add-lint-typecheck`
+
+- **依存**: PR-11（lint baseline が green である前提）。
 - **目的**: 回帰を CI で検知できるようにする。
 - **対象**: `.github/workflows/ci.yml`、必要なら `package.json` の scripts。
 - **主な変更**: ビルドチェックに加え `pnpm lint` と `pnpm exec tsc --noEmit` のジョブを追加。
@@ -251,6 +264,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [ ] PR-08 error-handling
 - [ ] PR-09 auth-jwks-singleton
 - [ ] PR-10 logger
-- [ ] PR-11 add-lint-typecheck
+- [ ] PR-11 fix-lint-baseline
+- [ ] PR-12 add-lint-typecheck
 
 > リファクタ完了後、別計画書「Phase 4+ ロードマップ（抽出スキーマv2 / フロント業務UI / AIパイプライン最適化 / DB / PDF証憑 / ステータス棚卸し）」を起こす。
