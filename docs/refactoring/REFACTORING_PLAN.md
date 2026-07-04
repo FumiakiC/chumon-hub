@@ -241,7 +241,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-02 remove-dead-code
 - [x] PR-03 prune-unused-deps
 - [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。詳細は「DB-minor」の実績セクションを参照）
-- [ ] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 完了。残タスク: ai+@ai-sdk/google（同一PR）と @types/node（Nodeランタイム移行とセット）。詳細は「DB-major」参照）
+- [ ] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 完了。残タスク: ai+@ai-sdk/google（同一PR）と @types/node（Nodeランタイム移行とセット）。詳細は「DB-major」参照。ただし #124 typescript の実績は DB-major には無く CLAUDE_HANDOFF「G. 直近実績」に記載）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
 - [ ] PR-06 gemini-file-helper
