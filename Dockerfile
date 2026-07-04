@@ -12,7 +12,7 @@ COPY package.json pnpm-lock.yaml* ./
 # ----- 修正前２ -----
 # RUN npm install -g corepack && corepack enable pnpm && pnpm i --frozen-lockfile
 # ----- 修正後 (corepackを使わず、直接pnpmをインストール) -----
-RUN npm install -g pnpm && pnpm i --frozen-lockfile
+RUN npm install -g pnpm@10.33.0 && pnpm i --frozen-lockfile
 
 # ステージ 2: ビルダー (Builder)
 FROM node:26-alpine AS builder
@@ -27,7 +27,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ----- 修正前２ -----
 # RUN npm install -g corepack && corepack enable pnpm && pnpm run build
 # ----- 修正後 (corepackを使わず、直接pnpmをインストール) -----
-RUN npm install -g pnpm && pnpm run build
+RUN npm install -g pnpm@10.33.0 && pnpm run build
 
 # ステージ 3: ランナー (Runner)
 FROM node:26-alpine AS runner
