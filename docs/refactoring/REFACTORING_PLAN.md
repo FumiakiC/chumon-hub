@@ -260,7 +260,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。詳細は「DB-minor」の実績セクションを参照）
 - [x] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 / ai+@ai-sdk/google #195 / @types/node+Node25→26 #197 完了。計画済み major は全消化＝recharts #125 は未使用のため PR-03 で削除＋クローズ。詳細は「DB-major」参照。ただし #124 typescript の実績は DB-major には無く CLAUDE_HANDOFF「G. 直近実績」に記載）
 - [x] フォローアップ chore（#197 派生・別 PR）: 本番 `Dockerfile` の `npm install -g pnpm` を `pnpm@10.33.0` に pin（**#199, merged**。deps/builder 両ステージ。Dev Container 側は pin 済みで prod のみ不整合だったのを解消。Copilot 指摘・方針8）
-- [x] フォローアップ（#197 派生・モードB）: dev(glibc/bookworm) と prod(musl/alpine) の非対称を ADR 化し `completed-form.md` §6 に記録（**ADR-4 [決定] 2026-07-04: 現状維持=アクション無し**。全 native 依存に musl prebuild 有り／CI build で欠落検知。Node musl=Experimental tier・security 版ラグ・parity ギャップを受容。**収束方向(glibc/alpine)は未定**でトリガ時決定＝ADR-1 基盤確定／musl 固有不具合／musl 非対応 native 依存追加／Node musl tier 変更。ADR-1 決定時に本 ADR を見直す）
+- [x] フォローアップ（#197 派生・モードB）: dev(glibc/bookworm) と prod(musl/alpine) の非対称を ADR 化し、**Claude スキル `chumon-hub-dev` の `completed-form.md` §6（repo 外・Claude スキル管理の ADR ログ。repo にはファイルを持たない設計）** に記録（**ADR-4 [決定] 2026-07-04: 現状維持=アクション無し**。全 native 依存に musl prebuild 有り／CI build で欠落検知。Node musl=Experimental tier・security 版ラグ・parity ギャップを受容。**収束方向(glibc/alpine)は未定**でトリガ時決定＝ADR-1 基盤確定／musl 固有不具合／musl 非対応 native 依存追加／Node musl tier 変更。ADR ログの repo 移設は行わない方針）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
 - [ ] PR-06 gemini-file-helper
