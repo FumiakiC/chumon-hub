@@ -1,20 +1,21 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { generateObject } from "ai"
-import { z } from "zod"
-import { encryptFileToken } from "@/lib/crypto"
-import { GoogleAIFileManager } from "@google/generative-ai/server"
-import { writeFile, unlink } from "fs/promises"
-import crypto from "crypto"
-import path from "path"
-import { fileTypeFromBuffer } from "file-type"
+import { createGoogle } from '@ai-sdk/google'
+import { GoogleAIFileManager } from '@google/generative-ai/server'
+import { generateObject } from 'ai'
+import crypto from 'crypto'
+import { fileTypeFromBuffer } from 'file-type'
+import { unlink, writeFile } from 'fs/promises'
+import path from 'path'
+import { z } from 'zod'
+
+import { encryptFileToken } from '@/lib/crypto'
 
 const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
 ])
 
 export const maxDuration = 60
@@ -24,11 +25,14 @@ export async function POST(req: Request) {
 
   try {
     const formData = await req.formData()
-    const file = formData.get("file") as File
-    const mimeType = formData.get("mimeType") as string
+    const file = formData.get('file') as File
+    const mimeType = formData.get('mimeType') as string
 
     // basic diagnostics: ensure we received values
-    console.log('[v0] check-document-type request:', { mimeType, hasFile: !!file })
+    console.log('[v0] check-document-type request:', {
+      mimeType,
+      hasFile: !!file,
+    })
     if (!file) {
       console.error('[v0] check-document-type: file empty')
       return Response.json({ error: 'file is required' }, { status: 400 })
@@ -41,15 +45,19 @@ export async function POST(req: Request) {
     // Validate size before processing
     const MAX_SINGLE_FILE_BYTES = 25 * 1024 * 1024 // 25MB
     if (file.size > MAX_SINGLE_FILE_BYTES) {
-      console.error('[v0] check-document-type: file too large', { fileSize: file.size })
+      console.error('[v0] check-document-type: file too large', {
+        fileSize: file.size,
+      })
       return Response.json({ error: 'File too large' }, { status: 413 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      const error = new Error('Server misconfiguration: GOOGLE_API_KEY is not set');
-      (error as any).code = 'ERR_SYS_CONFIG';
-      throw error;
+      const error = new Error(
+        'Server misconfiguration: GOOGLE_API_KEY is not set'
+      )
+      ;(error as any).code = 'ERR_SYS_CONFIG'
+      throw error
     }
 
     // Write file to /tmp directory
@@ -58,17 +66,20 @@ export async function POST(req: Request) {
 
     const detectedType = await fileTypeFromBuffer(buffer)
     if (!detectedType || !ALLOWED_MIME_TYPES.has(detectedType.mime)) {
-      console.error("[v0] check-document-type: unsupported media type", {
+      console.error('[v0] check-document-type: unsupported media type', {
         detectedType,
         claimedMimeType: mimeType,
       })
-      return Response.json({ error: "Unsupported media type" }, { status: 415 })
+      return Response.json({ error: 'Unsupported media type' }, { status: 415 })
     }
 
     const detectedMimeType = detectedType.mime
     const detectedExt = detectedType.ext
 
-    tmpFilePath = path.join('/tmp', `upload_${crypto.randomUUID()}.${detectedExt}`)
+    tmpFilePath = path.join(
+      '/tmp',
+      `upload_${crypto.randomUUID()}.${detectedExt}`
+    )
     await writeFile(tmpFilePath, buffer)
     console.log('[v0] check-document-type: written to tmp', tmpFilePath)
 
@@ -88,23 +99,31 @@ export async function POST(req: Request) {
     tmpFilePath = null
     console.log('[v0] check-document-type: deleted local tmp file')
 
-    const google = createGoogleGenerativeAI({ apiKey })
+    const google = createGoogle({ apiKey })
 
     const result = await generateObject({
-      model: google("gemini-2.5-flash-lite"),
+      model: google('gemini-2.5-flash-lite'),
       schema: z.object({
-        isQuotation: z.boolean().describe("Whether the document is a quotation, estimate, or purchase order form"),
+        isQuotation: z
+          .boolean()
+          .describe(
+            'Whether the document is a quotation, estimate, or purchase order form'
+          ),
         documentType: z
           .string()
-          .describe("The specific type of the document (e.g., Quotation, Invoice, Receipt, Other)"),
-        reason: z.string().describe("Short reason for the classification in Japanese"),
+          .describe(
+            'The specific type of the document (e.g., Quotation, Invoice, Receipt, Other)'
+          ),
+        reason: z
+          .string()
+          .describe('Short reason for the classification in Japanese'),
       }),
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: [
             {
-              type: "text",
+              type: 'text',
               text: `この画像を分析して、見積書または注文書/発注書かどうかを判定してください。
 
 【見積書・注文書の必須要素】
@@ -125,7 +144,7 @@ documentType には具体的な書類種別を記載してください（例: �
 reason フィールドには判定理由を日本語で簡潔に記載してください（例: 「見積書のタイトルと金額明細が確認できるため」「請求書のため除外」など）。`,
             },
             {
-              type: "file",
+              type: 'file',
               data: uploadResult.file.uri,
               mediaType: detectedMimeType,
             },
@@ -148,24 +167,27 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
       fileId: fileToken, // Return encrypted token for the next API call
     })
   } catch (error) {
-    console.error("Check document error:", error)
-    
+    console.error('Check document error:', error)
+
     // Check if error is a system configuration error by error code
     const errorCode = (error as any).code
-    
+
     if (errorCode === 'ERR_SYS_CONFIG') {
       return Response.json(
-        { 
-          error: "System Configuration Error", 
-          code: "ERR_SYS_CONFIG", 
-          message: "Contact administrator" 
-        }, 
+        {
+          error: 'System Configuration Error',
+          code: 'ERR_SYS_CONFIG',
+          message: 'Contact administrator',
+        },
         { status: 500 }
       )
     }
-    
+
     // For other unexpected errors, return generic message without internal details
-    return Response.json({ error: "Failed to check document type" }, { status: 500 })
+    return Response.json(
+      { error: 'Failed to check document type' },
+      { status: 500 }
+    )
   } finally {
     // Cleanup tmp file if it still exists
     if (tmpFilePath) {
@@ -173,9 +195,11 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
         await unlink(tmpFilePath)
         console.log('[v0] check-document-type: cleaned up tmp file in finally')
       } catch (err) {
-        console.error('[v0] check-document-type: failed to cleanup tmp file', err)
+        console.error(
+          '[v0] check-document-type: failed to cleanup tmp file',
+          err
+        )
       }
     }
   }
 }
-

@@ -1,30 +1,60 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import { generateObject } from "ai"
-import { z } from "zod"
-import { decryptFileToken } from "@/lib/crypto"
-import { GoogleAIFileManager } from "@google/generative-ai/server"
+import { createGoogle } from '@ai-sdk/google'
+import { GoogleAIFileManager } from '@google/generative-ai/server'
+import { generateObject } from 'ai'
+import { z } from 'zod'
+
+import { decryptFileToken } from '@/lib/crypto'
 
 export const maxDuration = 60
 
 // Define the schema for the order form extraction
 const orderSchema = z.object({
-  items: z.array(
-    z.object({
-      productName: z.string().describe("Product Name (品名)"),
-      quantity: z.coerce.number().describe("Quantity (数量)"),
-      unitPrice: z.coerce.number().describe("Unit Price (単価) - numeric value without comma or currency symbol"),
-      amount: z.coerce.number().describe("Amount/Subtotal (金額) - numeric value without comma or currency symbol"),
-      description: z.string().optional().describe("Description or remarks (摘要)"),
-    })
-  ).describe("Line items array (明細行の配列)"),
-  orderNo: z.string().describe("Order Number (注番) - Extract the ID strictly matching the format: 'S' + YYMMDD (date) + '-' + SerialNumber (e.g., S251106-008). It is usually found in '件名' or 'No.'. Ignore any other IDs like 'MGG...'."),
-  quoteNo: z.string().describe("Quotation Number (見積No)"),
-  totalAmount: z.string().describe("Total Amount (合計金額)"),
-  requestedDeliveryDate: z.string().describe("Requested/Confirmed Delivery Date (請納期/納入期日) - Extract '納入期日' or '納期' here. Format as YYYYMMDD (e.g., 20251114). Do NOT use slashes or other separators."),
-  paymentTerms: z.string().describe("Payment Terms (支払条件)"),
-  deliveryLocation: z.string().describe("Delivery Location (受渡場所) - Do NOT infer from the recipient's address or company name. If '受渡場所' is not explicitly labeled, return an empty string."),
-  inspectionDeadline: z.string().describe("Inspection Deadline (検査完了期日)"),
-  recipientCompany: z.string().describe("Order Recipient / Vendor Name (発注先/見積発行元) - The company that issued this quotation (e.g. 株式会社 山口製作所)"),
+  items: z
+    .array(
+      z.object({
+        productName: z.string().describe('Product Name (品名)'),
+        quantity: z.coerce.number().describe('Quantity (数量)'),
+        unitPrice: z.coerce
+          .number()
+          .describe(
+            'Unit Price (単価) - numeric value without comma or currency symbol'
+          ),
+        amount: z.coerce
+          .number()
+          .describe(
+            'Amount/Subtotal (金額) - numeric value without comma or currency symbol'
+          ),
+        description: z
+          .string()
+          .optional()
+          .describe('Description or remarks (摘要)'),
+      })
+    )
+    .describe('Line items array (明細行の配列)'),
+  orderNo: z
+    .string()
+    .describe(
+      "Order Number (注番) - Extract the ID strictly matching the format: 'S' + YYMMDD (date) + '-' + SerialNumber (e.g., S251106-008). It is usually found in '件名' or 'No.'. Ignore any other IDs like 'MGG...'."
+    ),
+  quoteNo: z.string().describe('Quotation Number (見積No)'),
+  totalAmount: z.string().describe('Total Amount (合計金額)'),
+  requestedDeliveryDate: z
+    .string()
+    .describe(
+      "Requested/Confirmed Delivery Date (請納期/納入期日) - Extract '納入期日' or '納期' here. Format as YYYYMMDD (e.g., 20251114). Do NOT use slashes or other separators."
+    ),
+  paymentTerms: z.string().describe('Payment Terms (支払条件)'),
+  deliveryLocation: z
+    .string()
+    .describe(
+      "Delivery Location (受渡場所) - Do NOT infer from the recipient's address or company name. If '受渡場所' is not explicitly labeled, return an empty string."
+    ),
+  inspectionDeadline: z.string().describe('Inspection Deadline (検査完了期日)'),
+  recipientCompany: z
+    .string()
+    .describe(
+      'Order Recipient / Vendor Name (発注先/見積発行元) - The company that issued this quotation (e.g. 株式会社 山口製作所)'
+    ),
 })
 
 export async function POST(req: Request) {
@@ -34,38 +64,50 @@ export async function POST(req: Request) {
     const body = await req.json()
     const fileIdToken = body?.fileId
     if (typeof fileIdToken !== 'string' || fileIdToken.trim() === '') {
-      return Response.json({ error: 'fileId must be a non-empty string' }, { status: 400 })
+      return Response.json(
+        { error: 'fileId must be a non-empty string' },
+        { status: 400 }
+      )
     }
 
     // Decrypt the file token to get file information
     const fileTokenData = decryptFileToken(fileIdToken)
     if (!fileTokenData) {
       console.error('[v0] extract-order: failed to decrypt fileId token')
-      return Response.json({ error: 'Invalid or expired fileId' }, { status: 401 })
+      return Response.json(
+        { error: 'Invalid or expired fileId' },
+        { status: 401 }
+      )
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
       console.error('[v0] GOOGLE_API_KEY is not set')
-      return Response.json({ error: 'Server misconfiguration: GOOGLE_API_KEY is not set' }, { status: 500 })
+      return Response.json(
+        { error: 'Server misconfiguration: GOOGLE_API_KEY is not set' },
+        { status: 500 }
+      )
     }
 
     const { fileUri, name, mimeType } = fileTokenData
     fileManagerName = name // Store for cleanup in finally
-    console.log('[v0] extract-order: using decrypted file token', { fileUri, name })
+    console.log('[v0] extract-order: using decrypted file token', {
+      fileUri,
+      name,
+    })
 
-    const google = createGoogleGenerativeAI({ apiKey })
+    const google = createGoogle({ apiKey })
 
     // Use Gemini 2.5 Flash for high-accuracy extraction
     const result = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google('gemini-2.5-flash'),
       schema: orderSchema,
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: [
             {
-              type: "text",
+              type: 'text',
               text: `Extract all order details from this quotation/order document into a structured JSON format.
 
 CRITICAL INSTRUCTIONS for line items:
@@ -92,7 +134,7 @@ CRITICAL INSTRUCTIONS for line items:
 Return only valid JSON matching the schema.`,
             },
             {
-              type: "file",
+              type: 'file',
               data: fileUri,
               mediaType: mimeType,
             },
@@ -103,8 +145,11 @@ Return only valid JSON matching the schema.`,
 
     return Response.json(result.object)
   } catch (error) {
-    console.error("Extraction error:", error)
-    return Response.json({ error: "Failed to extract order details" }, { status: 500 })
+    console.error('Extraction error:', error)
+    return Response.json(
+      { error: 'Failed to extract order details' },
+      { status: 500 }
+    )
   } finally {
     // Always delete the file from Google AI File Manager
     if (fileManagerName) {
@@ -113,10 +158,16 @@ Return only valid JSON matching the schema.`,
         if (apiKey) {
           const fileManager = new GoogleAIFileManager(apiKey)
           await fileManager.deleteFile(fileManagerName)
-          console.log('[v0] extract-order: deleted file from Google AI', fileManagerName)
+          console.log(
+            '[v0] extract-order: deleted file from Google AI',
+            fileManagerName
+          )
         }
       } catch (err) {
-        console.error('[v0] extract-order: failed to delete file from Google AI', err)
+        console.error(
+          '[v0] extract-order: failed to delete file from Google AI',
+          err
+        )
       }
     }
   }
