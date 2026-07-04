@@ -259,6 +259,8 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-03 prune-unused-deps
 - [x] Dependabot minor 群（zod 4.4.3 / tailwindcss 4.3.1 / tailwind-merge 3.6 / prettier-plugin-tailwindcss 0.8 / date-fns 4.4。詳細は「DB-minor」の実績セクションを参照）
 - [x] Dependabot major（✅ file-type #116 / typescript #124 / lucide-react #189 / ai+@ai-sdk/google #195 / @types/node+Node25→26 #197 完了。計画済み major は全消化＝recharts #125 は未使用のため PR-03 で削除＋クローズ。詳細は「DB-major」参照。ただし #124 typescript の実績は DB-major には無く CLAUDE_HANDOFF「G. 直近実績」に記載）
+- [ ] フォローアップ chore（#197 派生・本線 PR とは別 PR / 別チャット）: 本番 `Dockerfile` の `npm install -g pnpm` を `pnpm@10.33.0` に pin（Copilot 指摘・方針8。Dev Container 側は pin 済みで prod のみ不整合）
+- [ ] フォローアップ（#197 派生・モードB）: dev(glibc/bookworm) と prod(musl/alpine) のベース OS 非対称を ADR 化し `completed-form.md` §6 に記録（Gemini 指摘。現状は各イメージ内 install＋CI build 検知で許容、具体 native 失敗まで alpine 維持）
 - [ ] PR-04 centralize-ai-config
 - [ ] PR-05 api-frontend-contract
 - [ ] PR-06 gemini-file-helper

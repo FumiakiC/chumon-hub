@@ -35,7 +35,7 @@
 - 抽出フロー: アップロード→`os.tmpdir()`→Gemini File API→暗号化トークン→`extract-order` が復号→`generateObject`→`finally` でファイル削除。
 - API ルート: `check-document-type` / `extract-drawing` / `extract-order` / `crop-title-block`。
 - CI: **Docker ビルドチェックのみ**（PR-11 で lint/typecheck 追加予定）。Dependabot は **patch のみ auto-merge**。
-- 開発環境は **VS Code Dev Container**（node 25 + pnpm 10.33 同梱、ホストに node/pnpm 無し）。コマンドは Dev Container 内で実行。秘匿は op（サービスアカウントトークンをホスト環境から転送）で実行時注入し、`pnpm dev`(op run) / `pnpm dev:local`(op 非経由・この場合 `.env.local` に実値を手動設定) を使い分け。動作確認は **Dev Container 内でスモークテスト**。
+- 開発環境は **VS Code Dev Container**（node 26 + pnpm 10.33 同梱、ホストに node/pnpm 無し）。コマンドは Dev Container 内で実行。秘匿は op（サービスアカウントトークンをホスト環境から転送）で実行時注入し、`pnpm dev`(op run) / `pnpm dev:local`(op 非経由・この場合 `.env.local` に実値を手動設定) を使い分け。動作確認は **Dev Container 内でスモークテスト**。
 
 ## D. 不変の方針（ブレ防止の核）
 
@@ -184,14 +184,15 @@ _6-4. レビュー対応コミットメッセージ案_
 4. 追従修正を canonical diff で提示。
 5. Dev Container でスモークテスト → squash merge。
 6. **未使用ライブラリの major は、上げずに削除**（例: recharts が未使用なら PR をクローズ＋依存削除）。
-7. **ランタイム結合の major は単独で上げない**。@types/node の major(26) は Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセットで上げる。単独では型/ランタイム skew になるため保留中。
+7. **ランタイム結合の major は単独で上げない**。@types/node の major(26) は Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセットで上げる（**#197 で適用済み**。単独では型/ランタイム skew）。
 
    **直近実績 & 次候補（申し送り）**
 
 - **TypeScript 5→6 適用済み**（#124）。TS6 で `types` 既定が `[]` になったのに対し、`tsconfig.json` に **`types: ["node"]` を明示**（`process`/`Buffer` 等の node グローバルを、ソースの node builtin import の有無に依存させない）。挙動不変・`tsc --noEmit` 0 エラー・**6.0 の deprecation 警告 0** を確認済み。TS7（native/Go 版）は次期メジャー。
 - **lucide-react 0.x→1 適用済み**（#189）。`package.json` / `pnpm-lock.yaml` の更新のみ（0.577.0→1.23.0）で、既存アイコン import 名の追従修正は不要。挙動不変・build green・スモーク OK を確認済み。
 - **ai 6→7 + @ai-sdk/google 3→4 適用済み**（#195, カップリング）。両者は `@ai-sdk/provider@4.0.2` を共有するため同一 PR（#188/#186 統合、#186 クローズ）。コード変更は `createGoogleGenerativeAI` → `createGoogle` リネーム3ルートのみ。`ai@7.0.14` / `@ai-sdk/google@4.0.8` / `provider@4.0.2` 単一系。挙動不変・build green・scoped lint 0・スモーク OK。**教訓**: rebase で `package.json` の `ai` 行が巻き戻る事故 → coupled major は rebase 後に両依存行の grep 確認を必須化。format-on-save の Prettier 整形が混入 → canonical（リネームのみ）へ縮小し原子性維持。
-- **次の major 候補**: `@types/node` 26 は上記 7 の通り Node ランタイム 25→26 移行（Dockerfile / Dev Container のベースイメージ更新）とセット（単独保留）。
+- **@types/node 25→26 + Node ランタイム 25→26 適用済み**（#197, カップリング）。アプリコード変更ゼロ、バージョン参照4ファイルのみ（本番 `Dockerfile` `node:26-alpine`×3 / Dev Container `node:26-bookworm-slim` digest 再ピン / `package.json` `@types/node ^26.0.1` / doc）。lockfile 追従は `@types/node 26.1.0` + `undici-types 8.3.0` のみ。build + `tsc --noEmit` green、両抽出フロー smoke 200（Undici 8.0 影響なし）。`module.register()` DEP0205 は Next.js 内部由来で静観。**教訓**: Dev Container は digest ピン留めのため「digest 取得→リビルド→`pnpm install`（lockfile 追従）」の順を厳守。`--frozen-lockfile`（postCreate）は package.json 先行更新時に必ず落ちるので、移行時は手動 `pnpm install` で lockfile を追従させる。
+- **次候補（申し送り）**: 計画済み Dependabot **major は全消化**（残る open Dependabot は minor のみ: radix-ui/react-slot 1.3.0 / react-hook-form 7.80.0）。**フォローアップ chore（別チャット）**: ①本番 `Dockerfile` の `npm install -g pnpm` を `pnpm@10.33.0` に pin（#197 Copilot 指摘・方針8。Dev Container 側は pin 済みで prod のみ不整合）。②dev(glibc/bookworm) と prod(musl/alpine) のベース OS 非対称を ADR 化（#197 Gemini 指摘。現状は各イメージ内 install＋CI build 検知で許容、具体 native 失敗が出るまで alpine 維持）。その後 refactor 本線 PR-04（centralize-ai-config）へ。
 
 ## H. 開始時の最初の一言（テンプレ）
 
