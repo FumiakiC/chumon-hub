@@ -5,8 +5,9 @@ import crypto from 'crypto'
 import { fileTypeFromBuffer } from 'file-type'
 import { unlink, writeFile } from 'fs/promises'
 import path from 'path'
-import { z } from 'zod'
 
+import { GEMINI_MODELS } from '@/lib/ai/models'
+import { documentTypeSchema } from '@/lib/ai/schemas'
 import { encryptFileToken } from '@/lib/crypto'
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -102,22 +103,8 @@ export async function POST(req: Request) {
     const google = createGoogle({ apiKey })
 
     const result = await generateObject({
-      model: google('gemini-2.5-flash-lite'),
-      schema: z.object({
-        isQuotation: z
-          .boolean()
-          .describe(
-            'Whether the document is a quotation, estimate, or purchase order form'
-          ),
-        documentType: z
-          .string()
-          .describe(
-            'The specific type of the document (e.g., Quotation, Invoice, Receipt, Other)'
-          ),
-        reason: z
-          .string()
-          .describe('Short reason for the classification in Japanese'),
-      }),
+      model: google(GEMINI_MODELS.classify),
+      schema: documentTypeSchema,
       messages: [
         {
           role: 'user',

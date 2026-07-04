@@ -5,7 +5,9 @@ import crypto from 'crypto'
 import { unlink, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { z } from 'zod'
+
+import { GEMINI_MODELS } from '@/lib/ai/models'
+import { drawingSchema } from '@/lib/ai/schemas'
 
 export const maxDuration = 60
 
@@ -14,35 +16,6 @@ function normalizeDrawingNo(rawNo: string): string {
   const match = rawNo.match(/^(\d{2}[A-Za-z]\d{3}-\d{3})/)
   return match ? match[1] : rawNo
 }
-
-const drawingSchema = z.object({
-  reasoning: z
-    .string()
-    .describe(
-      '抽出の思考プロセス。まず図面全体（特に右下の表題欄）を確認し、「数量の特定（粗さ記号の上の数字、四角囲み数字の除外）」「材質・表面処理の有無」について、どのように判断したかステップバイステップで言語化してください。'
-    ),
-  drawingNo: z.string().describe('Drawing Number (図面番号)'),
-  partName: z.string().describe('Part/Item Name (品名・部品名)'),
-  material: z
-    .string()
-    .describe(
-      'Material (材質) ※明確な記載（SS400、SUS、SOBなど）のみ抽出すること。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
-    ),
-  quantity: z
-    .number()
-    .nullable()
-    .describe(
-      '数量。『数量』や『QTY』という項目名はありません。『粗さ記号（粗サ、▽など）』のすぐ上部に単独で記載されている数字が数量です。それを見つけて数値として抽出してください。図面番号の横などにある四角で囲まれた数字（用紙サイズ等の記号）は絶対に数量として抽出しないこと。見つからない場合は null を出力してください。'
-    ),
-  surfaceTreatment: z
-    .string()
-    .optional()
-    .describe(
-      'Surface Treatment (表面処理) ※明確な記載（めっき、塗装、アルマイト、無電解ニッケル、四三酸化鉄皮膜など）のみ抽出すること。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
-    ),
-  notes: z.string().optional().describe('Notes/Remarks (備考)'),
-  confidence: z.coerce.number().describe('Confidence level (0-100)'),
-})
 
 export async function POST(req: Request) {
   let fileManagerName: string | null = null
@@ -91,7 +64,7 @@ export async function POST(req: Request) {
     const google = createGoogle({ apiKey })
 
     const result = await generateObject({
-      model: google('gemini-3.1-flash-lite'),
+      model: google(GEMINI_MODELS.extractDrawing),
       schema: drawingSchema,
       messages: [
         {

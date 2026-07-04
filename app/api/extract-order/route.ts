@@ -1,61 +1,12 @@
 import { createGoogle } from '@ai-sdk/google'
 import { GoogleAIFileManager } from '@google/generative-ai/server'
 import { generateObject } from 'ai'
-import { z } from 'zod'
 
+import { GEMINI_MODELS } from '@/lib/ai/models'
+import { orderSchema } from '@/lib/ai/schemas'
 import { decryptFileToken } from '@/lib/crypto'
 
 export const maxDuration = 60
-
-// Define the schema for the order form extraction
-const orderSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        productName: z.string().describe('Product Name (品名)'),
-        quantity: z.coerce.number().describe('Quantity (数量)'),
-        unitPrice: z.coerce
-          .number()
-          .describe(
-            'Unit Price (単価) - numeric value without comma or currency symbol'
-          ),
-        amount: z.coerce
-          .number()
-          .describe(
-            'Amount/Subtotal (金額) - numeric value without comma or currency symbol'
-          ),
-        description: z
-          .string()
-          .optional()
-          .describe('Description or remarks (摘要)'),
-      })
-    )
-    .describe('Line items array (明細行の配列)'),
-  orderNo: z
-    .string()
-    .describe(
-      "Order Number (注番) - Extract the ID strictly matching the format: 'S' + YYMMDD (date) + '-' + SerialNumber (e.g., S251106-008). It is usually found in '件名' or 'No.'. Ignore any other IDs like 'MGG...'."
-    ),
-  quoteNo: z.string().describe('Quotation Number (見積No)'),
-  totalAmount: z.string().describe('Total Amount (合計金額)'),
-  requestedDeliveryDate: z
-    .string()
-    .describe(
-      "Requested/Confirmed Delivery Date (請納期/納入期日) - Extract '納入期日' or '納期' here. Format as YYYYMMDD (e.g., 20251114). Do NOT use slashes or other separators."
-    ),
-  paymentTerms: z.string().describe('Payment Terms (支払条件)'),
-  deliveryLocation: z
-    .string()
-    .describe(
-      "Delivery Location (受渡場所) - Do NOT infer from the recipient's address or company name. If '受渡場所' is not explicitly labeled, return an empty string."
-    ),
-  inspectionDeadline: z.string().describe('Inspection Deadline (検査完了期日)'),
-  recipientCompany: z
-    .string()
-    .describe(
-      'Order Recipient / Vendor Name (発注先/見積発行元) - The company that issued this quotation (e.g. 株式会社 山口製作所)'
-    ),
-})
 
 export async function POST(req: Request) {
   let fileManagerName: string | null = null
@@ -100,7 +51,7 @@ export async function POST(req: Request) {
 
     // Use Gemini 2.5 Flash for high-accuracy extraction
     const result = await generateObject({
-      model: google('gemini-2.5-flash'),
+      model: google(GEMINI_MODELS.extractOrder),
       schema: orderSchema,
       messages: [
         {
