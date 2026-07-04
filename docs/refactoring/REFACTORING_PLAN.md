@@ -233,7 +233,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **目的**: PR-12 の lint ゲート導入前に、既存の lint エラーを解消して `pnpm lint` を green にする。
 - **対象**: `hooks/use-order-processing.ts`（現状唯一の lint エラー箇所。着手時に `pnpm lint` で全件を再確認）。
 - **背景**: #195 の repo 全体 lint で `react-hooks/set-state-in-effect`（`hooks/use-order-processing.ts:64` の effect 内同期 `setPreviewUrl(null)`）が顕在化。react-hooks v7 の既定ルールで、既存コードのアンチパターン。本件は依存更新とは独立。
-- **主な変更**: preview URL を effect 内同期 setState ではなく、`URL.createObjectURL` のライフサイクル（生成/`revokeObjectURL` cleanup）を保ちつつ派生値化 or effect 構造見直しで解消。プレビュー表示の挙動は不変。
+- **主な変更**: preview URL を effect 内同期 setState ではなく、イベントハンドラでの生成（および適切な revokeObjectURL クリーンアップ）への移行、または effect 構造の見直しによって解消。プレビュー表示の挙動は不変。
 - **やらないこと**: フックの機能変更・UI変更（Phase 4+/対象外）。lint エラー解消の最小修正に限定。
 - **受け入れ条件**: `pnpm lint` が 0 error / プレビュー表示が従来通り。
 - **smoke test**: ファイル選択→プレビュー表示、選択解除→消去が従来通り。
