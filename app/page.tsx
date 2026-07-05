@@ -1,7 +1,9 @@
-import Link from "next/link"
-import { FileText, FileClock, ClipboardList } from "lucide-react"
-import { Header } from "@/components/ui/header"
-import { Button } from "@/components/ui/button"
+import Link from 'next/link'
+
+import { ClipboardList, FileClock, FileText } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Header } from '@/components/ui/header'
 
 export default function Home() {
   return (
@@ -13,16 +15,18 @@ export default function Home() {
         <div className="mb-16 flex flex-col items-center text-center">
           {/* Badge */}
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/60 bg-blue-50 px-4 py-1.5 dark:border-blue-500/20 dark:bg-blue-900/20">
-            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">注文管理システム v0.2.0</span>
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+              注文管理システム v0.2.0
+            </span>
           </div>
 
           {/* Title with subtle gradient */}
-          <h1 className="mb-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-4xl font-bold tracking-tight text-transparent dark:from-slate-50 dark:via-slate-200 dark:to-slate-400 md:text-5xl lg:text-6xl">
+          <h1 className="mb-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-5xl lg:text-6xl dark:from-slate-50 dark:via-slate-200 dark:to-slate-400">
             CHUMON HUB
           </h1>
 
           {/* Subtitle with constrained width and relaxed line height */}
-          <p className="max-w-md text-base leading-relaxed text-slate-500 dark:text-slate-400 md:text-lg">
+          <p className="max-w-md text-base leading-relaxed text-slate-500 md:text-lg dark:text-slate-400">
             注文書を作成・管理するための統合プラットフォーム
           </p>
         </div>
@@ -57,7 +61,12 @@ export default function Home() {
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
                 </svg>
               </div>
             </div>
@@ -91,7 +100,12 @@ export default function Home() {
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
                 </svg>
               </div>
             </div>

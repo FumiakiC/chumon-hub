@@ -1,13 +1,7 @@
-"use client"
+'use client'
 
-import type React from "react"
-
-import { useEffect, useMemo, useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Plus, Trash2 } from "lucide-react"
+import type React from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   type Control,
   Controller,
@@ -16,8 +10,16 @@ import {
   type UseFormWatch,
   useFieldArray,
   useWatch,
-} from "react-hook-form"
-import type { OrderFormData } from "./schema"
+} from 'react-hook-form'
+
+import { Plus, Trash2 } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+
+import type { OrderFormData } from './schema'
 
 type OrderFormItemsProps = {
   control: Control<OrderFormData>
@@ -38,11 +40,11 @@ function NumericInput({
   className?: string
 }) {
   const [isFocused, setIsFocused] = useState(false)
-  const [inputValue, setInputValue] = useState(String(value ?? ""))
+  const [inputValue, setInputValue] = useState(String(value ?? ''))
 
   const handleFocus = () => {
     setIsFocused(true)
-    setInputValue(value === 0 ? "" : String(value))
+    setInputValue(value === 0 ? '' : String(value))
   }
 
   const handleBlur = () => {
@@ -55,31 +57,40 @@ function NumericInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     // Allow only numbers and decimal point
-    if (val === "" || /^-?[0-9]*\.?[0-9]*$/.test(val)) {
+    if (val === '' || /^-?[0-9]*\.?[0-9]*$/.test(val)) {
       setInputValue(val)
     }
   }
 
-  const displayValue = isFocused ? inputValue : value != null ? value.toLocaleString("ja-JP") : ""
+  const displayValue = isFocused
+    ? inputValue
+    : value != null
+      ? value.toLocaleString('ja-JP')
+      : ''
 
   return (
     <Input
-      type={isFocused ? "text" : "text"}
+      type={isFocused ? 'text' : 'text'}
       inputMode="numeric"
       value={displayValue}
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}
       placeholder={placeholder}
-      className={`${className} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+      className={`${className} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
     />
   )
 }
 
-export function OrderFormItems({ control, register, watch, setValue }: OrderFormItemsProps) {
+export function OrderFormItems({
+  control,
+  register,
+  watch,
+  setValue,
+}: OrderFormItemsProps) {
   const { fields, append, remove } = useFieldArray({
     control,
-    name: "items",
+    name: 'items',
   })
 
   const formValues = useWatch({ control })
@@ -91,24 +102,26 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
       const calculatedAmount = quantity * unitPrice
 
       if (formValues.items?.[index]?.amount !== calculatedAmount) {
-        setValue(`items.${index}.amount`, calculatedAmount, { shouldValidate: false })
+        setValue(`items.${index}.amount`, calculatedAmount, {
+          shouldValidate: false,
+        })
       }
     })
   }, [formValues.items, fields, setValue])
 
-  const watchedItems = useWatch({ control, name: "items" })
+  const watchedItems = useWatch({ control, name: 'items' })
 
   const totalAmountString = useMemo(() => {
     const total = (watchedItems ?? []).reduce((sum, item) => {
       return sum + (item?.amount ?? 0)
     }, 0)
-    return total.toLocaleString("ja-JP")
+    return total.toLocaleString('ja-JP')
   }, [watchedItems])
 
   const addItem = () => {
     append({
-      productName: "",
-      description: "",
+      productName: '',
+      description: '',
       quantity: 0,
       unitPrice: 0,
       amount: 0,
@@ -122,31 +135,42 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
   }
 
   return (
-    <Card className="elevation-1 border-0 bg-gradient-to-br from-secondary/5 to-transparent p-5">
+    <Card className="elevation-1 from-secondary/5 border-0 bg-gradient-to-br to-transparent p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-semibold text-secondary">
-          <div className="h-1 w-1 rounded-full bg-secondary" />
+        <h3 className="text-secondary flex items-center gap-2 font-semibold">
+          <div className="bg-secondary h-1 w-1 rounded-full" />
           品目一覧
         </h3>
-        <Button onClick={addItem} size="sm" className="bg-slate-600 text-accent-foreground hover:bg-slate-600/90">
-          <Plus className="h-4 w-4 mr-1" />
+        <Button
+          onClick={addItem}
+          size="sm"
+          className="text-accent-foreground bg-slate-600 hover:bg-slate-600/90"
+        >
+          <Plus className="mr-1 h-4 w-4" />
           品目を追加
         </Button>
       </div>
 
-      <p className="mb-4 text-sm text-muted-foreground">品目を追加、編集、削除できます</p>
+      <p className="text-muted-foreground mb-4 text-sm">
+        品目を追加、編集、削除できます
+      </p>
 
       <div className="space-y-4">
         {fields.map((field, index) => (
-          <Card key={field.id} className="elevation-1 border border-border/50 bg-background p-4">
+          <Card
+            key={field.id}
+            className="elevation-1 border-border/50 bg-background border p-4"
+          >
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted-foreground">No. {index + 1}</span>
+              <span className="text-muted-foreground text-sm font-semibold">
+                No. {index + 1}
+              </span>
               {fields.length > 1 && (
                 <Button
                   onClick={() => removeItem(index)}
                   variant="ghost"
                   size="sm"
-                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -156,15 +180,19 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">品目名</label>
+                  <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                    品目名
+                  </label>
                   <Input
                     {...register(`items.${index}.productName`)}
                     placeholder="品目名を入力"
-                    className="elevation-1 border-0 bg-muted/30"
+                    className="elevation-1 bg-muted/30 border-0"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">単価</label>
+                  <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                    単価
+                  </label>
                   <Controller
                     control={control}
                     name={`items.${index}.unitPrice`}
@@ -173,13 +201,15 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
                         value={field.value}
                         onChange={field.onChange}
                         placeholder="0"
-                        className="elevation-1 border-0 bg-muted/30 font-mono"
+                        className="elevation-1 bg-muted/30 border-0 font-mono"
                       />
                     )}
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">数量</label>
+                  <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                    数量
+                  </label>
                   <Controller
                     control={control}
                     name={`items.${index}.quantity`}
@@ -188,24 +218,31 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
                         value={field.value}
                         onChange={field.onChange}
                         placeholder="1"
-                        className="elevation-1 border-0 bg-muted/30"
+                        className="elevation-1 bg-muted/30 border-0"
                       />
                     )}
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-muted-foreground">小計</label>
-                  <div className="flex h-10 items-center rounded-md bg-muted/50 px-3 font-mono text-sm font-semibold">
-                    ¥{((watchedItems?.[index]?.amount ?? 0) || 0).toLocaleString("ja-JP")}
+                  <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                    小計
+                  </label>
+                  <div className="bg-muted/50 flex h-10 items-center rounded-md px-3 font-mono text-sm font-semibold">
+                    ¥
+                    {((watchedItems?.[index]?.amount ?? 0) || 0).toLocaleString(
+                      'ja-JP'
+                    )}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">摘要</label>
+                <label className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                  摘要
+                </label>
                 <Textarea
                   {...register(`items.${index}.description`)}
-                  className="elevation-1 border-0 bg-muted/30"
+                  className="elevation-1 bg-muted/30 border-0"
                   rows={2}
                 />
               </div>
@@ -213,10 +250,14 @@ export function OrderFormItems({ control, register, watch, setValue }: OrderForm
           </Card>
         ))}
 
-        <div className="elevation-2 rounded-lg p-4 bg-slate-600">
+        <div className="elevation-2 rounded-lg bg-slate-600 p-4">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-accent-foreground">合計金額（税抜き）：</label>
-            <div className="text-2xl font-bold text-accent-foreground">¥{totalAmountString}</div>
+            <label className="text-accent-foreground text-sm font-semibold">
+              合計金額（税抜き）：
+            </label>
+            <div className="text-accent-foreground text-2xl font-bold">
+              ¥{totalAmountString}
+            </div>
           </div>
         </div>
       </div>

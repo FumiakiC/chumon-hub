@@ -1,9 +1,12 @@
-import { type NextRequest } from "next/server"
-import { createRemoteJWKSet, jwtVerify } from "jose"
+import { type NextRequest } from 'next/server'
 
-export async function verifyCloudflareAccess(request: NextRequest): Promise<boolean> {
-  if (process.env.NODE_ENV === "development") {
-    console.log("[auth] Skipping Cloudflare Access verification in development")
+import { createRemoteJWKSet, jwtVerify } from 'jose'
+
+export async function verifyCloudflareAccess(
+  request: NextRequest
+): Promise<boolean> {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[auth] Skipping Cloudflare Access verification in development')
     return true
   }
 
@@ -11,7 +14,9 @@ export async function verifyCloudflareAccess(request: NextRequest): Promise<bool
   const AUDIENCE = process.env.CLOUDFLARE_AUDIENCE
 
   if (!TEAM_DOMAIN || !AUDIENCE) {
-    console.error("[auth] Missing required environment variables: CLOUDFLARE_TEAM_DOMAIN or CLOUDFLARE_AUDIENCE")
+    console.error(
+      '[auth] Missing required environment variables: CLOUDFLARE_TEAM_DOMAIN or CLOUDFLARE_AUDIENCE'
+    )
     return false
   }
 
@@ -19,9 +24,9 @@ export async function verifyCloudflareAccess(request: NextRequest): Promise<bool
   const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`
   const jwks = createRemoteJWKSet(new URL(JWKS_URL))
 
-  const token = request.headers.get("Cf-Access-Jwt-Assertion")
+  const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (!token) {
-    console.warn("[auth] Missing Cf-Access-Jwt-Assertion header")
+    console.warn('[auth] Missing Cf-Access-Jwt-Assertion header')
     return false
   }
 
@@ -32,7 +37,7 @@ export async function verifyCloudflareAccess(request: NextRequest): Promise<bool
     })
     return true
   } catch (error) {
-    console.error("[auth] Cloudflare Access verification failed", error)
+    console.error('[auth] Cloudflare Access verification failed', error)
     return false
   }
 }

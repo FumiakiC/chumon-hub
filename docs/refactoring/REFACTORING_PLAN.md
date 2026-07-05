@@ -82,6 +82,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 | PR-08         | `refactor/error-handling`        | 型安全エラー + errorUtils 整合 + 情報漏えい防止          | 中     | なし       |
 | PR-09         | `perf/auth-jwks-singleton`       | `createRemoteJWKSet` をモジュールスコープへ              | 低     | なし       |
 | PR-10         | `refactor/logger`                | `[v0]` 接頭辞除去 + 簡易logger化 + 秘匿情報のログ抑止    | 中     | PR-08      |
+| chore         | `chore/format-baseline`          | Prettier 一括正規化 + format script + blame-ignore（**PR-06 前に先行実施**） | 低     | なし       |
 | PR-11         | `fix/lint-baseline`              | 既存 lint エラー解消（set-state-in-effect）→ lint green  | 低     | なし       |
 | PR-12         | `ci/add-lint-typecheck`          | CI に lint + `tsc --noEmit` を追加                       | 低     | 上記完了後 |
 
@@ -231,6 +232,16 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 
 ## Phase 3 — 品質ゲート
 
+### chore `chore/format-baseline`
+
+- **目的**: v0 由来のフォーマット非準拠（ダブルクォート等）を `.prettierrc` 準拠へ一括正規化し、以降の PR で **format-on-save 混入を構造的に防ぐ**（PR-05 で当該混入が2度発生した学びに基づく先行整備）。
+- **対象**: repo 全体（`prettier --write .`）。設定変更なし＝既存 `.prettierrc`（`semi:false` / `singleQuote:true` / `trailingComma:es5` / sort-imports / tailwindcss プラグイン）をそのまま適用。よってクォート/セミコロンに加え **import 順・Tailwind class 順も正規化**される（機械的・大 diff）。
+- **主な変更**: ①`package.json` に `format`(`prettier --write .`) / `format:check`(`prettier --check .`) を追加。②`.prettierignore` 新設（`node_modules` / `.next` / `out` / `build` / `coverage` / `*.tsbuildinfo` / `pnpm-lock.yaml` / **`docs/**/*.md`＝計画書・handoff の手書きフォーマット保護**）。③`.git-blame-ignore-revs` 新設し、整形の squash コミット hash を登録（`git blame` 汚染防止。GitHub 自動認識）。④`pnpm format` で一括整形。
+- **順序**: 独立・順序依存なし。ただし全ファイル大 diff のため **in-flight PR が無い今（PR-06 前）に単独・短命ブランチで**実施。CI の `prettier --check` 追加は **PR-12 に相乗り**（下記）。
+- **やらないこと**: コード挙動・UI・ロジックの変更（純フォーマット）。`.prettierrc` の設定変更。lint 修正（PR-11）。
+- **受け入れ条件**: `pnpm format:check` が差分ゼロ / `pnpm build`（または `tsc --noEmit`）green / `git diff` にコード挙動に関わる変更が無い（フォーマットのみ）。
+- **smoke test**: 不要（純フォーマット。build green で担保）。
+
 ### PR-11 `fix/lint-baseline`
 
 - **目的**: PR-12 の lint ゲート導入前に、既存の lint エラーを解消して `pnpm lint` を green にする。
@@ -246,7 +257,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **依存**: PR-11（lint baseline が green である前提）。
 - **目的**: 回帰を CI で検知できるようにする。
 - **対象**: `.github/workflows/ci.yml`、必要なら `package.json` の scripts。
-- **主な変更**: ビルドチェックに加え `pnpm lint` と `pnpm exec tsc --noEmit` のジョブを追加。
+- **主な変更**: ビルドチェックに加え `pnpm lint` / `pnpm exec tsc --noEmit` / `pnpm format:check` のジョブを追加（`format:check` は `chore/format-baseline` で整形済みの前提。以降の format-on-save 混入を CI で検知）。
 - **補足**: 将来の AIパイプライン最適化（Phase 4）に向けた **評価ハーネス / golden set** の置き場をここで用意しても良い（実装は Phase 4）。
 - **受け入れ条件**: PR で lint/型エラーが落ちる構成になる。
 - **smoke test**: 不要（CI設定）。

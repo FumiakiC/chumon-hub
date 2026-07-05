@@ -21,9 +21,9 @@ function getSecret(): string {
 
   if (!apiSecret) {
     console.error('🚨 FATAL: API_SECRET is not set in environment variables.')
-    const error = new Error('API_SECRET is not set in environment variables');
-    (error as any).code = 'ERR_SYS_CONFIG';
-    throw error;
+    const error = new Error('API_SECRET is not set in environment variables')
+    ;(error as any).code = 'ERR_SYS_CONFIG'
+    throw error
   }
 
   cachedSecret = apiSecret
@@ -84,7 +84,7 @@ export function decryptFileToken(token: string): FileTokenData | null {
     // Use Buffer.concat to safely handle multi-byte characters at boundaries
     const plaintext = Buffer.concat([
       decipher.update(encrypted),
-      decipher.final()
+      decipher.final(),
     ]).toString('utf8')
 
     const data: FileTokenData = JSON.parse(plaintext)

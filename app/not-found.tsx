@@ -1,4 +1,4 @@
-import { VideoErrorPage } from "@/components/layout/video-error-page"
+import { VideoErrorPage } from '@/components/layout/video-error-page'
 
 export default function NotFound() {
   return (

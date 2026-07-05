@@ -1,20 +1,29 @@
-import { useReducer, useCallback } from "react"
-import type { OrderItem } from "../../schema"
+import { useCallback, useReducer } from 'react'
+
+import type { OrderItem } from '../../schema'
 
 export type OrderAction =
-  | { type: "ADD_ITEMS"; payload: OrderItem[] }
-  | { type: "REMOVE_ITEM"; payload: string }
-  | { type: "UPDATE_ITEM"; payload: { id: string; changes: Partial<OrderItem> } }
+  | { type: 'ADD_ITEMS'; payload: OrderItem[] }
+  | { type: 'REMOVE_ITEM'; payload: string }
+  | {
+      type: 'UPDATE_ITEM'
+      payload: { id: string; changes: Partial<OrderItem> }
+    }
 
-export function orderReducer(state: OrderItem[], action: OrderAction): OrderItem[] {
+export function orderReducer(
+  state: OrderItem[],
+  action: OrderAction
+): OrderItem[] {
   switch (action.type) {
-    case "ADD_ITEMS":
+    case 'ADD_ITEMS':
       return [...state, ...action.payload]
-    case "REMOVE_ITEM":
+    case 'REMOVE_ITEM':
       return state.filter((item) => item.id !== action.payload)
-    case "UPDATE_ITEM":
+    case 'UPDATE_ITEM':
       return state.map((item) =>
-        item.id === action.payload.id ? { ...item, ...action.payload.changes } : item
+        item.id === action.payload.id
+          ? { ...item, ...action.payload.changes }
+          : item
       )
     default:
       return state
@@ -31,7 +40,7 @@ export function useOrderItems() {
    * Add multiple items to the order
    */
   const addFiles = useCallback((newItems: OrderItem[]) => {
-    dispatch({ type: "ADD_ITEMS", payload: newItems })
+    dispatch({ type: 'ADD_ITEMS', payload: newItems })
   }, [])
 
   const addItems = addFiles
@@ -40,7 +49,7 @@ export function useOrderItems() {
    * Delete an item from the order
    */
   const removeFile = useCallback((itemId: string) => {
-    dispatch({ type: "REMOVE_ITEM", payload: itemId })
+    dispatch({ type: 'REMOVE_ITEM', payload: itemId })
   }, [])
 
   const deleteItem = removeFile
@@ -51,8 +60,11 @@ export function useOrderItems() {
   const updateItemField = useCallback(
     (itemId: string, field: keyof OrderItem, value: string | number | null) => {
       dispatch({
-        type: "UPDATE_ITEM",
-        payload: { id: itemId, changes: { [field]: value } as Partial<OrderItem> },
+        type: 'UPDATE_ITEM',
+        payload: {
+          id: itemId,
+          changes: { [field]: value } as Partial<OrderItem>,
+        },
       })
     },
     []
@@ -61,16 +73,25 @@ export function useOrderItems() {
   /**
    * Update multiple fields of an item
    */
-  const updateItem = useCallback((itemId: string, updates: Partial<OrderItem>) => {
-    dispatch({ type: "UPDATE_ITEM", payload: { id: itemId, changes: updates } })
-  }, [])
+  const updateItem = useCallback(
+    (itemId: string, updates: Partial<OrderItem>) => {
+      dispatch({
+        type: 'UPDATE_ITEM',
+        payload: { id: itemId, changes: updates },
+      })
+    },
+    []
+  )
 
   /**
    * Get an item by ID
    */
-  const getItem = useCallback((itemId: string) => {
-    return orderItems.find((item) => item.id === itemId)
-  }, [orderItems])
+  const getItem = useCallback(
+    (itemId: string) => {
+      return orderItems.find((item) => item.id === itemId)
+    },
+    [orderItems]
+  )
 
   return {
     orderItems,

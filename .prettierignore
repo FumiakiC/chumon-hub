@@ -1,0 +1,16 @@
+# Dependencies / build output
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+
+next-env.d.ts
+.prettierrc
+
+# Lockfile
+pnpm-lock.yaml
+
+# Docs / 各種 .md（計画書・handoff・NOTICE・SECURITY 等の原文を保護）
+*.md

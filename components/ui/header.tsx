@@ -1,10 +1,14 @@
-"use client"
+'use client'
 
-import type { ReactNode } from "react"
-import Link from "next/link"
-import { ChevronLeft, Settings, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import type { ReactNode } from 'react'
+
+import Link from 'next/link'
+
+import { ChevronLeft, Settings, User } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+
+import { cn } from '@/lib/utils'
 
 type HeaderProps = {
   title?: ReactNode
@@ -12,12 +16,16 @@ type HeaderProps = {
   transparent?: boolean
 }
 
-export function Header({ title, showBackButton = false, transparent = false }: HeaderProps) {
+export function Header({
+  title,
+  showBackButton = false,
+  transparent = false,
+}: HeaderProps) {
   const wrapperClass = cn(
-    "sticky top-0 z-50 w-full",
+    'sticky top-0 z-50 w-full',
     transparent
-      ? ""
-      : "border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/70",
+      ? ''
+      : 'border-b border-slate-200/80 bg-white/70 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/70'
   )
 
   return (
@@ -37,7 +45,9 @@ export function Header({ title, showBackButton = false, transparent = false }: H
         </div>
 
         {/* Center: Title */}
-        <div className="flex flex-none items-center justify-center px-2">{title}</div>
+        <div className="flex flex-none items-center justify-center px-2">
+          {title}
+        </div>
 
         {/* Right: Icons */}
         <div className="flex flex-1 items-center justify-end gap-2">

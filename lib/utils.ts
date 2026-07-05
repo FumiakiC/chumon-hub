@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from 'clsx'
+import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
@@ -34,7 +34,10 @@ function toQuantity(value: string): number | null {
   return converted ? Number(converted) : null
 }
 
-export function parseDrawingNumber(input: string): { drawingNo: string; quantity: number | null } {
+export function parseDrawingNumber(input: string): {
+  drawingNo: string
+  quantity: number | null
+} {
   const normalized = input.trim()
   const match = normalized.match(DRAWING_NUMBER_WITH_QTY_REGEX)
 
