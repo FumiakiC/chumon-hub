@@ -1,36 +1,27 @@
-import { useState, useEffect, useRef } from "react"
-import { z } from "zod"
-import type { LogEntry } from "@/types/logEntry"
-import { resolveError } from "@/lib/errorUtils"
+import { useEffect, useRef, useState } from 'react'
 
-// APIレスポンスの各アイテムの検証スキーマ
-const ExtractedItemSchema = z.object({
-  productName: z.string(),
-  quantity: z.number(),
-  unitPrice: z.number(),
-  amount: z.number(),
-  description: z.string().optional(),
-})
+import type {
+  CheckDocumentTypeResponse,
+  OrderExtractionResult,
+} from '@/lib/ai/contracts'
+import { orderSchema } from '@/lib/ai/schemas'
+import { resolveError } from '@/lib/errorUtils'
 
-// スキーマから型を自動生成
-type ExtractedItem = z.infer<typeof ExtractedItemSchema>
-
-// 配列用のスキーマ
-const ExtractedItemsSchema = z.array(ExtractedItemSchema)
+import type { LogEntry } from '@/types/logEntry'
 
 // ユーティリティ関数: カンマや全角数字を正しく処理して数値に変換
 const safeParseFloat = (value: string): number => {
   // カンマをすべて削除
-  let cleaned = value.replace(/,/g, "")
-  
+  let cleaned = value.replace(/,/g, '')
+
   // 全角数字（０-９）を半角数字に変換
   cleaned = cleaned.replace(/[０-９]/g, (char) => {
-    return String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+    return String.fromCharCode(char.charCodeAt(0) - 0xfee0)
   })
-  
+
   // Number.parseFloatで変換
   const parsed = Number.parseFloat(cleaned)
-  
+
   // NaNの場合は0を返す
   return isNaN(parsed) ? 0 : parsed
 }
@@ -44,16 +35,25 @@ interface ProductItem {
   amount: string
 }
 
-type ProcessingStatus = "idle" | "uploading" | "flash_check" | "pro_extraction" | "complete" | "error" | "cancelled"
+type ProcessingStatus =
+  | 'idle'
+  | 'uploading'
+  | 'flash_check'
+  | 'pro_extraction'
+  | 'complete'
+  | 'error'
+  | 'cancelled'
 
 export function useOrderProcessing() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>("idle")
+  const [processingStatus, setProcessingStatus] =
+    useState<ProcessingStatus>('idle')
   const [logs, setLogs] = useState<LogEntry[]>([])
-  const [extractedJson, setExtractedJson] = useState<Record<string, string> | null>(null)
+  const [extractedJson, setExtractedJson] =
+    useState<OrderExtractionResult | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -81,7 +81,7 @@ export function useOrderProcessing() {
     setSelectedFile(file)
     setError(null)
     setLogs([])
-    setProcessingStatus("idle")
+    setProcessingStatus('idle')
     setExtractedJson(null)
   }
 
@@ -111,29 +111,38 @@ export function useOrderProcessing() {
     } else {
       setSelectedFile(null)
       setError(null)
-      setProcessingStatus("idle")
+      setProcessingStatus('idle')
       setLogs([])
     }
   }
 
-  const addLog = (message: string, type: "info" | "success" | "error" = "info") => {
+  const addLog = (
+    message: string,
+    type: 'info' | 'success' | 'error' = 'info'
+  ) => {
     const now = new Date()
-    const timeString = now.toLocaleTimeString("ja-JP", {
+    const timeString = now.toLocaleTimeString('ja-JP', {
       hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     })
     setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
   }
 
-  const handleApiResponse = async (response: Response, defaultMessage: string) => {
+  const handleApiResponse = async <T>(
+    response: Response,
+    defaultMessage: string
+  ): Promise<T> => {
     if (response.ok) return response.json()
     let errorMessage = defaultMessage
     try {
       const data = await response.json()
       if (data?.error) {
-        errorMessage = typeof data.error === "string" ? data.error : JSON.stringify(data.error)
+        errorMessage =
+          typeof data.error === 'string'
+            ? data.error
+            : JSON.stringify(data.error)
       }
     } catch (_) {
       // ignore JSON parse errors and fall back to default message
@@ -161,7 +170,7 @@ export function useOrderProcessing() {
     }) => void
   ) => {
     if (!selectedFile) {
-      setError("ファイルを選択してください")
+      setError('ファイルを選択してください')
       return
     }
 
@@ -171,51 +180,63 @@ export function useOrderProcessing() {
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
 
-    setProcessingStatus("uploading")
-    addLog("ファイルアップロードを開始...", "info")
+    setProcessingStatus('uploading')
+    addLog('ファイルアップロードを開始...', 'info')
 
     try {
       const formData = new FormData()
-      formData.append("file", selectedFile)
-      formData.append("mimeType", selectedFile.type)
+      formData.append('file', selectedFile)
+      formData.append('mimeType', selectedFile.type)
 
       await new Promise((r) => setTimeout(r, 800))
       if (signal.aborted) {
-        throw new DOMException("処理が中断されました", "AbortError")
+        throw new DOMException('処理が中断されました', 'AbortError')
       }
-      addLog(`アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`, "success")
+      addLog(
+        `アップロード完了。ファイルID: files/${Math.random().toString(36).substring(7)}`,
+        'success'
+      )
 
-      setProcessingStatus("flash_check")
-      addLog("Gemini 2.5 Flash-lite で書類タイプを判定中...", "info")
+      setProcessingStatus('flash_check')
+      addLog('Gemini 2.5 Flash-lite で書類タイプを判定中...', 'info')
 
-      const checkResponse = await fetch("/api/check-document-type", {
-        method: "POST",
+      const checkResponse = await fetch('/api/check-document-type', {
+        method: 'POST',
         body: formData,
         signal: signal,
       })
 
-      const checkResult = await handleApiResponse(checkResponse, "判定APIエラー")
+      const checkResult = await handleApiResponse<CheckDocumentTypeResponse>(
+        checkResponse,
+        '判定APIエラー'
+      )
       if (signal.aborted) {
-        throw new DOMException("処理が中断されました", "AbortError")
+        throw new DOMException('処理が中断されました', 'AbortError')
       }
 
       if (!checkResult.isQuotation) {
-        addLog(`判定結果: ❌ 見積書・発注書ではありません (${checkResult.documentType})。処理を中断します。`, "error")
-        addLog(`理由: ${checkResult.reason}`, "error")
-        setProcessingStatus("error")
+        addLog(
+          `判定結果: ❌ 見積書・発注書ではありません (${checkResult.documentType})。処理を中断します。`,
+          'error'
+        )
+        addLog(`理由: ${checkResult.reason}`, 'error')
+        setProcessingStatus('error')
         setIsLoading(false)
         return
       }
 
-      addLog(`判定結果: ✅ ${checkResult.documentType}と認定。次のステップに移行します。`, "success")
+      addLog(
+        `判定結果: ✅ ${checkResult.documentType}と認定。次のステップに移行します。`,
+        'success'
+      )
 
-      setProcessingStatus("pro_extraction")
-      addLog("Gemini 2.5 Flash で詳細データを抽出中...", "info")
+      setProcessingStatus('pro_extraction')
+      addLog('Gemini 2.5 Flash で詳細データを抽出中...', 'info')
 
-      const response = await fetch("/api/extract-order", {
-        method: "POST",
+      const response = await fetch('/api/extract-order', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           fileId: checkResult.fileId, // Use cached file
@@ -223,13 +244,12 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      const result = await handleApiResponse(response, "APIリクエストが失敗しました")
+      const result = await handleApiResponse<OrderExtractionResult>(
+        response,
+        'APIリクエストが失敗しました'
+      )
       if (signal.aborted) {
-        throw new DOMException("処理が中断されました", "AbortError")
-      }
-
-      if (result.error) {
-        throw new Error(result.error)
+        throw new DOMException('処理が中断されました', 'AbortError')
       }
 
       // Store the raw JSON response for copy functionality
@@ -239,19 +259,21 @@ export function useOrderProcessing() {
       const extracted = result
 
       // Zodスキーマでランタイム検証
-      const parseResult = ExtractedItemsSchema.safeParse(extracted.items ?? [])
+      const parseResult = orderSchema.shape.items.safeParse(
+        extracted.items ?? []
+      )
 
       if (!parseResult.success) {
-        console.error("[v0] Validation failed:", parseResult.error)
-        throw new Error("データの形式が不正です")
+        console.error('[v0] Validation failed:', parseResult.error)
+        throw new Error('データの形式が不正です')
       }
 
-      const items = parseResult.data // 型は ExtractedItem[] として保証される
+      const items = parseResult.data // 型は OrderLineItem[]（中央 orderSchema 由来）
 
       const mappedItems: ProductItem[] = items.map((item) => ({
         id: crypto.randomUUID(),
-        productName: item.productName ?? "",
-        description: item.description ?? "",
+        productName: item.productName ?? '',
+        description: item.description ?? '',
         quantity: (item.quantity ?? 0).toString(),
         unitPrice: (item.unitPrice ?? 0).toString(),
         amount: (item.amount ?? 0).toString(),
@@ -262,39 +284,32 @@ export function useOrderProcessing() {
         orderNo: extracted.orderNo,
         quoteNo: extracted.quoteNo,
         recipientCompany: extracted.recipientCompany,
-        issuerCompany: extracted.issuerCompany,
-        issuerAddress: extracted.issuerAddress,
-        manager: extracted.manager,
-        approver: extracted.approver,
-        desiredDeliveryDate: extracted.desiredDeliveryDate,
         requestedDeliveryDate: extracted.requestedDeliveryDate,
         paymentTerms: extracted.paymentTerms,
         deliveryLocation: extracted.deliveryLocation,
         inspectionDeadline: extracted.inspectionDeadline,
-        phone: extracted.phone,
-        fax: extracted.fax,
         items: mappedItems,
       })
 
-      setProcessingStatus("complete")
-      addLog("データ抽出完了。JSONパース成功。", "success")
+      setProcessingStatus('complete')
+      addLog('データ抽出完了。JSONパース成功。', 'success')
     } catch (err) {
-      console.error("[v0] Extraction error:", err)
-      if (err instanceof DOMException && err.name === "AbortError") {
-        addLog("ユーザーの操作により処理を停止しました", "info")
-        setProcessingStatus("cancelled")
-        
+      console.error('[v0] Extraction error:', err)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        addLog('ユーザーの操作により処理を停止しました', 'info')
+        setProcessingStatus('cancelled')
+
         // 3秒後に自動的にidleステータスに戻す
         setTimeout(() => {
-          setProcessingStatus("idle")
+          setProcessingStatus('idle')
           setLogs([])
         }, 3000)
       } else {
-        setProcessingStatus("error")
+        setProcessingStatus('error')
         const { message, action, raw } = resolveError(err)
-        addLog(`エラー: ${message}`, "error")
-        addLog(`対応: ${action}`, "error")
-        addLog(`詳細: ${raw}`, "info")
+        addLog(`エラー: ${message}`, 'error')
+        addLog(`対応: ${action}`, 'error')
+        addLog(`詳細: ${raw}`, 'info')
         setError(message)
       }
     } finally {
@@ -314,7 +329,7 @@ export function useOrderProcessing() {
     extractedJson,
     isCopied,
     setIsCopied,
-    
+
     // Functions
     processFile,
     handleFileChange,

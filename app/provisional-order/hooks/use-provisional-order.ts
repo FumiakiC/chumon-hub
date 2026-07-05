@@ -1,17 +1,21 @@
-import React, { useState, useCallback, useRef } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useOrderItems } from "./sub-hooks/use-order-items"
-import { useDrawingAnalysis } from "./sub-hooks/use-drawing-analysis"
+import React, { useCallback, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
+
+import { zodResolver } from '@hookform/resolvers/zod'
+
+import type { CropTitleBlockResponse } from '@/lib/ai/contracts'
+
 import {
-  verificationSchema,
-  type VerificationFormInput,
-  type VerificationFormData,
   type CroppedFile,
-  type OrderItem,
   type OrderHeader,
+  type OrderItem,
+  type VerificationFormData,
+  type VerificationFormInput,
   defaultOrderHeader,
-} from "../schema"
+  verificationSchema,
+} from '../schema'
+import { useDrawingAnalysis } from './sub-hooks/use-drawing-analysis'
+import { useOrderItems } from './sub-hooks/use-order-items'
 
 // ---------------------------------------------------------------------------
 // Helpers (module-private)
@@ -21,9 +25,9 @@ function generateCroppedFile(fileName: string): CroppedFile {
   return {
     id: crypto.randomUUID(),
     fileName,
-    status: "cropping",
+    status: 'cropping',
     progress: 0,
-    thumbnailUrl: "/placeholder.svg",
+    thumbnailUrl: '/placeholder.svg',
   }
 }
 
@@ -55,18 +59,23 @@ export function useProvisionalOrder() {
   )
 
   // --- Phase 3 ---
-  const [orderHeader, setOrderHeader] = useState<OrderHeader>(defaultOrderHeader)
+  const [orderHeader, setOrderHeader] =
+    useState<OrderHeader>(defaultOrderHeader)
 
   // --- Verification form ---
-  const verificationForm = useForm<VerificationFormInput, unknown, VerificationFormData>({
+  const verificationForm = useForm<
+    VerificationFormInput,
+    unknown,
+    VerificationFormData
+  >({
     resolver: zodResolver(verificationSchema),
     defaultValues: {
-      drawingNo: "",
-      partName: "",
-      material: "",
-      quantity: "",
-      surfaceTreatment: "",
-      notes: "",
+      drawingNo: '',
+      partName: '',
+      material: '',
+      quantity: '',
+      surfaceTreatment: '',
+      notes: '',
     },
   })
 
@@ -78,7 +87,7 @@ export function useProvisionalOrder() {
     const progressInterval = setInterval(() => {
       setCroppedFiles((prev) =>
         prev.map((f) => {
-          if (f.id === fileId && f.status === "cropping" && f.progress < 90) {
+          if (f.id === fileId && f.status === 'cropping' && f.progress < 90) {
             return { ...f, progress: Math.min(f.progress + 15, 90) }
           }
           return f
@@ -88,37 +97,42 @@ export function useProvisionalOrder() {
 
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      formData.append('file', file)
 
-      const response = await fetch("/api/crop-title-block", {
-        method: "POST",
+      const response = await fetch('/api/crop-title-block', {
+        method: 'POST',
         body: formData,
       })
 
       clearInterval(progressInterval)
 
-      if (!response.ok) throw new Error("Failed to crop PDF")
+      if (!response.ok) throw new Error('Failed to crop PDF')
 
-      const data = await response.json()
+      const data: CropTitleBlockResponse = await response.json()
       const croppedFile = data.croppedFiles?.[0]
 
       if (croppedFile && croppedFile.base64) {
         setCroppedFiles((prev) =>
           prev.map((f) =>
             f.id === fileId
-              ? { ...f, progress: 100, status: "cropped", base64: croppedFile.base64 }
+              ? {
+                  ...f,
+                  progress: 100,
+                  status: 'cropped',
+                  base64: croppedFile.base64,
+                }
               : f
           )
         )
       } else {
-        throw new Error("Invalid response")
+        throw new Error('Invalid response')
       }
     } catch (error) {
       clearInterval(progressInterval)
-      console.error("Crop error:", error)
+      console.error('Crop error:', error)
       setCroppedFiles((prev) =>
         prev.map((f) =>
-          f.id === fileId ? { ...f, progress: 100, status: "cropped" } : f
+          f.id === fileId ? { ...f, progress: 100, status: 'cropped' } : f
         )
       )
     }
@@ -127,16 +141,26 @@ export function useProvisionalOrder() {
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files) return
-      const newFiles: Array<{ croppedFile: CroppedFile; originalFile: File }> = []
+      const newFiles: Array<{ croppedFile: CroppedFile; originalFile: File }> =
+        []
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
-        if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          newFiles.push({ croppedFile: generateCroppedFile(file.name), originalFile: file })
+        if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          newFiles.push({
+            croppedFile: generateCroppedFile(file.name),
+            originalFile: file,
+          })
         }
       }
-      setCroppedFiles((prev) => [...prev, ...newFiles.map((f) => f.croppedFile)])
+      setCroppedFiles((prev) => [
+        ...prev,
+        ...newFiles.map((f) => f.croppedFile),
+      ])
       newFiles.forEach(({ croppedFile, originalFile }) => {
-        setTimeout(() => processCrop(croppedFile.id, originalFile), Math.random() * 300)
+        setTimeout(
+          () => processCrop(croppedFile.id, originalFile),
+          Math.random() * 300
+        )
       })
     },
     [processCrop]
@@ -191,7 +215,7 @@ export function useProvisionalOrder() {
         drawingNo: item.drawingNo,
         partName: item.partName,
         material: item.material,
-        quantity: item.quantity ?? "",
+        quantity: item.quantity ?? '',
         surfaceTreatment: item.surfaceTreatment,
         notes: item.notes,
       })
@@ -200,21 +224,24 @@ export function useProvisionalOrder() {
     [verificationForm]
   )
 
-  const handleDelete = useCallback((itemId: string) => {
-    removeFile(itemId)
-  }, [removeFile])
+  const handleDelete = useCallback(
+    (itemId: string) => {
+      removeFile(itemId)
+    },
+    [removeFile]
+  )
 
   const handleVerificationSubmit = useCallback(
     (data: VerificationFormData) => {
       if (!selectedItem) return
       dispatch({
-        type: "UPDATE_ITEM",
+        type: 'UPDATE_ITEM',
         payload: {
           id: selectedItem.id,
           changes: {
             ...data,
-            quantity: data.quantity === "" ? null : data.quantity,
-            status: "completed",
+            quantity: data.quantity === '' ? null : data.quantity,
+            status: 'completed',
             needsReview: false,
             confidence: 100,
           },
@@ -230,9 +257,12 @@ export function useProvisionalOrder() {
   // Phase 3
   // ---------------------------------------------------------------------------
 
-  const updateOrderHeader = useCallback((field: keyof OrderHeader, value: string) => {
-    setOrderHeader((prev) => ({ ...prev, [field]: value }))
-  }, [])
+  const updateOrderHeader = useCallback(
+    (field: keyof OrderHeader, value: string) => {
+      setOrderHeader((prev) => ({ ...prev, [field]: value }))
+    },
+    []
+  )
 
   const handleCopyJSON = useCallback(async () => {
     const items = orderItems.map((item) => ({
@@ -243,7 +273,9 @@ export function useProvisionalOrder() {
       amount: 0,
     }))
     try {
-      await navigator.clipboard.writeText(JSON.stringify({ ...orderHeader, items }, null, 2))
+      await navigator.clipboard.writeText(
+        JSON.stringify({ ...orderHeader, items }, null, 2)
+      )
     } catch (e) {
       console.error(e)
     }
@@ -253,12 +285,21 @@ export function useProvisionalOrder() {
   // Derived values
   // ---------------------------------------------------------------------------
 
-  const croppingCount = croppedFiles.filter((f) => f.status === "cropping").length
-  const croppedCount = croppedFiles.filter((f) => f.status === "cropped").length
-  const completedCount = orderItems.filter((i) => i.status === "completed").length
-  const reviewCount = orderItems.filter((i) => i.status === "needs_review").length
+  const croppingCount = croppedFiles.filter(
+    (f) => f.status === 'cropping'
+  ).length
+  const croppedCount = croppedFiles.filter((f) => f.status === 'cropped').length
+  const completedCount = orderItems.filter(
+    (i) => i.status === 'completed'
+  ).length
+  const reviewCount = orderItems.filter(
+    (i) => i.status === 'needs_review'
+  ).length
   const processingCount = orderItems.filter(
-    (i) => i.status === "pending" || i.status === "cropping" || i.status === "analyzing"
+    (i) =>
+      i.status === 'pending' ||
+      i.status === 'cropping' ||
+      i.status === 'analyzing'
   ).length
 
   return {
