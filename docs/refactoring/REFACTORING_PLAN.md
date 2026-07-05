@@ -175,6 +175,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **やらないこと**: UIの作り直し・新画面の追加・見た目やスキーマ項目の変更。あくまで **型と依存方向の整理**（挙動・表示は不変）。
 - **受け入れ条件**: フロントが import する抽出API型が `lib/ai/schemas.ts` 由来に一本化 / 画面表示が従来と同一 / `tsc --noEmit` 通過 / Docker ビルド green。
 - **smoke test**: official-order / extract-drawing の抽出フローで、UI表示が従来通りであること。
+- **実績（#203）**: `lib/ai/contracts.ts` 新設、フロント3ファイル（`lib/api/drawing-api.ts` / `hooks/use-order-processing.ts` / `app/provisional-order/hooks/use-provisional-order.ts`）を契約型参照へ一本化、`OrderExtractionResult` に存在しない常時 `undefined` 参照7項目（`issuerCompany` / `issuerAddress` / `manager` / `approver` / `desiredDeliveryDate` / `phone` / `fax`）を除去。挙動・UI・スキーマ項目は不変。ボット指摘は全件 REJECT（内訳: `safeParseFloat` デッドコード削除提案は PR-11、応答の防御的検証追加は PR-08、Prettier 正規化は別 `chore` PR へ分離）。
 
 ### PR-06 `refactor/gemini-file-helper`
 
@@ -263,7 +264,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] フォローアップ（#197 派生・モードB）: dev(glibc/bookworm) と prod(musl/alpine) の非対称を ADR 化し、**Claude スキル `chumon-hub-dev` の `completed-form.md` §6（repo 外・Claude スキル管理の ADR ログ。repo にはファイルを持たない設計）** に記録（**ADR-4 [決定] 2026-07-04: 現状維持=アクション無し**。全 native 依存に musl prebuild 有り／CI build で欠落検知。Node musl=Experimental tier・security 版ラグ・parity ギャップを受容。**収束方向(glibc/alpine)は未定**でトリガ時決定＝ADR-1 基盤確定／musl 固有不具合／musl 非対応 native 依存追加／Node musl tier 変更。ADR ログの repo 移設は行わない方針）
 - [x] PR-04 centralize-ai-config（**#201, merged**。モデルID（`GEMINI_MODELS`）＋抽出3スキーマ（`documentTypeSchema` / `orderSchema` / `drawingSchema`）を `lib/ai/{models,schemas}.ts` へ純粋移設。項目・順序・型・修飾子・describe 文言・モデル値をすべて不変で移し、3ルートは中央参照へ／不要 zod import 削除。スモーク3経路で出力JSON一致・build/tsc green・ボット指摘なし。**モデルの 3.x 移行は本PRに含めず**、下記フォローアップで実施）
 - [ ] フォローアップ（PR-04 派生・別チャット・`chore/`・EoL駆動）: **Gemini モデル 3.x 移行**。中央化済みのため `lib/ai/models.ts` の3値差し替えのみ（数行 diff）。一次情報（Gemini API 公式 deprecation ページ, 2026-07-05 確認）: `gemini-2.5-flash` / `gemini-2.5-flash-lite` は **shutdown 2026-10-16**。差し替え先＝classify `gemini-2.5-flash-lite`→`gemini-3.1-flash-lite`（公式後継・GA・EoL 2027-05-07）／extractOrder `gemini-2.5-flash`→`gemini-3.5-flash`（公式後継・GA・shutdown 未定）。**extractDrawing は EoL 対象外**（現行 `gemini-3.1-flash-lite` は 2027-05 まで生存）＝`gemini-3.5-flash` 化は純粋な精度アップグレードで **要測定**（境界E: golden set / 実図面 before-after。EoL 分と分割するか要判断）。着手時確認: Gemini 3 は thinking 既定ON（`drawingSchema.reasoning` の手動CoTと干渉しうる）／料金体系変更／`@ai-sdk/google` v4 のモデル文字列・thinkingConfig 取り扱い。PR-07（`@google/genai` SDK 一本化）とは別物。
-- [ ] PR-05 api-frontend-contract
+- [x] PR-05 api-frontend-contract（**#203, merged**。`lib/ai/contracts.ts` 新設、抽出API契約型をフロント3ファイルで一本化。`OrderExtractionResult` 非存在の常時 `undefined` 参照7項目を除去。挙動・UI・スキーマ項目は不変。ボット指摘は全件 REJECT= `safeParseFloat` デッドコード削除提案は PR-11 / 応答の防御的検証追加は PR-08 / Prettier 正規化は別 `chore` PR）
 - [ ] PR-06 gemini-file-helper
 - [ ] PR-07 migrate-google-genai
 - [ ] PR-08 error-handling
