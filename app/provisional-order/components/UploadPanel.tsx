@@ -1,10 +1,11 @@
-"use client"
+'use client'
 
-import { UploadCloud, Trash2, Play, CheckCircle2, Crop } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Spinner } from "@/components/ui/spinner"
+import { CheckCircle2, Crop, Play, Trash2, UploadCloud } from 'lucide-react'
+
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
@@ -12,9 +13,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { cn } from "@/lib/utils"
-import type { CroppedFile, CropStatus } from "../schema"
+} from '@/components/ui/table'
+
+import { cn } from '@/lib/utils'
+
+import type { CropStatus, CroppedFile } from '../schema'
 
 // ---------------------------------------------------------------------------
 // Sub-component: status badge
@@ -22,13 +25,13 @@ import type { CroppedFile, CropStatus } from "../schema"
 
 function CropStatusBadge({ status }: { status: CropStatus }) {
   switch (status) {
-    case "cropping":
+    case 'cropping':
       return (
         <Badge variant="secondary" className="gap-1">
           <Spinner className="size-3" /> クロップ中
         </Badge>
       )
-    case "cropped":
+    case 'cropped':
       return (
         <Badge
           variant="secondary"
@@ -37,7 +40,7 @@ function CropStatusBadge({ status }: { status: CropStatus }) {
           <Crop className="size-3" /> クロップ済
         </Badge>
       )
-    case "completed":
+    case 'completed':
       return (
         <Badge
           variant="secondary"
@@ -89,7 +92,7 @@ export function UploadPanel({
   return (
     <Card className="lg:w-1/3">
       <CardHeader className="bg-muted/50 border-b">
-        <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Badge variant="outline">Phase 1</Badge>
             <CardTitle className="text-lg">アップロード</CardTitle>
@@ -97,18 +100,20 @@ export function UploadPanel({
           {croppedFiles.length > 0 && (
             <div className="flex gap-2">
               {croppingCount > 0 && <Spinner className="size-4" />}
-              <span className="text-xs text-muted-foreground">{croppedFiles.length}件</span>
+              <span className="text-muted-foreground text-xs">
+                {croppedFiles.length}件
+              </span>
             </div>
           )}
         </div>
       </CardHeader>
 
-      <CardContent className="p-4 space-y-4">
+      <CardContent className="space-y-4 p-4">
         {/* Drop zone */}
         <div
           className={cn(
-            "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-            isDragActive ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+            'rounded-lg border-2 border-dashed p-6 text-center transition-colors',
+            isDragActive ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
           )}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -123,7 +128,7 @@ export function UploadPanel({
             onChange={onFileInput}
           />
           <div className="flex flex-col items-center gap-3">
-            <UploadCloud className="size-8 text-muted-foreground" />
+            <UploadCloud className="text-muted-foreground size-8" />
             <p className="text-sm">PDFをドラッグ＆ドロップ</p>
             <Button
               variant="outline"
@@ -137,9 +142,9 @@ export function UploadPanel({
 
         {/* File list */}
         {croppedFiles.length > 0 && (
-          <div className="rounded-lg border max-h-[400px] overflow-y-auto">
+          <div className="max-h-[400px] overflow-y-auto rounded-lg border">
             <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
+              <TableHeader className="bg-background sticky top-0 z-10">
                 <TableRow>
                   <TableHead>ファイル</TableHead>
                   <TableHead className="w-[100px]">状態</TableHead>
@@ -152,7 +157,7 @@ export function UploadPanel({
                     <TableCell className="py-2">
                       <div className="flex flex-col gap-1">
                         <span
-                          className="text-xs font-medium truncate max-w-[150px]"
+                          className="max-w-[150px] truncate text-xs font-medium"
                           title={file.fileName}
                         >
                           {file.fileName}
@@ -160,7 +165,7 @@ export function UploadPanel({
                         {file.base64 && (
                           <button
                             type="button"
-                            className="text-[10px] text-blue-600 cursor-pointer underline text-left"
+                            className="cursor-pointer text-left text-[10px] text-blue-600 underline"
                             onClick={() => onPreviewFile(file)}
                           >
                             プレビュー確認
@@ -190,10 +195,7 @@ export function UploadPanel({
 
         {/* Analyze trigger */}
         {croppedCount > 0 && (
-          <Button
-            onClick={onAnalyzeAll}
-            className="w-full gap-2"
-          >
+          <Button onClick={onAnalyzeAll} className="w-full gap-2">
             <Play className="size-4" /> すべて解析 ({croppedCount}件)
           </Button>
         )}

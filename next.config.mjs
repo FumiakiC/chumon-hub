@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone', // スタンドアロン出力を有効化
 
-  output: "standalone", // スタンドアロン出力を有効化
-  
   typescript: {
     ignoreBuildErrors: false, // ビルド時のTypeScriptエラーを無視しない
   },

@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -125,19 +125,27 @@
 
 @layer utilities {
   .elevation-1 {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 1px 2px rgba(0, 0, 0, 0.24);
   }
 
   .elevation-2 {
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.12);
+    box-shadow:
+      0 3px 6px rgba(0, 0, 0, 0.15),
+      0 2px 4px rgba(0, 0, 0, 0.12);
   }
 
   .elevation-3 {
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15), 0 3px 6px rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 10px 20px rgba(0, 0, 0, 0.15),
+      0 3px 6px rgba(0, 0, 0, 0.1);
   }
 
   .elevation-4 {
-    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.15), 0 5px 10px rgba(0, 0, 0, 0.05);
+    box-shadow:
+      0 15px 25px rgba(0, 0, 0, 0.15),
+      0 5px 10px rgba(0, 0, 0, 0.05);
   }
 
   .elevation-5 {
@@ -147,15 +155,15 @@
   /* Error pages: text glow and subtle glitch */
   .text-shadow-glow {
     text-shadow:
-      0 0 8px rgba(59, 130, 246, 0.6), /* blue */
-      0 0 16px rgba(236, 72, 153, 0.4); /* pink */
+      0 0 8px rgba(59, 130, 246, 0.6),
+      /* blue */ 0 0 16px rgba(236, 72, 153, 0.4); /* pink */
   }
 
   .glitch-text {
     position: relative;
     text-shadow:
-      1px 0 0 rgba(34, 197, 94, 0.35), /* green */
-      -1px 0 0 rgba(14, 165, 233, 0.35); /* cyan */
+      1px 0 0 rgba(34, 197, 94, 0.35),
+      /* green */ -1px 0 0 rgba(14, 165, 233, 0.35); /* cyan */
     animation: glitch-jitter 1.6s infinite steps(2, end);
   }
 }
@@ -186,15 +194,37 @@
 }
 
 @keyframes glitch-jitter {
-  0% { transform: translate(0, 0); }
-  10% { transform: translate(0.6px, -0.6px); }
-  20% { transform: translate(-0.6px, 0.6px); }
-  30% { transform: translate(0.4px, 0.4px); }
-  40% { transform: translate(-0.4px, -0.4px); }
-  50% { transform: translate(0.3px, -0.3px); }
-  60% { transform: translate(-0.3px, 0.3px); }
-  70% { transform: translate(0.2px, 0.2px); }
-  80% { transform: translate(-0.2px, -0.2px); }
-  90% { transform: translate(0.1px, -0.1px); }
-  100% { transform: translate(0, 0); }
+  0% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(0.6px, -0.6px);
+  }
+  20% {
+    transform: translate(-0.6px, 0.6px);
+  }
+  30% {
+    transform: translate(0.4px, 0.4px);
+  }
+  40% {
+    transform: translate(-0.4px, -0.4px);
+  }
+  50% {
+    transform: translate(0.3px, -0.3px);
+  }
+  60% {
+    transform: translate(-0.3px, 0.3px);
+  }
+  70% {
+    transform: translate(0.2px, 0.2px);
+  }
+  80% {
+    transform: translate(-0.2px, -0.2px);
+  }
+  90% {
+    transform: translate(0.1px, -0.1px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }

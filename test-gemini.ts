@@ -4,9 +4,15 @@ import { z } from 'zod'
 async function testGeminiAuth() {
   console.log('=== Gemini API Test ===')
   console.log('Node env vars check:')
-  console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS ? '✓ SET' : '✗ NOT SET')
-  console.log('GOOGLE_API_KEY:', process.env.GOOGLE_API_KEY ? '✓ SET' : '✗ NOT SET')
-  
+  console.log(
+    'GOOGLE_APPLICATION_CREDENTIALS:',
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ? '✓ SET' : '✗ NOT SET'
+  )
+  console.log(
+    'GOOGLE_API_KEY:',
+    process.env.GOOGLE_API_KEY ? '✓ SET' : '✗ NOT SET'
+  )
+
   try {
     console.log('\n--- Testing simple text generation (no image) ---')
     const { object } = await generateObject({

@@ -1,12 +1,14 @@
-"use client"
+'use client'
 
-import { Copy, FileText } from "lucide-react"
-import { Header } from "@/components/ui/header"
-import { Button } from "@/components/ui/button"
-import { UploadPanel } from "./components/UploadPanel"
-import { AnalysisTable } from "./components/AnalysisTable"
-import { VerificationSheet } from "./components/VerificationSheet"
-import { useProvisionalOrder } from "./hooks/use-provisional-order"
+import { Copy, FileText } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Header } from '@/components/ui/header'
+
+import { AnalysisTable } from './components/AnalysisTable'
+import { UploadPanel } from './components/UploadPanel'
+import { VerificationSheet } from './components/VerificationSheet'
+import { useProvisionalOrder } from './hooks/use-provisional-order'
 
 export default function ProvisionalOrderPage() {
   const {
@@ -59,7 +61,9 @@ export default function ProvisionalOrderPage() {
         <div className="mx-auto max-w-[1600px] space-y-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">図面一括解析</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                図面一括解析
+              </h1>
               <p className="text-muted-foreground text-sm">
                 PDF図面の表題欄を自動クロップして解析します
               </p>
@@ -76,7 +80,7 @@ export default function ProvisionalOrderPage() {
             </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex flex-col gap-6 lg:flex-row">
             <UploadPanel
               croppedFiles={croppedFiles}
               isDragActive={isDragActive}

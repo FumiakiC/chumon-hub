@@ -2,7 +2,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: ["main","chore/docker-setup"]
+    branches: ['main', 'chore/docker-setup']
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -15,11 +15,11 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Image Name
         id: meta
         run: echo "image_name=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
-      
+
       # ★★★ ここを追加しました ★★★
       # これによりキャッシュ機能(type=gha)が使えるドライバーがセットアップされます
       - name: Set up Docker Buildx
@@ -31,7 +31,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:

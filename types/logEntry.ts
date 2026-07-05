@@ -1,5 +1,5 @@
 export interface LogEntry {
   timestamp: string
   message: string
-  type: "info" | "success" | "error"
+  type: 'info' | 'success' | 'error'
 }
