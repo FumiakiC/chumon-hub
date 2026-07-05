@@ -241,6 +241,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **やらないこと**: コード挙動・UI・ロジックの変更（純フォーマット）。`.prettierrc` の設定変更。lint 修正（PR-11）。
 - **受け入れ条件**: `pnpm format:check` が差分ゼロ / `pnpm build`（または `tsc --noEmit`）green / `git diff` にコード挙動に関わる変更が無い（フォーマットのみ）。
 - **smoke test**: 不要（純フォーマット。build green で担保）。
+- **実績(#204, merged)**: コード56ファイルを `.prettierrc` 準拠へ一括整形（設定変更なし・`tsc --noEmit` green・`docs/` 無変更）。`.prettierignore` は**当初計画の `docs/**/*.md` から `*.md` へ拡大**（リポジトリ直下の NOTICE/SECURITY も保護するため）し、`next-env.d.ts`・`.prettierrc` も除外に追加。整形で一度混入した `NOTICE.md`/`SECURITY.md` は原文復帰。squash hash を `.git-blame-ignore-revs` へ後追い登録。ボットレビュー5件は**純フォーマット厳守で全件 REJECT**：①`¥` の改行分割は JSX→JS 変換で出力同一＝レンダリング不変と実証（Prettier は JSX 空白を保存）／②`setValueAs`・③`as any`・④`resolveError` キー不一致（**実バグ**）・⑤内部例外の UI 露出（情報漏えい）は既存コードにつき本 PR 対象外とし、③④⑤は **PR-08(error-handling)**、②は別 fix へ申し送り。
 
 ### PR-11 `fix/lint-baseline`
 
