@@ -7,6 +7,8 @@
     "build": "next build",
     "dev": "op run --env-file=.env.local -- next dev",
     "dev:local": "next dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "lint": "eslint .",
     "start": "next start"
   },

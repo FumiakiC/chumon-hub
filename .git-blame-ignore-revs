@@ -1,0 +1,4 @@
+# Prettier 一括正規化（フォーマットのみ・挙動不変）を git blame から除外。
+# ローカル有効化: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub は本ファイルを自動認識。
+# ↓ chore/format-baseline の squash コミット hash を merge 後に追記
