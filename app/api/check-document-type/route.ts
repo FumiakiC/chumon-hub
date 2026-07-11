@@ -1,55 +1,29 @@
 import { createGoogle } from '@ai-sdk/google'
-import { GoogleAIFileManager } from '@google/generative-ai/server'
 import { generateObject } from 'ai'
-import crypto from 'crypto'
-import { fileTypeFromBuffer } from 'file-type'
-import { unlink, writeFile } from 'fs/promises'
-import path from 'path'
 
 import { GEMINI_MODELS } from '@/lib/ai/models'
+import { validateUploadFile, withUploadedFile } from '@/lib/ai/pipeline'
 import { documentTypeSchema } from '@/lib/ai/schemas'
 import { encryptFileToken } from '@/lib/crypto'
-
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-  'application/pdf',
-])
 
 export const maxDuration = 60
 
 export async function POST(req: Request) {
-  let tmpFilePath: string | null = null
-
   try {
     const formData = await req.formData()
-    const file = formData.get('file') as File
-    const mimeType = formData.get('mimeType') as string
+    const file = formData.get('file')
+    const mimeType = formData.get('mimeType')
 
-    // basic diagnostics: ensure we received values
-    console.log('[v0] check-document-type request:', {
-      mimeType,
-      hasFile: !!file,
-    })
-    if (!file) {
-      console.error('[v0] check-document-type: file empty')
-      return Response.json({ error: 'file is required' }, { status: 400 })
+    const validation = await validateUploadFile(file)
+    if (!validation.ok) {
+      return Response.json(
+        { error: validation.error },
+        { status: validation.status }
+      )
     }
-    if (!mimeType) {
-      console.error('[v0] check-document-type: mimeType empty')
+
+    if (typeof mimeType !== 'string' || mimeType === '') {
       return Response.json({ error: 'mimeType is required' }, { status: 400 })
-    }
-
-    // Validate size before processing
-    const MAX_SINGLE_FILE_BYTES = 25 * 1024 * 1024 // 25MB
-    if (file.size > MAX_SINGLE_FILE_BYTES) {
-      console.error('[v0] check-document-type: file too large', {
-        fileSize: file.size,
-      })
-      return Response.json({ error: 'File too large' }, { status: 413 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
@@ -61,57 +35,27 @@ export async function POST(req: Request) {
       throw error
     }
 
-    // Write file to /tmp directory
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const responseBody = await withUploadedFile(
+      {
+        buffer: validation.buffer,
+        mimeType: validation.mimeType,
+        ext: validation.ext,
+        displayName: validation.file.name,
+        apiKey,
+      },
+      async (uploaded) => {
+        const google = createGoogle({ apiKey })
 
-    const detectedType = await fileTypeFromBuffer(buffer)
-    if (!detectedType || !ALLOWED_MIME_TYPES.has(detectedType.mime)) {
-      console.error('[v0] check-document-type: unsupported media type', {
-        detectedType,
-        claimedMimeType: mimeType,
-      })
-      return Response.json({ error: 'Unsupported media type' }, { status: 415 })
-    }
-
-    const detectedMimeType = detectedType.mime
-    const detectedExt = detectedType.ext
-
-    tmpFilePath = path.join(
-      '/tmp',
-      `upload_${crypto.randomUUID()}.${detectedExt}`
-    )
-    await writeFile(tmpFilePath, buffer)
-    console.log('[v0] check-document-type: written to tmp', tmpFilePath)
-
-    // Upload to Google AI File Manager
-    const fileManager = new GoogleAIFileManager(apiKey)
-    const uploadResult = await fileManager.uploadFile(tmpFilePath, {
-      mimeType: detectedMimeType,
-      displayName: file.name,
-    })
-    console.log('[v0] check-document-type: uploaded to Google AI', {
-      name: uploadResult.file.name,
-      uri: uploadResult.file.uri,
-    })
-
-    // Delete local tmp file immediately
-    await unlink(tmpFilePath)
-    tmpFilePath = null
-    console.log('[v0] check-document-type: deleted local tmp file')
-
-    const google = createGoogle({ apiKey })
-
-    const result = await generateObject({
-      model: google(GEMINI_MODELS.classify),
-      schema: documentTypeSchema,
-      messages: [
-        {
-          role: 'user',
-          content: [
+        const result = await generateObject({
+          model: google(GEMINI_MODELS.classify),
+          schema: documentTypeSchema,
+          messages: [
             {
-              type: 'text',
-              text: `この画像を分析して、見積書または注文書/発注書かどうかを判定してください。
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `この画像を分析して、見積書または注文書/発注書かどうかを判定してください。
 
 【見積書・注文書の必須要素】
 - 「見積書」「注文書」「発注書」「Quotation」「Purchase Order」などのタイトル
@@ -129,30 +73,34 @@ export async function POST(req: Request) {
 上記の必須要素が揃っている場合のみ isQuotation を true にしてください。
 documentType には具体的な書類種別を記載してください（例: 見積書、注文書、請求書、その他）。
 reason フィールドには判定理由を日本語で簡潔に記載してください（例: 「見積書のタイトルと金額明細が確認できるため」「請求書のため除外」など）。`,
-            },
-            {
-              type: 'file',
-              data: uploadResult.file.uri,
-              mediaType: detectedMimeType,
+                },
+                {
+                  type: 'file',
+                  data: uploaded.fileUri,
+                  mediaType: uploaded.mimeType,
+                },
+              ],
             },
           ],
-        },
-      ],
-    })
+        })
 
-    // Generate encrypted token containing file reference
-    const fileToken = encryptFileToken({
-      fileUri: uploadResult.file.uri,
-      name: uploadResult.file.name,
-      mimeType: detectedMimeType,
-      timestamp: Date.now(),
-    })
-    console.log('[v0] check-document-type: generated encrypted token')
+        // Generate encrypted token containing file reference
+        const fileToken = encryptFileToken({
+          fileUri: uploaded.fileUri,
+          name: uploaded.name,
+          mimeType: uploaded.mimeType,
+          timestamp: Date.now(),
+        })
 
-    return Response.json({
-      ...result.object,
-      fileId: fileToken, // Return encrypted token for the next API call
-    })
+        return {
+          ...result.object,
+          fileId: fileToken, // Return encrypted token for the next API call
+        }
+      },
+      { deleteRemoteAfter: false }
+    )
+
+    return Response.json(responseBody)
   } catch (error) {
     console.error('Check document error:', error)
 
@@ -175,18 +123,5 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
       { error: 'Failed to check document type' },
       { status: 500 }
     )
-  } finally {
-    // Cleanup tmp file if it still exists
-    if (tmpFilePath) {
-      try {
-        await unlink(tmpFilePath)
-        console.log('[v0] check-document-type: cleaned up tmp file in finally')
-      } catch (err) {
-        console.error(
-          '[v0] check-document-type: failed to cleanup tmp file',
-          err
-        )
-      }
-    }
   }
 }
