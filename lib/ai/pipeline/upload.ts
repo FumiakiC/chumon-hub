@@ -121,16 +121,17 @@ export async function withUploadedFile<T>(
       displayName,
     })
 
+    remoteName = uploadResult.file.name
+
     // ローカル tmp はアップロード完了後すぐに削除（現状挙動を踏襲）。
     await unlink(tmpFilePath)
     tmpFilePath = null
 
     const uploaded: UploadedFile = {
       fileUri: uploadResult.file.uri,
-      name: uploadResult.file.name,
+      name: remoteName,
       mimeType,
     }
-    remoteName = uploaded.name
 
     return await handler(uploaded)
   } finally {
