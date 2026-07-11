@@ -1,5 +1,5 @@
 import { createGoogle } from '@ai-sdk/google'
-import { GoogleAIFileManager } from '@google/generative-ai/server'
+import { GoogleGenAI } from '@google/genai'
 import { generateObject } from 'ai'
 
 import { GEMINI_MODELS } from '@/lib/ai/models'
@@ -107,8 +107,8 @@ Return only valid JSON matching the schema.`,
       try {
         const apiKey = process.env.GOOGLE_API_KEY
         if (apiKey) {
-          const fileManager = new GoogleAIFileManager(apiKey)
-          await fileManager.deleteFile(fileManagerName)
+          const ai = new GoogleGenAI({ apiKey })
+          await ai.files.delete({ name: fileManagerName })
           console.log(
             '[v0] extract-order: deleted file from Google AI',
             fileManagerName
