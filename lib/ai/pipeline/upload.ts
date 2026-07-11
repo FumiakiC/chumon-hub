@@ -1,4 +1,4 @@
-import { GoogleAIFileManager } from '@google/generative-ai/server'
+import { GoogleGenAI } from '@google/genai'
 import crypto from 'crypto'
 import { fileTypeFromBuffer } from 'file-type'
 import { unlink, writeFile } from 'fs/promises'
@@ -115,21 +115,28 @@ export async function withUploadedFile<T>(
     tmpFilePath = path.join(os.tmpdir(), `upload_${crypto.randomUUID()}.${ext}`)
     await writeFile(tmpFilePath, buffer)
 
-    const fileManager = new GoogleAIFileManager(apiKey)
-    const uploadResult = await fileManager.uploadFile(tmpFilePath, {
-      mimeType,
-      displayName,
+    const ai = new GoogleGenAI({ apiKey })
+    const uploadResult = await ai.files.upload({
+      file: tmpFilePath,
+      config: {
+        mimeType,
+        displayName,
+      },
     })
 
-    remoteName = uploadResult.file.name
+    if (!uploadResult.name || !uploadResult.uri) {
+      throw new Error('File API upload did not return name/uri')
+    }
+
+    remoteName = uploadResult.name
 
     // ローカル tmp はアップロード完了後すぐに削除（現状挙動を踏襲）。
     await unlink(tmpFilePath)
     tmpFilePath = null
 
     const uploaded: UploadedFile = {
-      fileUri: uploadResult.file.uri,
-      name: remoteName,
+      fileUri: uploadResult.uri,
+      name: uploadResult.name,
       mimeType,
     }
 
@@ -144,8 +151,8 @@ export async function withUploadedFile<T>(
     }
     if (options.deleteRemoteAfter && remoteName) {
       try {
-        const fileManager = new GoogleAIFileManager(apiKey)
-        await fileManager.deleteFile(remoteName)
+        const ai = new GoogleGenAI({ apiKey })
+        await ai.files.delete({ name: remoteName })
       } catch {
         // リモート cleanup 失敗はリクエスト自体を失敗させない。
       }
