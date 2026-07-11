@@ -78,7 +78,8 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 | PR-04         | `refactor/centralize-ai-config`  | モデルID + 抽出スキーマを中央 config 化                  | 低     | なし       |
 | PR-05         | `refactor/api-frontend-contract` | API出力契約の型をフロントから分離                        | 低〜中 | PR-04      |
 | PR-06         | `refactor/gemini-file-helper`    | ルート共通のアップロード/検証/cleanup + 抽出ステージ分解 | 中     | PR-04      |
-| PR-07         | `refactor/migrate-google-genai`  | レガシーSDK→`@google/genai` 一本化                       | 中〜高 | PR-06      |
+| PR-07         | `refactor/migrate-google-genai`  | レガシーSDK→`@google/genai` 一本化（File API）           | 中〜高 | PR-06      |
+| PR-07b        | `refactor/genai-generate`        | 生成側を `@google/genai` に一本化（generateObject→generateContent） | 中〜高 | PR-07 |
 | PR-08         | `refactor/error-handling`        | 型安全エラー + errorUtils 整合 + 情報漏えい防止          | 中     | なし       |
 | PR-09         | `perf/auth-jwks-singleton`       | `createRemoteJWKSet` をモジュールスコープへ              | 低     | なし       |
 | PR-10         | `refactor/logger`                | `[v0]` 接頭辞除去 + 簡易logger化 + 秘匿情報のログ抑止    | 中     | PR-08      |
@@ -202,6 +203,19 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **受け入れ条件**: `@google/generative-ai` への参照が0 / 3経路すべて成功。
 - **smoke test**: 必須。判定→トークン→注文抽出の一連フロー、図面抽出を実機確認。
 
+- **実績（#226, merged）**: `GoogleAIFileManager`（`@google/generative-ai/server`）→ `@google/genai` の `new GoogleGenAI({ apiKey })` ＋ `ai.files.upload({ file, config })` / `ai.files.delete({ name })` に差し替え（`lib/ai/pipeline/upload.ts` の upload/delete 両方、`app/api/extract-order/route.ts` の finally delete）。upload 戻り値 `File.name`/`.uri` が **optional 型**のため guard（欠落時 throw＝**成功経路は不変**・異常時のみ既存 500 経路へ合流）を1箇所追加。`package.json` は `@google/generative-ai` 削除／`@google/genai ^2.11.0` 追加（**直接依存±0**、推移的依存は google-auth-library/gaxios/protobufjs/ws 等が増＝統合SDKの性質）。**生成側 `@ai-sdk/google` は不変**（一本化は PR-07b に分離＝owner 合意）。一次情報: `@google/genai` 2.11.0 の型定義で `ai.files.upload` の `mimeType` は `UploadFileConfig` 内が正と確認。smoke: 3経路 200（check-document-type→extract-order のクロス SDK uri 消費含む）・txt→pdf 偽装 415。ボット(Gemini Code Assist)対応: **#1** `mimeType` をトップレベルへ移す提案＝**REJECT**（型定義上 `UploadFileParameters` は `file`/`config` のみ。提案は逆に型エラー）。
+
+### PR-07b `refactor/genai-generate`
+
+- **目的**: 生成側（判定・抽出）を `@ai-sdk/google` から `@google/genai` に寄せ、Gemini SDK を **完全に一本化**する。PR-07（File API 差し替え）の第2段。owner 合意で PR-07 から分離。
+- **対象**: `app/api/{check-document-type,extract-order,extract-drawing}/route.ts` の生成呼び出し、`lib/ai/*`（モデル/スキーマ由来）、`package.json`（`@ai-sdk/google`・`ai` が他で未使用なら撤去）。
+- **背景**: `ai` の `generateObject` は zod スキーマ（単一真実源 `lib/ai/schemas.ts`）を直接消費するが、`@google/genai` は `generateContent` ＋ `config.responseSchema`（Google Schema）＋ `responseMimeType: 'application/json'`。**着手時に、zod 単一真実源から responseSchema を導出する方法（変換 or アダプタ）を一次情報で確定**し、スキーマの二重管理を避ける。
+- **挙動の扱い（refactor）**: **抽出JSON出力の同値性を保存**するのが前提。`generateObject` の zod 検証に相当する後段検証（応答 JSON のパース＋zod 検証）を維持する。
+- **相互作用（着手時確認）**: Gemini 3 は **thinking 既定ON**（`drawingSchema.reasoning` の手動CoTと干渉しうる）／料金体系／`thinkingConfig` 取り扱い。付録の **Gemini モデル 3.x 移行 chore**（`@ai-sdk/google` v4 のモデル文字列前提の記述含む）と統合するか分割するかを着手時に判断。
+- **受け入れ条件**: 生成側の `@ai-sdk/google` / `ai` 依存が 0（撤去可能なら撤去）／3経路すべて成功／**抽出JSON が PR-07b 前後で同値**（golden set or 実書類 before-after で確認）。
+- **smoke test**: 必須。判定→トークン→注文抽出、図面抽出を実機確認＋出力同値性。
+- **依存**: PR-07。
+
 ### PR-08 `refactor/error-handling`
 
 - **目的**: 型安全なエラー処理と、クライアントへの内部情報漏えい防止。
@@ -279,7 +293,8 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [ ] フォローアップ（PR-04 派生・別チャット・`chore/`・EoL駆動）: **Gemini モデル 3.x 移行**。中央化済みのため `lib/ai/models.ts` の3値差し替えのみ（数行 diff）。一次情報（Gemini API 公式 deprecation ページ, 2026-07-05 確認）: `gemini-2.5-flash` / `gemini-2.5-flash-lite` は **shutdown 2026-10-16**。差し替え先＝classify `gemini-2.5-flash-lite`→`gemini-3.1-flash-lite`（公式後継・GA・EoL 2027-05-07）／extractOrder `gemini-2.5-flash`→`gemini-3.5-flash`（公式後継・GA・shutdown 未定）。**extractDrawing は EoL 対象外**（現行 `gemini-3.1-flash-lite` は 2027-05 まで生存）＝`gemini-3.5-flash` 化は純粋な精度アップグレードで **要測定**（境界E: golden set / 実図面 before-after。EoL 分と分割するか要判断）。着手時確認: Gemini 3 は thinking 既定ON（`drawingSchema.reasoning` の手動CoTと干渉しうる）／料金体系変更／`@ai-sdk/google` v4 のモデル文字列・thinkingConfig 取り扱い。PR-07（`@google/genai` SDK 一本化）とは別物。
 - [x] PR-05 api-frontend-contract（**#203, merged**。`lib/ai/contracts.ts` 新設、抽出API契約型をフロント3ファイルで一本化。`OrderExtractionResult` 非存在の常時 `undefined` 参照7項目を除去。挙動・UI・スキーマ項目は不変。ボット指摘は全件 REJECT= `safeParseFloat` デッドコード削除提案は PR-11 / 応答の防御的検証追加は PR-08 / Prettier 正規化は別 `chore` PR）
 - [x] PR-06 gemini-file-helper（**#224, merged**。`lib/ai/pipeline/{types,upload,index}.ts` 新設＝`validateUploadFile`(no-throw union) ＋ `withUploadedFile`(`deleteRemoteAfter` で remote 寿命制御)。両ルートをヘルパ化し extract-drawing にマジックバイト415・サイズ25MB(413) 統一。prompt/schema/model・token・`normalizeDrawingNo` 不変。ボット #1 `remoteName` 順序 ACCEPT／#2#3 `(error as any).code` 撤廃は PR-08 送り。詳細は PR-06 節「実績(#224)」）
-- [ ] PR-07 migrate-google-genai
+- [x] PR-07 migrate-google-genai（**#226, merged**。File API を `@google/genai` の `ai.files.upload`/`ai.files.delete` に差し替え。upload 戻り値 name/uri の optional 型に guard 追加＝成功経路不変。生成側 `@ai-sdk/google` は据え置き。ボット(Gemini Code Assist)「`mimeType` をトップレベルへ」は **REJECT**＝型定義上 `UploadFileParameters` は `file`/`config` のみで `mimeType` は `UploadFileConfig` 内が正、提案は逆に型エラー。生成側一本化は **PR-07b** として新設。詳細は PR-07 節「実績(#226)」）
+- [ ] PR-07b genai-generate（生成側を `@google/genai` に一本化＝generateObject→generateContent+responseSchema。zod 単一真実源からの responseSchema 導出・出力同値性・Gemini3 thinking を着手時に確定）
 - [ ] PR-08 error-handling
 - [ ] PR-09 auth-jwks-singleton
 - [ ] PR-10 logger
