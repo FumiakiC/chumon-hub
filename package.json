@@ -13,7 +13,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/google": "^4.0.2",
+    "@ai-sdk/google": "^4.0.14",
     "@google/genai": "^2.11.0",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-dialog": "1.1.19",
