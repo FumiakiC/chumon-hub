@@ -9,7 +9,7 @@
 
 /** Google File API へアップロード済みのファイル参照（handler へ渡す入力）。 */
 export interface UploadedFile {
-  /** Google File API の参照 URI（generateObject の file data に渡す）。 */
+  /** Google File API の参照 URI（generateContent の file part に渡す）。 */
   fileUri: string
   /** Google File API 上のリソース名（cleanup 時の deleteFile に使う）。 */
   name: string
