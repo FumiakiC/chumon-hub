@@ -1,6 +1,4 @@
-import { createGoogle } from '@ai-sdk/google'
-import { generateObject } from 'ai'
-
+import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
 import { validateUploadFile, withUploadedFile } from '@/lib/ai/pipeline'
 import { documentTypeSchema } from '@/lib/ai/schemas'
@@ -44,18 +42,11 @@ export async function POST(req: Request) {
         apiKey,
       },
       async (uploaded) => {
-        const google = createGoogle({ apiKey })
-
-        const result = await generateObject({
-          model: google(GEMINI_MODELS.classify),
+        const result = await generateStructured({
+          apiKey,
+          model: GEMINI_MODELS.classify,
           schema: documentTypeSchema,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `この画像を分析して、見積書または注文書/発注書かどうかを判定してください。
+          prompt: `この画像を分析して、見積書または注文書/発注書かどうかを判定してください。
 
 【見積書・注文書の必須要素】
 - 「見積書」「注文書」「発注書」「Quotation」「Purchase Order」などのタイトル
@@ -73,15 +64,10 @@ export async function POST(req: Request) {
 上記の必須要素が揃っている場合のみ isQuotation を true にしてください。
 documentType には具体的な書類種別を記載してください（例: 見積書、注文書、請求書、その他）。
 reason フィールドには判定理由を日本語で簡潔に記載してください（例: 「見積書のタイトルと金額明細が確認できるため」「請求書のため除外」など）。`,
-                },
-                {
-                  type: 'file',
-                  data: uploaded.fileUri,
-                  mediaType: uploaded.mimeType,
-                },
-              ],
-            },
-          ],
+          file: {
+            fileUri: uploaded.fileUri,
+            mimeType: uploaded.mimeType,
+          },
         })
 
         // Generate encrypted token containing file reference
@@ -93,7 +79,7 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
         })
 
         return {
-          ...result.object,
+          ...result,
           fileId: fileToken, // Return encrypted token for the next API call
         }
       },

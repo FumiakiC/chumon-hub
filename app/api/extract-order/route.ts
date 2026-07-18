@@ -1,7 +1,6 @@
-import { createGoogle } from '@ai-sdk/google'
 import { GoogleGenAI } from '@google/genai'
-import { generateObject } from 'ai'
 
+import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
 import { orderSchema } from '@/lib/ai/schemas'
 import { decryptFileToken } from '@/lib/crypto'
@@ -47,19 +46,12 @@ export async function POST(req: Request) {
       name,
     })
 
-    const google = createGoogle({ apiKey })
-
     // Use Gemini 2.5 Flash for high-accuracy extraction
-    const result = await generateObject({
-      model: google(GEMINI_MODELS.extractOrder),
+    const result = await generateStructured({
+      apiKey,
+      model: GEMINI_MODELS.extractOrder,
       schema: orderSchema,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Extract all order details from this quotation/order document into a structured JSON format.
+      prompt: `Extract all order details from this quotation/order document into a structured JSON format.
 
 CRITICAL INSTRUCTIONS for line items:
 1. Extract ALL line items/products as an array in the "items" field.
@@ -83,18 +75,13 @@ CRITICAL INSTRUCTIONS for line items:
 6. Be extremely thorough - extract ALL line items from tables or lists.
 
 Return only valid JSON matching the schema.`,
-            },
-            {
-              type: 'file',
-              data: fileUri,
-              mediaType: mimeType,
-            },
-          ],
-        },
-      ],
+      file: {
+        fileUri,
+        mimeType,
+      },
     })
 
-    return Response.json(result.object)
+    return Response.json(result)
   } catch (error) {
     console.error('Extraction error:', error)
     return Response.json(
