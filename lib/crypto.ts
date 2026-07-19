@@ -1,5 +1,7 @@
 import crypto from 'crypto'
 
+import { ConfigError } from '@/lib/errors'
+
 let cachedSecret: string | null = null
 let cachedEncryptionKey: Buffer | null = null
 
@@ -21,9 +23,7 @@ function getSecret(): string {
 
   if (!apiSecret) {
     console.error('🚨 FATAL: API_SECRET is not set in environment variables.')
-    const error = new Error('API_SECRET is not set in environment variables')
-    ;(error as any).code = 'ERR_SYS_CONFIG'
-    throw error
+    throw new ConfigError('API_SECRET is not set in environment variables')
   }
 
   cachedSecret = apiSecret

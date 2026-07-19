@@ -4,6 +4,7 @@ import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
 import { orderSchema } from '@/lib/ai/schemas'
 import { decryptFileToken } from '@/lib/crypto'
+import { ConfigError, errorResponse } from '@/lib/errors'
 
 export const maxDuration = 60
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     const fileIdToken = body?.fileId
     if (typeof fileIdToken !== 'string' || fileIdToken.trim() === '') {
       return Response.json(
-        { error: 'fileId must be a non-empty string' },
+        { error: 'fileId must be a non-empty string', code: 'ERR_VALIDATION' },
         { status: 400 }
       )
     }
@@ -25,18 +26,14 @@ export async function POST(req: Request) {
     if (!fileTokenData) {
       console.error('[v0] extract-order: failed to decrypt fileId token')
       return Response.json(
-        { error: 'Invalid or expired fileId' },
+        { error: 'Invalid or expired fileId', code: 'ERR_UNAUTHORIZED' },
         { status: 401 }
       )
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      console.error('[v0] GOOGLE_API_KEY is not set')
-      return Response.json(
-        { error: 'Server misconfiguration: GOOGLE_API_KEY is not set' },
-        { status: 500 }
-      )
+      throw new ConfigError('GOOGLE_API_KEY is not set')
     }
 
     const { fileUri, name, mimeType } = fileTokenData
@@ -84,10 +81,7 @@ Return only valid JSON matching the schema.`,
     return Response.json(result)
   } catch (error) {
     console.error('Extraction error:', error)
-    return Response.json(
-      { error: 'Failed to extract order details' },
-      { status: 500 }
-    )
+    return errorResponse(error, { code: 'ERR_EXTRACT', status: 500 })
   } finally {
     // Always delete the file from Google AI File Manager
     if (fileManagerName) {

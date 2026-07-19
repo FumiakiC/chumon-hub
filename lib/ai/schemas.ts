@@ -16,6 +16,11 @@ export const documentTypeSchema = z.object({
     .describe('Short reason for the classification in Japanese'),
 })
 
+/** check-document-type の応答契約（判定結果 + 暗号化ファイルトークン）。 */
+export const checkDocumentTypeResponseSchema = documentTypeSchema.extend({
+  fileId: z.string(),
+})
+
 export const orderSchema = z.object({
   items: z
     .array(
