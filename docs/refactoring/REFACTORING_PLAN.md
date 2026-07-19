@@ -236,6 +236,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **主な変更**: `createRemoteJWKSet(...)` を関数内生成→ **モジュールスコープでメモ化**（issuer 単位）。挙動は不変。
 - **受け入れ条件**: 認証成功/失敗の挙動が不変。
 - **smoke test**: 認証あり/なしリクエストの応答確認（development はスキップ仕様に注意）。
+- **実績（#237, merged）**: `createRemoteJWKSet(new URL(JWKS_URL))` の関数内生成を、モジュールスコープの `const remoteJWKSetCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>()` ＋ ヘルパ `getRemoteJWKSet(jwksUrl)`（hit で再利用 / miss で生成＆格納・早期 return）へ。**メモ化のキーは JWKS URL**（`${ISSUER}/cdn-cgi/access/certs`。issuer と 1:1 なので「issuer ごとに1つ」＝計画の『issuer 単位』を実キー準拠に明確化）。挙動不変（dev スキップ・env 毎回読取・ISSUER/JWKS_URL 導出・`jwtVerify` の issuer/audience 検証・エラー処理は現状のまま。差分はリゾルバインスタンスの再利用のみ＝JWKS の HTTP フェッチが跨リクエストでキャッシュされる）。一次情報(jose 公式)確認済: 返り値関数が取得済み JWKS をインスタンス内部にキャッシュし cooldownDuration(既定30s)/cacheMaxAge(既定10分) の範囲で再取得抑制、キー rotation 等の再取得挙動は不変。型 `ReturnType<typeof createRemoteJWKSet>`・`as any` 不使用（方針6）。レビュー対応(別 `docs(auth)` コミット): コメント「issuer(JWKS URL)単位」→「JWKS URL（issuer ごとに1つ）単位」に修正（実キーは JWKS URL との指摘）。smoke: `tsc --noEmit` 0 / `pnpm format:check` green / `pnpm build` green（`.next` 残骸 `ENOTEMPTY: rmdir '.next/build/chunks 2'` は環境要因＝`rm -rf .next` 後に green・コード無関係）。`next dev` は NODE_ENV を development に強制し検証パスをスキップするため、**正常系 auth の実トークン確認は Cloudflare Access(Tunnel) 必須＝ステージング事項**（ローカルは異常系まで）。dev 起動で boot・extract フロー(200) 無回帰確認。
 
 ### PR-10 `refactor/logger`
 
@@ -298,7 +299,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-07 migrate-google-genai（**#226, merged**。File API を `@google/genai` の `ai.files.upload`/`ai.files.delete` に差し替え。upload 戻り値 name/uri の optional 型に guard 追加＝成功経路不変。生成側 `@ai-sdk/google` は据え置き。ボット(Gemini Code Assist)「`mimeType` をトップレベルへ」は **REJECT**＝型定義上 `UploadFileParameters` は `file`/`config` のみで `mimeType` は `UploadFileConfig` 内が正、提案は逆に型エラー。生成側一本化は **PR-07b** として新設。詳細は PR-07 節「実績(#226)」）
 - [x] PR-07b genai-generate（**#235, merged**。`lib/ai/generate.ts` 新設＝`generateStructured`（zod v4 `z.toJSONSchema()`→`responseJsonSchema`+後段 zod 検証、thinkingConfig 非設定）。3ルート置換・`@ai-sdk/google`/`ai`/`test-gemini.ts` 撤去。抽出JSON before-after 同値を実書類で確認。ボット「`z.toJSONSchema` 不存在」は zod v4 公式APIの実証で **REJECT**。詳細は PR-07b 節「実績(#235)」）
 - [x] PR-08 error-handling（**#236, merged**。`lib/errors.ts` 新設＝`APP_ERROR_CODES`/`AppError`/`ConfigError`/`getErrorCode`(型ガード)/`errorResponse`・`validationErrorResponse`(code別 client-safe 文言＋status)。`errorUtils.resolveError` を raw includes 分岐→code 分岐へ刷新し死に分岐 `'API_SECRET is missing'` を廃止（#204 実バグ是正）。`crypto.ts`/`check-document-type` の `(error as any).code` を型付き化＝**`(error as any)` 全撲滅(grep 0件)**、`extract-order`/`extract-drawing` の内部設定文言（`GOOGLE_API_KEY ...`）をクライアント応答から除去し汎用 code へ。order `handleApiResponse` に成功応答 zod 防御検証＋code 伝播。**残置**: check-document-type の orphan remote cleanup は未対応（別 fix 送り）。詳細は PR-08 節「実績(#236)」）
-- [ ] PR-09 auth-jwks-singleton
+- [x] PR-09 auth-jwks-singleton（**#237, merged**。`lib/auth-cloudflare.ts`: `createRemoteJWKSet` を関数内生成→モジュールスコープの `Map`（**キー=JWKS URL**＝issuer ごとに1つ）でメモ化。ヘルパ `getRemoteJWKSet` 追加、値型 `ReturnType<typeof createRemoteJWKSet>`(`as any` 不使用)。jose の JWKS 内部キャッシュ(cooldownDuration 既定30s / cacheMaxAge 既定10分)を跨リクエスト有効化。挙動不変(認証成功/失敗・issuer/audience 検証・dev スキップ)。コメント文言は #237 レビューで「issuer(JWKS URL)単位」→「JWKS URL（issuer ごとに1つ）単位」に修正。詳細は PR-09 節「実績(#237)」）
 - [ ] PR-10 logger
 - [ ] PR-11 fix-lint-baseline
 - [ ] PR-12 add-lint-typecheck
