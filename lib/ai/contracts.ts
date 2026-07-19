@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 
 import type {
+  checkDocumentTypeResponseSchema,
   documentTypeSchema,
   drawingSchema,
   orderSchema,
@@ -11,9 +12,9 @@ export type OrderExtractionResult = z.infer<typeof orderSchema>
 export type DrawingExtractionResult = z.infer<typeof drawingSchema>
 export type OrderLineItem = OrderExtractionResult['items'][number]
 
-export type CheckDocumentTypeResponse = DocumentTypeResult & {
-  fileId: string
-}
+export type CheckDocumentTypeResponse = z.infer<
+  typeof checkDocumentTypeResponseSchema
+>
 
 export type CropTitleBlockResponse = {
   croppedFiles: {

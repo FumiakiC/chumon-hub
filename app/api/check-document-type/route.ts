@@ -3,6 +3,11 @@ import { GEMINI_MODELS } from '@/lib/ai/models'
 import { validateUploadFile, withUploadedFile } from '@/lib/ai/pipeline'
 import { documentTypeSchema } from '@/lib/ai/schemas'
 import { encryptFileToken } from '@/lib/crypto'
+import {
+  ConfigError,
+  errorResponse,
+  validationErrorResponse,
+} from '@/lib/errors'
 
 export const maxDuration = 60
 
@@ -14,23 +19,19 @@ export async function POST(req: Request) {
 
     const validation = await validateUploadFile(file)
     if (!validation.ok) {
-      return Response.json(
-        { error: validation.error },
-        { status: validation.status }
-      )
+      return validationErrorResponse(validation.status)
     }
 
     if (typeof mimeType !== 'string' || mimeType === '') {
-      return Response.json({ error: 'mimeType is required' }, { status: 400 })
+      return Response.json(
+        { error: 'mimeType is required', code: 'ERR_VALIDATION' },
+        { status: 400 }
+      )
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      const error = new Error(
-        'Server misconfiguration: GOOGLE_API_KEY is not set'
-      )
-      ;(error as any).code = 'ERR_SYS_CONFIG'
-      throw error
+      throw new ConfigError('GOOGLE_API_KEY is not set')
     }
 
     const responseBody = await withUploadedFile(
@@ -89,25 +90,6 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
     return Response.json(responseBody)
   } catch (error) {
     console.error('Check document error:', error)
-
-    // Check if error is a system configuration error by error code
-    const errorCode = (error as any).code
-
-    if (errorCode === 'ERR_SYS_CONFIG') {
-      return Response.json(
-        {
-          error: 'System Configuration Error',
-          code: 'ERR_SYS_CONFIG',
-          message: 'Contact administrator',
-        },
-        { status: 500 }
-      )
-    }
-
-    // For other unexpected errors, return generic message without internal details
-    return Response.json(
-      { error: 'Failed to check document type' },
-      { status: 500 }
-    )
+    return errorResponse(error, { code: 'ERR_CLASSIFY', status: 500 })
   }
 }

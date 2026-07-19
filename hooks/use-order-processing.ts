@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type {
-  CheckDocumentTypeResponse,
-  OrderExtractionResult,
-} from '@/lib/ai/contracts'
-import { orderSchema } from '@/lib/ai/schemas'
+import type { z } from 'zod'
+
+import type { OrderExtractionResult } from '@/lib/ai/contracts'
+import { checkDocumentTypeResponseSchema, orderSchema } from '@/lib/ai/schemas'
 import { resolveError } from '@/lib/errorUtils'
+import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
 
 import type { LogEntry } from '@/types/logEntry'
 
@@ -130,24 +130,31 @@ export function useOrderProcessing() {
     setLogs((prev) => [...prev, { timestamp: timeString, message, type }])
   }
 
-  const handleApiResponse = async <T>(
+  const handleApiResponse = async <S extends z.ZodType>(
     response: Response,
-    defaultMessage: string
-  ): Promise<T> => {
-    if (response.ok) return response.json()
-    let errorMessage = defaultMessage
-    try {
-      const data = await response.json()
-      if (data?.error) {
-        errorMessage =
-          typeof data.error === 'string'
-            ? data.error
-            : JSON.stringify(data.error)
+    schema: S,
+    fallbackCode: AppErrorCode
+  ): Promise<z.infer<S>> => {
+    if (!response.ok) {
+      let code: AppErrorCode = fallbackCode
+      let message: string | undefined
+      try {
+        const data = await response.json()
+        if (isAppErrorCode(data?.code)) code = data.code
+        if (typeof data?.error === 'string') message = data.error
+      } catch (_) {
+        // 本文が JSON でない等は無視し、fallbackCode を使う
       }
-    } catch (_) {
-      // ignore JSON parse errors and fall back to default message
+      throw new AppError(code, message ?? code)
     }
-    throw new Error(errorMessage)
+
+    // 成功応答も形状をランタイム検証する（防御的検証）
+    const data = await response.json()
+    const parsed = schema.safeParse(data)
+    if (!parsed.success) {
+      throw new AppError('ERR_INVALID_RESULT', 'データの形式が不正です')
+    }
+    return parsed.data
   }
 
   const handleTranscription = async (
@@ -206,9 +213,10 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      const checkResult = await handleApiResponse<CheckDocumentTypeResponse>(
+      const checkResult = await handleApiResponse(
         checkResponse,
-        '判定APIエラー'
+        checkDocumentTypeResponseSchema,
+        'ERR_CLASSIFY'
       )
       if (signal.aborted) {
         throw new DOMException('処理が中断されました', 'AbortError')
@@ -244,9 +252,10 @@ export function useOrderProcessing() {
         signal: signal,
       })
 
-      const result = await handleApiResponse<OrderExtractionResult>(
+      const result = await handleApiResponse(
         response,
-        'APIリクエストが失敗しました'
+        orderSchema,
+        'ERR_EXTRACT'
       )
       if (signal.aborted) {
         throw new DOMException('処理が中断されました', 'AbortError')
@@ -265,7 +274,7 @@ export function useOrderProcessing() {
 
       if (!parseResult.success) {
         console.error('[v0] Validation failed:', parseResult.error)
-        throw new Error('データの形式が不正です')
+        throw new AppError('ERR_INVALID_RESULT', 'データの形式が不正です')
       }
 
       const items = parseResult.data // 型は OrderLineItem[]（中央 orderSchema 由来）
@@ -306,10 +315,9 @@ export function useOrderProcessing() {
         }, 3000)
       } else {
         setProcessingStatus('error')
-        const { message, action, raw } = resolveError(err)
+        const { message, action } = resolveError(err)
         addLog(`エラー: ${message}`, 'error')
         addLog(`対応: ${action}`, 'error')
-        addLog(`詳細: ${raw}`, 'info')
         setError(message)
       }
     } finally {
