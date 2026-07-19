@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 import { OrderFormItems } from './order-form-items'
@@ -47,7 +48,7 @@ export function OrderForm({ form, isCopied, setIsCopied }: OrderFormProps) {
           <Button
             onClick={() => {
               if (!navigator.clipboard) {
-                console.error('[v0] Clipboard API not available.')
+                logger.error('Clipboard API not available.')
                 return
               }
               const currentValues = watch()
@@ -55,12 +56,12 @@ export function OrderForm({ form, isCopied, setIsCopied }: OrderFormProps) {
               navigator.clipboard
                 .writeText(jsonString)
                 .then(() => {
-                  console.log('[v0] formData copied to clipboard')
+                  logger.debug('formData copied to clipboard')
                   setIsCopied(true)
                   setTimeout(() => setIsCopied(false), 2000)
                 })
                 .catch((err) => {
-                  console.error('[v0] Failed to copy:', err)
+                  logger.error('Failed to copy:', err)
                 })
             }}
             variant="outline"

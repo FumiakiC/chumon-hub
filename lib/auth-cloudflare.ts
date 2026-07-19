@@ -2,6 +2,8 @@ import { type NextRequest } from 'next/server'
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
+import { logger } from '@/lib/logger'
+
 // JWKS リゾルバを JWKS URL（issuer ごとに1つ）単位でモジュールスコープにメモ化する。
 // createRemoteJWKSet が返す関数は取得済み JWKS を内部キャッシュし、
 // cooldownDuration / cacheMaxAge の範囲で再取得を抑制する（jose 公式仕様）。
@@ -28,7 +30,9 @@ export async function verifyCloudflareAccess(
   request: NextRequest
 ): Promise<boolean> {
   if (process.env.NODE_ENV === 'development') {
-    console.log('[auth] Skipping Cloudflare Access verification in development')
+    logger.debug(
+      '[auth] Skipping Cloudflare Access verification in development'
+    )
     return true
   }
 
@@ -36,7 +40,7 @@ export async function verifyCloudflareAccess(
   const AUDIENCE = process.env.CLOUDFLARE_AUDIENCE
 
   if (!TEAM_DOMAIN || !AUDIENCE) {
-    console.error(
+    logger.error(
       '[auth] Missing required environment variables: CLOUDFLARE_TEAM_DOMAIN or CLOUDFLARE_AUDIENCE'
     )
     return false
@@ -48,7 +52,7 @@ export async function verifyCloudflareAccess(
 
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (!token) {
-    console.warn('[auth] Missing Cf-Access-Jwt-Assertion header')
+    logger.warn('[auth] Missing Cloudflare Access JWT header')
     return false
   }
 
@@ -59,7 +63,7 @@ export async function verifyCloudflareAccess(
     })
     return true
   } catch (error) {
-    console.error('[auth] Cloudflare Access verification failed', error)
+    logger.error('[auth] Cloudflare Access verification failed', error)
     return false
   }
 }

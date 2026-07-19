@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
 import { ConfigError } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 let cachedSecret: string | null = null
 let cachedEncryptionKey: Buffer | null = null
@@ -22,7 +23,7 @@ function getSecret(): string {
   const apiSecret = process.env.API_SECRET
 
   if (!apiSecret) {
-    console.error('🚨 FATAL: API_SECRET is not set in environment variables.')
+    logger.error('FATAL: API secret is not set in environment variables.')
     throw new ConfigError('API_SECRET is not set in environment variables')
   }
 
@@ -96,7 +97,7 @@ export function decryptFileToken(token: string): FileTokenData | null {
 
     return data
   } catch (error) {
-    console.error('Failed to decrypt file token:', error)
+    logger.error('Failed to decrypt file reference:', error)
     return null
   }
 }

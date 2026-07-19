@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { PDFDocument } from 'pdf-lib'
 
+import { logger } from '@/lib/logger'
+
 // 単位変換定数: 1mm ≒ 2.8346ポイント
 const MM_TO_POINTS = 2.8346
 
@@ -85,7 +87,7 @@ function detectPageSize(widthPt: number, heightPt: number): ISOSize {
   }
 
   // デフォルトはA2（最も一般的な図面サイズ）
-  console.warn(
+  logger.warn(
     `Unknown page size: ${widthMm.toFixed(1)}mm x ${heightMm.toFixed(1)}mm. Defaulting to A2.`
   )
   return 'A2'
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     for (const file of files) {
       // PDFファイルかチェック
       if (!file.type.includes('pdf') && !file.name.endsWith('.pdf')) {
-        console.warn(`Skipping non-PDF file: ${file.name}`)
+        logger.warn('Skipping non-PDF file')
         croppedFileResults.push(null)
         continue
       }
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
         // ページ数を確認
         const pageCount = pdfDoc.getPageCount()
         if (pageCount === 0) {
-          console.warn(`No pages found in: ${file.name}`)
+          logger.warn('No pages found in PDF')
           croppedFileResults.push(null)
           continue
         }
@@ -142,8 +144,8 @@ export async function POST(request: NextRequest) {
         // ログ出力: 検出されたページサイズ
         const widthMm = (pageWidth / MM_TO_POINTS).toFixed(1)
         const heightMm = (pageHeight / MM_TO_POINTS).toFixed(1)
-        console.log(
-          `[${file.name}] Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm) | ` +
+        logger.debug(
+          `Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm) | ` +
             `Crop: ${cropConfig.width}mm x ${cropConfig.height}mm`
         )
 
@@ -190,7 +192,7 @@ export async function POST(request: NextRequest) {
           base64: dataUri,
         })
       } catch (fileError) {
-        console.error(`Error processing file ${file.name}:`, fileError)
+        logger.error('Error processing file:', fileError)
         // 個別のファイルエラーは警告として処理し、処理を続行
         croppedFileResults.push(null)
       }
@@ -213,7 +215,7 @@ export async function POST(request: NextRequest) {
       croppedFiles,
     })
   } catch (error) {
-    console.error('Error in crop-title-block API:', error)
+    logger.error('Error in crop-title-block API:', error)
     return NextResponse.json(
       { error: 'PDFのクロップ処理中にエラーが発生しました' },
       { status: 500 }

@@ -5,6 +5,7 @@ import { GEMINI_MODELS } from '@/lib/ai/models'
 import { orderSchema } from '@/lib/ai/schemas'
 import { decryptFileToken } from '@/lib/crypto'
 import { ConfigError, errorResponse } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 60
 
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     // Decrypt the file token to get file information
     const fileTokenData = decryptFileToken(fileIdToken)
     if (!fileTokenData) {
-      console.error('[v0] extract-order: failed to decrypt fileId token')
+      logger.error('extract-order: failed to decrypt file reference')
       return Response.json(
         { error: 'Invalid or expired fileId', code: 'ERR_UNAUTHORIZED' },
         { status: 401 }
@@ -38,10 +39,7 @@ export async function POST(req: Request) {
 
     const { fileUri, name, mimeType } = fileTokenData
     fileManagerName = name // Store for cleanup in finally
-    console.log('[v0] extract-order: using decrypted file token', {
-      fileUri,
-      name,
-    })
+    logger.debug('extract-order: using decrypted file reference')
 
     // Use Gemini 2.5 Flash for high-accuracy extraction
     const result = await generateStructured({
@@ -80,7 +78,7 @@ Return only valid JSON matching the schema.`,
 
     return Response.json(result)
   } catch (error) {
-    console.error('Extraction error:', error)
+    logger.error('Extraction error:', error)
     return errorResponse(error, { code: 'ERR_EXTRACT', status: 500 })
   } finally {
     // Always delete the file from Google AI File Manager
@@ -90,16 +88,10 @@ Return only valid JSON matching the schema.`,
         if (apiKey) {
           const ai = new GoogleGenAI({ apiKey })
           await ai.files.delete({ name: fileManagerName })
-          console.log(
-            '[v0] extract-order: deleted file from Google AI',
-            fileManagerName
-          )
+          logger.debug('extract-order: deleted file from Google AI')
         }
       } catch (err) {
-        console.error(
-          '[v0] extract-order: failed to delete file from Google AI',
-          err
-        )
+        logger.error('extract-order: failed to delete file from Google AI', err)
       }
     }
   }

@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import type { CropTitleBlockResponse } from '@/lib/ai/contracts'
+import { logger } from '@/lib/logger'
 
 import {
   type CroppedFile,
@@ -129,7 +130,7 @@ export function useProvisionalOrder() {
       }
     } catch (error) {
       clearInterval(progressInterval)
-      console.error('Crop error:', error)
+      logger.error('Crop error:', error)
       setCroppedFiles((prev) =>
         prev.map((f) =>
           f.id === fileId ? { ...f, progress: 100, status: 'cropped' } : f
@@ -277,7 +278,7 @@ export function useProvisionalOrder() {
         JSON.stringify({ ...orderHeader, items }, null, 2)
       )
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     }
   }, [orderItems, orderHeader])
 
