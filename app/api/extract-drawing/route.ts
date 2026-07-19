@@ -7,6 +7,7 @@ import {
   errorResponse,
   validationErrorResponse,
 } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 60
 
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
 
     return Response.json(responseBody)
   } catch (error) {
-    console.error('Extraction error:', error)
+    logger.error('Extraction error:', error)
     return errorResponse(error, { code: 'ERR_EXTRACT', status: 500 })
   }
 }
