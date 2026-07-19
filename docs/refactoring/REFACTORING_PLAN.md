@@ -245,6 +245,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **主な変更**: `lib/logger.ts`（環境で出力制御する薄いラッパ）を導入。fileUri / token / displayName 等の **秘匿値をログに出さない**（#195 Copilot High で具体化: `extract-order`/`extract-drawing` の復号トークン内容(`fileUri`,`name`)・`fileManagerName` 出力を含む）。
 - **受け入れ条件**: `[v0]` が0件 / 本番想定でデバッグログが抑制される。
 - **smoke test**: 主要フローでログに秘匿値が出ないことを目視。
+- **実績(#238, merged)**: `lib/logger.ts` 新設（`debug`/`info` を本番=NODE_ENV=production で抑制、`warn`/`error` は常時）。全 `console.*` 実呼び出し27件を logger 経由へ置換・`[v0]` 8件除去（計画「約29箇所」は PR-04〜08 の整理で既に減少済みだった）。秘匿値ログ除去=`extract-order` の復号トークン内容(`{fileUri,name}`)・`fileManagerName`、`crop-title-block`/`use-drawing-analysis` のアップロードファイル名。`error`/`warn` レベルは1:1温存し挙動差は debug/info の本番抑制のみ＝挙動・API応答・zodスキーマ・認証/暗号ロジック不変。ボットレビュー2件（`crop-title-block`: ①`getAll('file')` が `string` を返すと `file.type` undefined で TypeError(500) ②`validateUploadFile` 未使用で magic-byte/25MB 未強制・`file.type`詐称可能）は**未変更コンテキスト行への指摘かつ挙動変更を伴う**ため**全件 REJECT-for-scope**、別 `fix/crop-title-block-validation` へ集約（`instanceof File` チェックが①を内包）。軽微差: `logger.ts` の JSDoc は英語短縮版で merge され「秘匿値を呼び出し側で渡さない」契約行は省略（動作・秘匿抑止は担保・追加対応不要）。
 
 ---
 
@@ -300,7 +301,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-07b genai-generate（**#235, merged**。`lib/ai/generate.ts` 新設＝`generateStructured`（zod v4 `z.toJSONSchema()`→`responseJsonSchema`+後段 zod 検証、thinkingConfig 非設定）。3ルート置換・`@ai-sdk/google`/`ai`/`test-gemini.ts` 撤去。抽出JSON before-after 同値を実書類で確認。ボット「`z.toJSONSchema` 不存在」は zod v4 公式APIの実証で **REJECT**。詳細は PR-07b 節「実績(#235)」）
 - [x] PR-08 error-handling（**#236, merged**。`lib/errors.ts` 新設＝`APP_ERROR_CODES`/`AppError`/`ConfigError`/`getErrorCode`(型ガード)/`errorResponse`・`validationErrorResponse`(code別 client-safe 文言＋status)。`errorUtils.resolveError` を raw includes 分岐→code 分岐へ刷新し死に分岐 `'API_SECRET is missing'` を廃止（#204 実バグ是正）。`crypto.ts`/`check-document-type` の `(error as any).code` を型付き化＝**`(error as any)` 全撲滅(grep 0件)**、`extract-order`/`extract-drawing` の内部設定文言（`GOOGLE_API_KEY ...`）をクライアント応答から除去し汎用 code へ。order `handleApiResponse` に成功応答 zod 防御検証＋code 伝播。**残置**: check-document-type の orphan remote cleanup は未対応（別 fix 送り）。詳細は PR-08 節「実績(#236)」）
 - [x] PR-09 auth-jwks-singleton（**#237, merged**。`lib/auth-cloudflare.ts`: `createRemoteJWKSet` を関数内生成→モジュールスコープの `Map`（**キー=JWKS URL**＝issuer ごとに1つ）でメモ化。ヘルパ `getRemoteJWKSet` 追加、値型 `ReturnType<typeof createRemoteJWKSet>`(`as any` 不使用)。jose の JWKS 内部キャッシュ(cooldownDuration 既定30s / cacheMaxAge 既定10分)を跨リクエスト有効化。挙動不変(認証成功/失敗・issuer/audience 検証・dev スキップ)。コメント文言は #237 レビューで「issuer(JWKS URL)単位」→「JWKS URL（issuer ごとに1つ）単位」に修正。詳細は PR-09 節「実績(#237)」）
-- [ ] PR-10 logger
+- [x] PR-10 logger（**#238, merged**。`lib/logger.ts` 新設＝`debug`/`info` を本番抑制・`warn`/`error` 常時。`console.*`27件を logger 化・`[v0]`8件除去。秘匿値ログ除去=`extract-order` の `{fileUri,name}`・`fileManagerName`／`crop-title-block`・`use-drawing-analysis` のファイル名。挙動・スキーマ・認証/暗号ロジック不変。ボット2件は REJECT-for-scope→`fix/crop-title-block-validation` へ。詳細は PR-10 節「実績(#238)」）
 - [ ] PR-11 fix-lint-baseline
 - [ ] PR-12 add-lint-typecheck
 
