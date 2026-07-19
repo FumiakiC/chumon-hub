@@ -5,7 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 // JWKS リゾルバを JWKS URL（issuer ごとに1つ）単位でモジュールスコープにメモ化する。
 // createRemoteJWKSet が返す関数は取得済み JWKS を内部キャッシュし、
 // cooldownDuration / cacheMaxAge の範囲で再取得を抑制する（jose 公式仕様）。
-// リクエスト毎に生成するとこのキャッシュが毎回捨てられるため、再利用する。
+// リクエスト毎に生成するとこのキャッシュが毎回捨てられるため、同じ URL なら再利用する。
 const remoteJWKSetCache = new Map<
   string,
   ReturnType<typeof createRemoteJWKSet>
