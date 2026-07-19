@@ -48,23 +48,15 @@ const ERROR_BY_CODE: Record<AppErrorCode, { ja: string; action: string }> = {
 
 /**
  * エラーを画面表示用に解決する。機械可読コードで分岐し（文字列 includes マッチは廃止）、
- * コードが無い場合は固定の汎用メッセージ（ERR_UNKNOWN）を返す。`raw` は内部ログ用途に
- * 限り、ユーザー向け `message` に内部詳細を埋め込まない。
+ * コードが無い場合は固定の汎用メッセージ（ERR_UNKNOWN）を返す。内部詳細（元メッセージ）は
+ * 返さない。必要なら呼び出し側が元の error を直接ログすること。
  */
 export function resolveError(error: unknown): {
   message: string
   action: string
-  raw: string
 } {
-  const raw =
-    (error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : null) || '予期せぬエラー'
-
   const code = getErrorCode(error)
   const info = code ? ERROR_BY_CODE[code] : ERROR_BY_CODE.ERR_UNKNOWN
 
-  return { message: info.ja, action: info.action, raw }
+  return { message: info.ja, action: info.action }
 }

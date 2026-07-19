@@ -264,20 +264,9 @@ export function useOrderProcessing() {
       // Store the raw JSON response for copy functionality
       setExtractedJson(result)
 
-      // APIレスポンスから直接 items を取得
+      // handleApiResponse で orderSchema による検証済みのため、items はそのまま利用できる
       const extracted = result
-
-      // Zodスキーマでランタイム検証
-      const parseResult = orderSchema.shape.items.safeParse(
-        extracted.items ?? []
-      )
-
-      if (!parseResult.success) {
-        console.error('[v0] Validation failed:', parseResult.error)
-        throw new AppError('ERR_INVALID_RESULT', 'データの形式が不正です')
-      }
-
-      const items = parseResult.data // 型は OrderLineItem[]（中央 orderSchema 由来）
+      const items = extracted.items // OrderLineItem[]（中央 orderSchema 由来）
 
       const mappedItems: ProductItem[] = items.map((item) => ({
         id: crypto.randomUUID(),
