@@ -2,6 +2,28 @@ import { type NextRequest } from 'next/server'
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
+// JWKS リゾルバを issuer(JWKS URL)単位でモジュールスコープにメモ化する。
+// createRemoteJWKSet が返す関数は取得済み JWKS を内部キャッシュし、
+// cooldownDuration / cacheMaxAge の範囲で再取得を抑制する（jose 公式仕様）。
+// リクエスト毎に生成するとこのキャッシュが毎回捨てられるため、再利用する。
+const remoteJWKSetCache = new Map<
+  string,
+  ReturnType<typeof createRemoteJWKSet>
+>()
+
+function getRemoteJWKSet(
+  jwksUrl: string
+): ReturnType<typeof createRemoteJWKSet> {
+  const cachedJWKSet = remoteJWKSetCache.get(jwksUrl)
+  if (cachedJWKSet) {
+    return cachedJWKSet
+  }
+
+  const jwks = createRemoteJWKSet(new URL(jwksUrl))
+  remoteJWKSetCache.set(jwksUrl, jwks)
+  return jwks
+}
+
 export async function verifyCloudflareAccess(
   request: NextRequest
 ): Promise<boolean> {
@@ -22,7 +44,7 @@ export async function verifyCloudflareAccess(
 
   const ISSUER = `https://${TEAM_DOMAIN}.cloudflareaccess.com`
   const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`
-  const jwks = createRemoteJWKSet(new URL(JWKS_URL))
+  const jwks = getRemoteJWKSet(JWKS_URL)
 
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (!token) {
