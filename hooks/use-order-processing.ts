@@ -57,29 +57,33 @@ export function useOrderProcessing() {
     useState<OrderExtractionResult | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
 
-  // Object URLのライフサイクル管理（自動生成・破棄）
+  const updateSelectedFile = (file: File | null) => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+    }
+
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null
+    previewUrlRef.current = nextPreviewUrl
+    setSelectedFile(file)
+    setPreviewUrl(nextPreviewUrl)
+  }
+
+  // Object URLのライフサイクル管理（アンマウント時の破棄）
   useEffect(() => {
-    if (!selectedFile) {
-      // ファイルなしの場合：previewUrlをクリア
-      setPreviewUrl(null)
-      return
-    }
-
-    // 新しいObject URLを生成
-    const objectUrl = URL.createObjectURL(selectedFile)
-    setPreviewUrl(objectUrl)
-
-    // クリーンアップ：コンポーネントアンマウント時やSelectedFileが変更されたときに実行
     return () => {
-      URL.revokeObjectURL(objectUrl)
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
+      }
     }
-  }, [selectedFile])
+  }, [])
 
   const processFile = (file: File) => {
     if (!file) return
 
-    setSelectedFile(file)
+    updateSelectedFile(file)
     setError(null)
     setLogs([])
     setProcessingStatus('idle')
@@ -106,11 +110,11 @@ export function useOrderProcessing() {
   const handleRemoveFile = () => {
     if (isLoading && abortControllerRef.current) {
       abortControllerRef.current.abort()
-      setSelectedFile(null)
+      updateSelectedFile(null)
       setError(null)
       // ログは残したままにする
     } else {
-      setSelectedFile(null)
+      updateSelectedFile(null)
       setError(null)
       setProcessingStatus('idle')
       setLogs([])
