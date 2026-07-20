@@ -271,6 +271,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **やらないこと**: フックの機能変更・UI変更（Phase 4+/対象外）。lint エラー解消の最小修正に限定。
 - **受け入れ条件**: `pnpm lint` が 0 error / プレビュー表示が従来通り。
 - **smoke test**: ファイル選択→プレビュー表示、選択解除→消去が従来通り。
+- **実績(#239, merged)**: squash `9b2935b`。`previewUrlRef` 追加＋`updateSelectedFile(file|null)` に selectedFile/previewUrl 更新と旧 Object URL の revoke を集約し、`useEffect` は依存 `[]`・アンマウント時 revoke のみ（body に同期 setState なし）へ変更。呼び出しは `processFile`×1・`handleRemoveFile`×2 を置換（error/logs/status 分岐は不変）。`pnpm lint` 0 error／`tsc --noEmit` 0／prettier 準拠・プレビュー挙動不変。Gemini 指摘1件は **REJECT**：「React 18 StrictMode でプレビュー破損」は ①実プロジェクトは React 19.2.7 ②提案コードは `setPreviewUrl(null)` で lint 未解消＋`eslint-disable` が非エラー行に付き "unused directive" 警告 ③StrictMode の再マウントは初回マウント時のみ（＝ファイル選択前で `previewUrlRef` は null）で主張の時系列が不成立、として一次情報(react.dev)で反証。dev 限定の Fast Refresh 差異は PR 本文で開示済み（production 影響なし）。
 
 ### PR-12 `ci/add-lint-typecheck`
 
@@ -302,7 +303,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-08 error-handling（**#236, merged**。`lib/errors.ts` 新設＝`APP_ERROR_CODES`/`AppError`/`ConfigError`/`getErrorCode`(型ガード)/`errorResponse`・`validationErrorResponse`(code別 client-safe 文言＋status)。`errorUtils.resolveError` を raw includes 分岐→code 分岐へ刷新し死に分岐 `'API_SECRET is missing'` を廃止（#204 実バグ是正）。`crypto.ts`/`check-document-type` の `(error as any).code` を型付き化＝**`(error as any)` 全撲滅(grep 0件)**、`extract-order`/`extract-drawing` の内部設定文言（`GOOGLE_API_KEY ...`）をクライアント応答から除去し汎用 code へ。order `handleApiResponse` に成功応答 zod 防御検証＋code 伝播。**残置**: check-document-type の orphan remote cleanup は未対応（別 fix 送り）。詳細は PR-08 節「実績(#236)」）
 - [x] PR-09 auth-jwks-singleton（**#237, merged**。`lib/auth-cloudflare.ts`: `createRemoteJWKSet` を関数内生成→モジュールスコープの `Map`（**キー=JWKS URL**＝issuer ごとに1つ）でメモ化。ヘルパ `getRemoteJWKSet` 追加、値型 `ReturnType<typeof createRemoteJWKSet>`(`as any` 不使用)。jose の JWKS 内部キャッシュ(cooldownDuration 既定30s / cacheMaxAge 既定10分)を跨リクエスト有効化。挙動不変(認証成功/失敗・issuer/audience 検証・dev スキップ)。コメント文言は #237 レビューで「issuer(JWKS URL)単位」→「JWKS URL（issuer ごとに1つ）単位」に修正。詳細は PR-09 節「実績(#237)」）
 - [x] PR-10 logger（**#238, merged**。`lib/logger.ts` 新設＝`debug`/`info` を本番抑制・`warn`/`error` 常時。`console.*`27件を logger 化・`[v0]`8件除去。秘匿値ログ除去=`extract-order` の `{fileUri,name}`・`fileManagerName`／`crop-title-block`・`use-drawing-analysis` のファイル名。挙動・スキーマ・認証/暗号ロジック不変。ボット2件は REJECT-for-scope→`fix/crop-title-block-validation` へ。詳細は PR-10 節「実績(#238)」）
-- [ ] PR-11 fix-lint-baseline
+- [x] PR-11 fix-lint-baseline（**#239, merged**。`hooks/use-order-processing.ts` の `react-hooks/set-state-in-effect` を解消＝Object URL 生成/破棄を effect からイベント起点 `updateSelectedFile` へ移し、`useEffect` はアンマウント revoke のみ（deps []）に。lint 0／tsc 0／prettier 準拠・挙動不変。Gemini「StrictMode 破損」指摘は REJECT（React 19／提案は lint 未達＋disable 位置誤り／StrictMode 再マウントは初回のみ＝選択前）。詳細は PR-11 節「実績(#239)」）
 - [ ] PR-12 add-lint-typecheck
 
 > リファクタ完了後、別計画書「Phase 4+ ロードマップ（抽出スキーマv2 / フロント業務UI / AIパイプライン最適化 / DB / PDF証憑 / ステータス棚卸し）」を起こす。
