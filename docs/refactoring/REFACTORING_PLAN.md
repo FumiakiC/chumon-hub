@@ -282,6 +282,7 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - **補足**: 将来の AIパイプライン最適化（Phase 4）に向けた **評価ハーネス / golden set** の置き場をここで用意しても良い（実装は Phase 4）。
 - **受け入れ条件**: PR で lint/型エラーが落ちる構成になる。
 - **smoke test**: 不要（CI設定）。
+- **実績（#240, merged）**: squash `f82f9d4`。`quality` ジョブを `build-check` と並列で追加（checkout@v5 / `pnpm/action-setup@v4` 版未指定＝`packageManager` の `pnpm@10.33.0` 採用 / `actions/setup-node@v6` Node 26・`cache: pnpm` / `pnpm install --frozen-lockfile` → `pnpm lint` → `pnpm typecheck` → `pnpm format:check`）。`build-check` は完全不変（`actions/checkout@v4` 据え置き＝v5 化は別 maintenance 送り）。計画の `pnpm exec tsc --noEmit` は **`typecheck` script 化**（`tsc --noEmit`）して `pnpm typecheck` 採用（local↔CI 対称）。typecheck・format:check は `if: ${{ !cancelled() }}` で先行失敗時も全チェック結果を提示。**計画外の必須修正**: `eslint` を `eslint-config-next` 経由の推移的依存→**明示的 devDependency へ昇格**（`^9.39.2`）。pnpm は推移的 bin を `.bin` にリンクせず、クリーンな `--frozen-lockfile`（＝CI 同条件）では `pnpm lint` が "Command not found" で落ちるため（コード自体は lint クリーン）。既存 9.39.2 の昇格のみ＝新規パッケージ無し・バージョン据え置き（lockfile 差分は importer 3行）。補足の **評価ハーネス / golden set** は用意せず Phase 4 送り。ボットレビューは付かずマージ（トリアージ無し）。クリーン main 適用で install(frozen)/lint/typecheck/format:check すべて exit 0・`git diff --check` clean を確認。
 
 ---
 
@@ -304,6 +305,6 @@ chumon-hub は **買い手（発注側）のツール**。最終形は「注文�
 - [x] PR-09 auth-jwks-singleton（**#237, merged**。`lib/auth-cloudflare.ts`: `createRemoteJWKSet` を関数内生成→モジュールスコープの `Map`（**キー=JWKS URL**＝issuer ごとに1つ）でメモ化。ヘルパ `getRemoteJWKSet` 追加、値型 `ReturnType<typeof createRemoteJWKSet>`(`as any` 不使用)。jose の JWKS 内部キャッシュ(cooldownDuration 既定30s / cacheMaxAge 既定10分)を跨リクエスト有効化。挙動不変(認証成功/失敗・issuer/audience 検証・dev スキップ)。コメント文言は #237 レビューで「issuer(JWKS URL)単位」→「JWKS URL（issuer ごとに1つ）単位」に修正。詳細は PR-09 節「実績(#237)」）
 - [x] PR-10 logger（**#238, merged**。`lib/logger.ts` 新設＝`debug`/`info` を本番抑制・`warn`/`error` 常時。`console.*`27件を logger 化・`[v0]`8件除去。秘匿値ログ除去=`extract-order` の `{fileUri,name}`・`fileManagerName`／`crop-title-block`・`use-drawing-analysis` のファイル名。挙動・スキーマ・認証/暗号ロジック不変。ボット2件は REJECT-for-scope→`fix/crop-title-block-validation` へ。詳細は PR-10 節「実績(#238)」）
 - [x] PR-11 fix-lint-baseline（**#239, merged**。`hooks/use-order-processing.ts` の `react-hooks/set-state-in-effect` を解消＝Object URL 生成/破棄を effect からイベント起点 `updateSelectedFile` へ移し、`useEffect` はアンマウント revoke のみ（deps []）に。lint 0／tsc 0／prettier 準拠・挙動不変。Gemini「StrictMode 破損」指摘は REJECT（React 19／提案は lint 未達＋disable 位置誤り／StrictMode 再マウントは初回のみ＝選択前）。詳細は PR-11 節「実績(#239)」）
-- [ ] PR-12 add-lint-typecheck
+- [x] PR-12 add-lint-typecheck（**#240, merged**。squash `f82f9d4`。CI に `quality` ジョブ追加＝`pnpm install --frozen-lockfile` → `pnpm lint` → `pnpm typecheck` → `pnpm format:check`（checkout@v5 / action-setup@v4 版未指定 / setup-node@v6 Node26 cache:pnpm）。`build-check` 不変。**計画外の必須修正**: `eslint` を推移的依存→明示的 devDependency 昇格（^9.39.2・pnpm が推移的 bin を張らず frozen install で `pnpm lint` が not found のため。既存版昇格でバージョン据え置き）。`typecheck` を script 化。`if: ${{ !cancelled() }}` で全チェック結果提示。評価ハーネス/golden set は Phase 4 送り。ボットレビュー無しでマージ。詳細は PR-12 節「実績(#240)」）
 
 > リファクタ完了後、別計画書「Phase 4+ ロードマップ（抽出スキーマv2 / フロント業務UI / AIパイプライン最適化 / DB / PDF証憑 / ステータス棚卸し）」を起こす。
