@@ -192,8 +192,10 @@
 ## 1. ドメインモデル
 
 ```
-Order（注文）………… 注No＝不変主キー。lifecycle_status（draft/仮発行/請書受領(仮)/本発行/
- │                    請書受領(本)/クローズ/キャンセル）のみ stored。進捗は導出。
+Order（注文）………… 注No＝不変主キー。lifecycle_status（draft/承認待ち/社内承認済/仮発行/
+ │                    請書受領(仮)/本発行/請書受領(本)/クローズ/キャンセル。§要件 2.1 と対応）
+ │                    のみ stored。進捗は導出。承認の多段（一次/最終）は ApprovalLog 側で表現し、
+ │                    lifecycle_status は「承認待ち/社内承認済」の粒度で持つ。
  ├─ OrderLine（明細行）… 品名・図番・発注数量・単価(null=協議中)・金額・摘要
  ├─ Receipt（入荷）1:N … 入荷日
  │    └─ ReceiptLine …… OrderLine 参照＋入荷数量
