@@ -40,7 +40,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.4",
+    "@tailwindcss/postcss": "^4.3.3",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/node": "^26.1.2",
     "@types/react": "^19",
