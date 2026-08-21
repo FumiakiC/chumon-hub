@@ -3,6 +3,12 @@ name: Build and Deploy
 on:
   push:
     branches: ['main', 'chore/docker-setup']
+    # ドキュメントのみの変更ではイメージ再ビルド・再デプロイを行わない。
+    # ベースイメージ (node:26-alpine) が可変タグのため、ソースが同一でも
+    # 再ビルドすると別物のイメージになりうる。不要な再デプロイは避ける。
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
