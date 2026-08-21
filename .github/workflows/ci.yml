@@ -17,14 +17,48 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # ビルドのみ行い、Pushはしない.
+      # load: true でビルド結果をローカル docker に取り込み、後続のスモークで起動する.
       - name: Build check
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
+          load: true
+          tags: chumon-hub:ci
           cache-from: type=gha
 
           cache-to: type=gha,mode=max
+
+      # ビルド成功だけでは実行時の起動失敗を検知できないため、
+      # 実際にコンテナを起動して / が 200 を返すことまで確認する.
+      # 検証パスの / は proxy.ts の matcher 外なので Cloudflare Access なしで応答する.
+      - name: Start container
+        run: docker run -d --name chumon-hub-smoke -p 3000:3000 chumon-hub:ci
+
+      - name: Smoke test (HTTP 200 on /)
+        run: |
+          for i in $(seq 1 30); do
+            if ! docker ps --filter 'name=chumon-hub-smoke' --filter 'status=running' --quiet | grep -q .; then
+              echo "::error::コンテナが起動直後に終了しました"
+              exit 1
+            fi
+            code=$(curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)
+            if [ "$code" = "200" ]; then
+              echo "スモーク成功: / が 200 を返しました (${i} 回目の試行)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::60 秒以内に / が 200 を返しませんでした (最後の応答: ${code:-none})"
+          exit 1
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs chumon-hub-smoke || true
+
+      - name: Clean up container
+        if: always()
+        run: docker rm -f chumon-hub-smoke || true
 
   quality:
     runs-on: ubuntu-latest
