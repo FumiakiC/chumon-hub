@@ -53,7 +53,7 @@ export function useProvisionalOrder() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // Analysis hook
-  const { handleAnalyzeAll } = useDrawingAnalysis(
+  const { handleAnalyzeAll, isAnalyzing } = useDrawingAnalysis(
     croppedFiles,
     dispatch,
     setCroppedFiles
@@ -317,6 +317,7 @@ export function useProvisionalOrder() {
     handleDeleteCroppedFile,
     handlePreviewFile,
     handleAnalyzeAll,
+    isAnalyzing,
     // Phase 2
     orderItems,
     selectedItem,

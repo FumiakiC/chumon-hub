@@ -24,6 +24,7 @@ export default function ProvisionalOrderPage() {
     handleDeleteCroppedFile,
     handlePreviewFile,
     handleAnalyzeAll,
+    isAnalyzing,
     orderItems,
     selectedItem,
     isSheetOpen,
@@ -94,6 +95,7 @@ export default function ProvisionalOrderPage() {
               onDeleteFile={handleDeleteCroppedFile}
               onPreviewFile={handlePreviewFile}
               onAnalyzeAll={handleAnalyzeAll}
+              isAnalyzing={isAnalyzing}
             />
 
             <AnalysisTable
