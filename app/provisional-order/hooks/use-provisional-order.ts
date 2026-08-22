@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 
 import { zodResolver } from '@hookform/resolvers/zod'
 
-import type { CropTitleBlockResponse } from '@/lib/ai/contracts'
+import { cropTitleBlock } from '@/lib/api/drawing-api'
+import { resolveError } from '@/lib/errorUtils'
 import { logger } from '@/lib/logger'
 
 import {
@@ -97,43 +98,39 @@ export function useProvisionalOrder() {
     }, 150)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('/api/crop-title-block', {
-        method: 'POST',
-        body: formData,
-      })
+      const base64 = await cropTitleBlock(file)
 
       clearInterval(progressInterval)
 
-      if (!response.ok) throw new Error('Failed to crop PDF')
-
-      const data: CropTitleBlockResponse = await response.json()
-      const croppedFile = data.croppedFiles?.[0]
-
-      if (croppedFile && croppedFile.base64) {
-        setCroppedFiles((prev) =>
-          prev.map((f) =>
-            f.id === fileId
-              ? {
-                  ...f,
-                  progress: 100,
-                  status: 'cropped',
-                  base64: croppedFile.base64,
-                }
-              : f
-          )
+      setCroppedFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? {
+                ...f,
+                progress: 100,
+                status: 'cropped',
+                base64,
+              }
+            : f
         )
-      } else {
-        throw new Error('Invalid response')
-      }
+      )
     } catch (error) {
       clearInterval(progressInterval)
       logger.error('Crop error:', error)
+      // 失敗を成功と同じ状態に落とすと、413/415/500 が「クロップ済」に見えてしまう。
+      // 失敗は失敗として保持し、画面と件数の双方に反映させる。
+      const { message, action } = resolveError(error)
       setCroppedFiles((prev) =>
         prev.map((f) =>
-          f.id === fileId ? { ...f, progress: 100, status: 'cropped' } : f
+          f.id === fileId
+            ? {
+                ...f,
+                progress: 100,
+                status: 'error',
+                errorMessage: message,
+                errorAction: action,
+              }
+            : f
         )
       )
     }
@@ -289,7 +286,11 @@ export function useProvisionalOrder() {
   const croppingCount = croppedFiles.filter(
     (f) => f.status === 'cropping'
   ).length
-  const croppedCount = croppedFiles.filter((f) => f.status === 'cropped').length
+  // 解析側（use-drawing-analysis）の絞り込みと同一条件にする。条件がずれると
+  // 「すべて解析 (N件)」の N が実際に解析される件数と食い違う。
+  const croppedCount = croppedFiles.filter(
+    (f) => f.status === 'cropped' && f.base64
+  ).length
   const completedCount = orderItems.filter(
     (i) => i.status === 'completed'
   ).length

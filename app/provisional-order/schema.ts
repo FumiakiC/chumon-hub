@@ -4,7 +4,7 @@ import * as z from 'zod'
 // Phase 1: Cropped Files
 // ---------------------------------------------------------------------------
 
-export type CropStatus = 'cropping' | 'cropped' | 'completed'
+export type CropStatus = 'cropping' | 'cropped' | 'error' | 'completed'
 
 export interface CroppedFile {
   id: string
@@ -13,6 +13,10 @@ export interface CroppedFile {
   progress: number
   thumbnailUrl: string
   base64?: string
+  /** status === 'error' のときのみ設定される（resolveError の日本語メッセージ）。 */
+  errorMessage?: string
+  /** status === 'error' のときのみ設定される（resolveError の推奨アクション）。 */
+  errorAction?: string
 }
 
 // ---------------------------------------------------------------------------
