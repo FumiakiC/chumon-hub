@@ -69,6 +69,7 @@ export interface UploadPanelProps {
   onDeleteFile: (fileId: string) => void
   onPreviewFile: (file: CroppedFile) => void
   onAnalyzeAll: () => void
+  isAnalyzing: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,7 @@ export function UploadPanel({
   onDeleteFile,
   onPreviewFile,
   onAnalyzeAll,
+  isAnalyzing,
 }: UploadPanelProps) {
   return (
     <Card className="lg:w-1/3">
@@ -194,9 +196,21 @@ export function UploadPanel({
         )}
 
         {/* Analyze trigger */}
-        {croppedCount > 0 && (
-          <Button onClick={onAnalyzeAll} className="w-full gap-2">
-            <Play className="size-4" /> すべて解析 ({croppedCount}件)
+        {(croppedCount > 0 || isAnalyzing) && (
+          <Button
+            onClick={onAnalyzeAll}
+            disabled={isAnalyzing || croppedCount === 0}
+            className="w-full gap-2"
+          >
+            {isAnalyzing ? (
+              <>
+                <Spinner className="size-4" /> 解析中...
+              </>
+            ) : (
+              <>
+                <Play className="size-4" /> すべて解析 ({croppedCount}件)
+              </>
+            )}
           </Button>
         )}
       </CardContent>
