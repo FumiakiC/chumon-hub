@@ -22,6 +22,81 @@ export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 /**
+ * リクエストボディ全体（multipart の境界文字列・パートヘッダを含む）の上限。
+ * MAX_UPLOAD_BYTES に multipart オーバーヘッド分の余裕を足した値。
+ * next.config.mjs の proxyClientMaxBodySize（32MB）より必ず小さく保つこと。
+ * この大小関係が崩れると、切り詰められたボディが route に届く経路が復活する。
+ */
+export const MAX_REQUEST_BYTES = 26 * 1024 * 1024
+
+/** checkRequestBodySize の結果。 */
+export type RequestSizeCheck =
+  | { ok: true }
+  | { ok: false; status: 413; error: string }
+
+/**
+ * Content-Length による、パース前の早期サイズガード。
+ *
+ * proxy 使用時の Next.js はボディを上限までしかバッファせず、超過分をサイレントに
+ * 切り詰める（リクエストは失敗しない）。そのまま formData() に渡すと multipart が
+ * 壊れて throw し汎用 500 になるため、パース前に明示的な 413 へ落とす。
+ *
+ * ヘッダが無い／10 進の数字列として解釈できない場合は判定不能として通す。その場合も
+ * 後段の validateUploadFile がファイル単体を MAX_UPLOAD_BYTES で弾く。
+ */
+export function checkRequestBodySize(request: Request): RequestSizeCheck {
+  const rawContentLength = request.headers.get('content-length')
+  if (rawContentLength === null) {
+    logger.warn(
+      'Content-Length is missing; skipping the early request size guard'
+    )
+    return { ok: true }
+  }
+
+  // Number() の暗黙変換は緩すぎる（'' → 0、'0x10' → 16、'1e3' → 1000）。
+  // 空文字が 0 として通ると「判定不能」の警告が出ず、デプロイ後に
+  // Content-Length が経路上で保たれているかをログで観測できなくなる。
+  // 10 進の数字列だけを受け付け、それ以外は判定不能として警告のうえ通す。
+  const normalizedContentLength = rawContentLength.trim()
+  if (!/^\d+$/.test(normalizedContentLength)) {
+    logger.warn(
+      'Content-Length is not a valid size; skipping the early request size guard'
+    )
+    return { ok: true }
+  }
+
+  const contentLength = Number(normalizedContentLength)
+
+  if (contentLength > MAX_REQUEST_BYTES) {
+    return { ok: false, status: 413, error: 'Request body too large' }
+  }
+
+  return { ok: true }
+}
+
+/** readFormData の結果。 */
+export type FormDataParse =
+  | { ok: true; formData: FormData }
+  | { ok: false; status: 400; error: string }
+
+/**
+ * multipart ボディのパースを集中実装する。
+ * パース失敗はサーバ側の異常ではなく壊れた入力なので 500 ではなく 400 に落とす
+ * （Content-Length 欠落時に切り詰めが起きた場合の最後の受け皿も兼ねる）。
+ * 例外オブジェクトはログに渡さず、error.name のみを残す。
+ */
+export async function readFormData(request: Request): Promise<FormDataParse> {
+  try {
+    const formData = await request.formData()
+    return { ok: true, formData }
+  } catch (error) {
+    const name = error instanceof Error ? error.name : 'UnknownError'
+    logger.warn(`Failed to parse the multipart request body (${name})`)
+    return { ok: false, status: 400, error: 'Malformed request body' }
+  }
+}
+
+/**
  * validateUploadFile の結果。成功時は検証済みバッファと「検出した」メタを返す。
  * 失敗時は HTTP ステータスとメッセージを持ち、呼び出し側の route が応答を組み立てる
  * （helper は HTTP を投げない＝throw しない。型付きエラーの本格導入は PR-08）。

@@ -1,7 +1,9 @@
 import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
 import {
+  checkRequestBodySize,
   deleteRemoteFile,
+  readFormData,
   validateUploadFile,
   withUploadedFile,
 } from '@/lib/ai/pipeline'
@@ -18,7 +20,19 @@ export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData()
+    // proxy のボディバッファ上限による切り詰めを、パース前に明示的な 413 へ落とす。
+    const sizeCheck = checkRequestBodySize(req)
+    if (!sizeCheck.ok) {
+      logger.warn('Request rejected by the early body size guard')
+      return validationErrorResponse(sizeCheck.status)
+    }
+
+    const parsed = await readFormData(req)
+    if (!parsed.ok) {
+      return validationErrorResponse(parsed.status)
+    }
+
+    const { formData } = parsed
     const file = formData.get('file')
     const mimeType = formData.get('mimeType')
 
