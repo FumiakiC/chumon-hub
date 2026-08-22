@@ -41,7 +41,7 @@ export type RequestSizeCheck =
  * 切り詰める（リクエストは失敗しない）。そのまま formData() に渡すと multipart が
  * 壊れて throw し汎用 500 になるため、パース前に明示的な 413 へ落とす。
  *
- * ヘッダが無い／数値として解釈できない場合は判定不能として通す。その場合も
+ * ヘッダが無い／10 進の数字列として解釈できない場合は判定不能として通す。その場合も
  * 後段の validateUploadFile がファイル単体を MAX_UPLOAD_BYTES で弾く。
  */
 export function checkRequestBodySize(request: Request): RequestSizeCheck {
@@ -53,13 +53,19 @@ export function checkRequestBodySize(request: Request): RequestSizeCheck {
     return { ok: true }
   }
 
-  const contentLength = Number(rawContentLength)
-  if (!Number.isFinite(contentLength) || contentLength < 0) {
+  // Number() の暗黙変換は緩すぎる（'' → 0、'0x10' → 16、'1e3' → 1000）。
+  // 空文字が 0 として通ると「判定不能」の警告が出ず、デプロイ後に
+  // Content-Length が経路上で保たれているかをログで観測できなくなる。
+  // 10 進の数字列だけを受け付け、それ以外は判定不能として警告のうえ通す。
+  const normalizedContentLength = rawContentLength.trim()
+  if (!/^\d+$/.test(normalizedContentLength)) {
     logger.warn(
       'Content-Length is not a valid size; skipping the early request size guard'
     )
     return { ok: true }
   }
+
+  const contentLength = Number(normalizedContentLength)
 
   if (contentLength > MAX_REQUEST_BYTES) {
     return { ok: false, status: 413, error: 'Request body too large' }
