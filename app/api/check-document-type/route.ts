@@ -1,6 +1,10 @@
 import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
-import { validateUploadFile, withUploadedFile } from '@/lib/ai/pipeline'
+import {
+  deleteRemoteFile,
+  validateUploadFile,
+  withUploadedFile,
+} from '@/lib/ai/pipeline'
 import { documentTypeSchema } from '@/lib/ai/schemas'
 import { encryptFileToken } from '@/lib/crypto'
 import {
@@ -72,6 +76,14 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
           },
         })
 
+        // 見積書・注文書でないと判定した場合、クライアントは extract-order を呼ばない＝
+        // 誰もリモートファイルを解放しないため、ここで明示的に削除し、参照先が存在しない
+        // トークンも返さない（応答契約は checkDocumentTypeResponseSchema のユニオン）。
+        if (!result.isQuotation) {
+          await deleteRemoteFile(apiKey, uploaded.name)
+          return result
+        }
+
         // Generate encrypted token containing file reference
         const fileToken = encryptFileToken({
           fileUri: uploaded.fileUri,
@@ -85,7 +97,7 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
           fileId: fileToken, // Return encrypted token for the next API call
         }
       },
-      { deleteRemoteAfter: false }
+      { remoteCleanup: 'on-error' }
     )
 
     return Response.json(responseBody)

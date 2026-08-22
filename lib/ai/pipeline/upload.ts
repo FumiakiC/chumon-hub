@@ -6,6 +6,7 @@ import os from 'os'
 import path from 'path'
 
 import type { UploadedFile } from '@/lib/ai/pipeline/types'
+import { logger } from '@/lib/logger'
 
 /** アップロード受け口で許可する MIME（マジックバイト検証で使用）。 */
 export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
@@ -83,20 +84,65 @@ export interface UploadParams {
   apiKey: string
 }
 
+/**
+ * Google File API 上のリモートファイルを削除するタイミング。
+ * - 'always': 成否によらず削除する（同一リクエスト内で使い切る場合）
+ * - 'on-error': 失敗した場合のみ削除する（成功時は後続へ寿命を手渡す場合）
+ * - 'never': ここでは削除しない（呼び出し側が寿命の責任を持つ）
+ */
+export type RemoteCleanupPolicy = 'always' | 'on-error' | 'never'
+
 export interface WithUploadedFileOptions {
   /**
-   * handler 完了後（および handler が throw した場合も finally で）リモートの
-   * Google File API 上のファイルを削除するか。
-   * - extract-drawing: true（同一リクエスト内で使い切る）
-   * - check-document-type: false（暗号トークンで後続 extract-order へ寿命を手渡す）
+   * リモート（Google File API）のファイルを削除するタイミング。
+   * - extract-drawing: 'always'（同一リクエスト内で使い切る）
+   * - check-document-type: 'on-error'（成功時は暗号トークンで後続 extract-order へ
+   *   寿命を手渡すため削除してはいけない。失敗時は手渡しが起きないので削除する）
    */
-  deleteRemoteAfter: boolean
+  remoteCleanup: RemoteCleanupPolicy
+}
+
+/**
+ * エラーから HTTP ステータスだけを取り出す（`as any` を使わない）。
+ * `@google/genai` の `ApiError` は `status: number` を持つが、`message` は API の
+ * エラー応答本文そのもの（JSON 文字列）であり、リソース名などを含みうる。
+ */
+function getHttpStatus(error: unknown): number | undefined {
+  if (typeof error === 'object' && error !== null && 'status' in error) {
+    const { status } = error
+    if (typeof status === 'number') return status
+  }
+  return undefined
+}
+
+/**
+ * Google File API 上のファイルを削除する。冪等（既に存在しない場合も throw しない）。
+ *
+ * 削除失敗で呼び出し元のリクエストを失敗させないが、握り潰すと「検知できない orphan」
+ * になるため warn を残す。ログに出すのは固定文言＋HTTPステータス＋エラー種別名のみで、
+ * 例外オブジェクトはそのまま渡さない（SDK の例外メッセージは API のエラー応答本文を
+ * そのまま含み、リモートファイル名などが混入しうるため）。
+ */
+export async function deleteRemoteFile(
+  apiKey: string,
+  name: string
+): Promise<void> {
+  try {
+    const ai = new GoogleGenAI({ apiKey })
+    await ai.files.delete({ name })
+  } catch (error) {
+    const status = getHttpStatus(error)
+    const kind = error instanceof Error ? error.name : typeof error
+    logger.warn(
+      `Failed to delete remote file (orphan may remain). kind=${kind} status=${status ?? 'n/a'}`
+    )
+  }
 }
 
 /**
  * tmp 書き込み → Google File API アップロード → tmp 即時削除 → handler 実行
  * を集約する。tmp は必ず finally で後始末（冪等）。リモートファイルの寿命は
- * options.deleteRemoteAfter で制御する。
+ * options.remoteCleanup で制御する。
  *
  * handler は upload 済みの `UploadedFile` を受け取り、任意の結果 T を返す
  * （classify / extract ステージ相当）。
@@ -110,6 +156,8 @@ export async function withUploadedFile<T>(
 
   let tmpFilePath: string | null = null
   let remoteName: string | null = null
+  /** try 内で throw されたか（＝このリクエストが失敗したか）。 */
+  let failed = false
 
   try {
     tmpFilePath = path.join(os.tmpdir(), `upload_${crypto.randomUUID()}.${ext}`)
@@ -141,6 +189,9 @@ export async function withUploadedFile<T>(
     }
 
     return await handler(uploaded)
+  } catch (error) {
+    failed = true
+    throw error
   } finally {
     if (tmpFilePath) {
       try {
@@ -149,13 +200,12 @@ export async function withUploadedFile<T>(
         // 既に削除済み等は無視（冪等な後始末）。
       }
     }
-    if (options.deleteRemoteAfter && remoteName) {
-      try {
-        const ai = new GoogleGenAI({ apiKey })
-        await ai.files.delete({ name: remoteName })
-      } catch {
-        // リモート cleanup 失敗はリクエスト自体を失敗させない。
-      }
+    if (
+      remoteName &&
+      (options.remoteCleanup === 'always' ||
+        (options.remoteCleanup === 'on-error' && failed))
+    ) {
+      await deleteRemoteFile(apiKey, remoteName)
     }
   }
 }

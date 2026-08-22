@@ -58,7 +58,7 @@ export async function POST(req: Request) {
           drawingNo: normalizeDrawingNo(result.drawingNo),
         }
       },
-      { deleteRemoteAfter: true }
+      { remoteCleanup: 'always' }
     )
 
     return Response.json(responseBody)

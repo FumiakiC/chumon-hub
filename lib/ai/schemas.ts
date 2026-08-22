@@ -16,10 +16,25 @@ export const documentTypeSchema = z.object({
     .describe('Short reason for the classification in Japanese'),
 })
 
-/** check-document-type の応答契約（判定結果 + 暗号化ファイルトークン）。 */
-export const checkDocumentTypeResponseSchema = documentTypeSchema.extend({
-  fileId: z.string(),
-})
+/**
+ * check-document-type の応答契約。
+ *
+ * 見積書・注文書と判定した場合のみ、後続 extract-order へ渡す暗号化ファイルトークン
+ * (fileId) を含む。非該当と判定した場合はリモートファイルを即時削除するため、
+ * 参照先が存在しない fileId を返さない（isQuotation を判別子とするユニオン）。
+ */
+export const checkDocumentTypeResponseSchema = z.discriminatedUnion(
+  'isQuotation',
+  [
+    documentTypeSchema.extend({
+      isQuotation: z.literal(true),
+      fileId: z.string(),
+    }),
+    documentTypeSchema.extend({
+      isQuotation: z.literal(false),
+    }),
+  ]
+)
 
 export const orderSchema = z.object({
   items: z
