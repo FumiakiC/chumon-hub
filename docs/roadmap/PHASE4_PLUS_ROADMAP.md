@@ -146,11 +146,14 @@
 - **既知バグ（2026-08-22 / `fix/analyze-double-submit` 完了 #299）**: 仮注文書作成画面の「すべて解析」ボタンに実行中ガードが無く、連打すると `ADD_ITEMS` が同一 `id`（`CroppedFile.id` を流用）の明細行を重複 append する。React の duplicate key 警告（`AnalysisTable.tsx`）は症状にすぎず、実害は**明細行の同一性の崩壊**＝`UPDATE_ITEM` / `REMOVE_ITEM` が id 一致行を全件処理するため、重複行は常に同期更新され、1行だけ削除しようとすると両方消える。加えて Gemini API を件数分二重に呼び、チャンク単位のレート制御も無効化される。連打はトリガーの一つにすぎず、**投入済みファイルが `status: 'cropped'` のまま残る**ため解析完了後の再押下でも同じ重複が起きる。UI は Phase 5 後に作り直す前提だが、明細行は仮注文書の中身そのもの（§2.2）のため放置しない。対応は (a) 実行中の再入禁止（同期的な ref ガード ＋ ボタン disabled）、(b) 明細化済み `CroppedFile` の消費（`status: 'completed'` へ遷移させ再投入させない）、(c) **明細行 id を入力ファイル id から分離**（行ごとに `crypto.randomUUID()`）の3点。
   - **(c) を本 fix に含める判断（2026-08-22 決定）**: 当初は UI 作り直しへ繰り延べる方針だったが、(a)(b) が「重複行を作らせない」ガードであるのに対し (c) は「重複行が万一できても業務データが壊れない」構造的保証であり、変更が `use-drawing-analysis.ts` 内に閉じる（明細行と入力ファイルを id で突き合わせる箇所は他に存在しないことを実コードで確認）ため、繰り延べる理由がないと判断した。
   - 原則（実装済み・UI 作り直し後も維持する）: **明細行の id は行の identity であり、入力ファイルの id と同一視しない**（1入力→N明細になる split 実装後はなおさら成立しない。§3.2）。明細→入力ファイルの逆参照が必要になった時点で `OrderItem.sourceFileId` 等を追加する（現時点では読み手がいないため持たない）。
-- **既知バグ（2026-08-22 / #301 のスモークで判明。`fix/crop-error-state` で別途対応）**: `use-provisional-order.ts` の `processCrop` は catch 節で `{ progress: 100, status: 'cropped' }` を設定するため、**`/api/crop-title-block` が 400 / 413 / 415 / 500 のいずれを返しても UI 上は青い「クロップ済」バッジになる**。失敗が一切表示されない。#301 以前から存在するクライアント側の既存バグであり、#301 の回帰ではない。
+- **既知バグ（2026-08-22 / #301 のスモークで判明 → `fix/crop-error-state` で完了 #304 / 2026-08-23）**: `use-provisional-order.ts` の `processCrop` は catch 節で `{ progress: 100, status: 'cropped' }` を設定するため、**`/api/crop-title-block` が 400 / 413 / 415 / 500 のいずれを返しても UI 上は青い「クロップ済」バッジになる**。失敗が一切表示されない。#301 以前から存在するクライアント側の既存バグであり、#301 の回帰ではない。
   - **業務データは壊れない**: 解析への投入は `f.status === 'cropped' && f.base64` で絞られ、失敗ファイルは `base64` を持たないため解析に流れない（方針「抽出データと業務データの分離」は維持されている）。
   - **実害はカウントと導線**: `croppedCount` は `status === 'cropped'` のみで数えるため「すべて解析 (N件)」の N が失敗分だけ水増しされ、**全件失敗時はボタンが活性なのに押しても何も起きない**（`handleAnalyzeAll` が `croppedReadyFiles.length === 0` で即 return）。
   - **#301 の価値を打ち消している**: #301 で 25MB 超が正しく 413 を返すようになったが、この画面ではその 413 が「クロップ済」として握り潰されるため、サーバ側の改善がユーザーに届かない。エポック0 内での優先度は高い。
-  - **修正の当たり所**: `CropStatus` は `'cropping' | 'cropped' | 'completed'` で **`'error'` を持たない**（`OrderItemStatus` は持つ＝非対称）。型（`schema.ts`）・バッジ（`UploadPanel.tsx` の `CropStatusBadge`）・カウント（`croppedCount`）の3箇所に手が入る。サーバ応答のステータスコードを UI 文言へ写像する粒度（413 は「サイズ超過」、415 は「PDF以外」等）は fix 着手時に決める。
+  - **実装（#304）**: 根本原因は `CropStatus` が `'error'` を持たず（`OrderItemStatus` は持つ＝非対称）、catch 節が「嘘の成功」以外を書けない構造だったこと。型に失敗を表現させたうえで、`CroppedFile` に `errorMessage` / `errorAction` を保持する。
+  - **文言の写像は `code` 経由に決定（2026-08-23）**: HTTP ステータスを UI 文言へ直接写像するのではなく、応答本文の `code` を `resolveError` に渡して組み立てる（PR-08 で確立した「文字列マッチ廃止・code 分岐」の単一真実源に従う）。`code` を持たない応答（crop route の素の 400 / 500、`proxy.ts` の 401）のためだけに、HTTP ステータス由来の fallback（400→`ERR_VALIDATION` / 401→`ERR_UNAUTHORIZED` / 413→`ERR_FILE_TOO_LARGE` / 415→`ERR_UNSUPPORTED_MEDIA` / その他→`ERR_REQUEST_FAILED`）を `lib/api/drawing-api.ts` に置く。画面に出るのは `resolveError` の文言のみで、サーバ本文の生メッセージはログに留める。
+  - **件数条件の統一**: `croppedCount` を解析側の絞り込み（`status === 'cropped' && base64`）と同一条件に揃えた。条件がずれていたことが「ボタンは活性なのに押しても何も起きない」の直接原因であり、**カウントと実処理の述語を分けない**ことを原則として維持する（UI 作り直し後も同様）。
+  - **fetch 実装の一本化**: `use-provisional-order.ts` に重複していた fetch を `lib/api/drawing-api.ts` の `cropTitleBlock`（従来は呼び出し元ゼロのデッドコード）へ統合し、`AppError` を throw する実装にした。
 
 ### 3.5 PDF証憑（Phase 6）
 
@@ -305,7 +308,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 
 | 順 | エポック | ブランチ prefix | 内容 | 依存 |
 |---|---|---|---|---|
-| 0 | fix 5本 | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ ~~proxy ボディ上限~~（**完了 #301 / 2026-08-22**。25MB ハードリミットが到達不能な状態を解消。§3.2）／ ~~解析ボタン二重押下~~（**完了 #299 / 2026-08-22**。明細行の同一性が壊れる実バグ。§3.4）／ **クロップ失敗の UI 表示**（`fix/crop-error-state`。#301 のスモークで判明。失敗が「クロップ済」に見え 413 が握り潰される。§3.4） | なし（即着手可） |
+| 0 | fix 5本（**完了 / 2026-08-23**） | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ ~~proxy ボディ上限~~（**完了 #301 / 2026-08-22**。25MB ハードリミットが到達不能な状態を解消。§3.2）／ ~~解析ボタン二重押下~~（**完了 #299 / 2026-08-22**。明細行の同一性が壊れる実バグ。§3.4）／ ~~クロップ失敗の UI 表示~~（**完了 #304 / 2026-08-23**。失敗が「クロップ済」に見え 413 が握り潰される問題を解消。§3.4） | なし（消化済み） |
 | 1 | **Phase 4a** | `feat/eval-harness` | golden set 正解ラベル付与＋評価ハーネス | なし |
 | 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（**2026-10-16 期限**。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
 | 3 | **Phase 4b** | `feat/order-schema-v2` | 2層スキーマ分離＋v2 項目反映＋**ページ分割（split）ステージ・DoSハードリミット**（複数PRに分割） | 要件定義確定 |
@@ -316,7 +319,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 
 - 各エポックは着手時に「1 PR = 1 関心事」の粒度へ分割し、詳細計画を本書または独立文書に展開する。
 
-### エポック0 の申し送り（#297 / #299 / #301 由来）
+### エポック0 の申し送り（#297 / #299 / #301 / #304 由来）
 
 - **リモートファイル寿命の設計（決定・実装済み）**: Google File API 上のファイルの寿命は `withUploadedFile` の `remoteCleanup: 'always' | 'on-error' | 'never'` で制御する。`check-document-type` は `'on-error'`（成功時は暗号トークンで `extract-order` へ寿命を手渡すため削除しない）。**「トークンの手渡しが起きなかった経路はすべて orphan になる」**のが本質で、handler の throw だけでなく **`isQuotation: false` 判定時も orphan** になっていた（2026-08-20 の残置ファイルとして実発生を確認）。後者は route 内で明示削除し、応答契約 `checkDocumentTypeResponseSchema` を `isQuotation` の判別可能ユニオンにして、参照先が存在しない `fileId` を返さない構造にした。
 - **残存する orphan（Phase 5 で解消）**: 判定成功後にユーザーがブラウザを閉じる等で `extract-order` が呼ばれないケース。トークン TTL 5分に対しファイルは48時間残る。リクエストのライフサイクルから切り離した寿命管理が要るため、**非同期ジョブ実行基盤（基本設計 §3）と同時に解消**する。
@@ -327,6 +330,8 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 - **#301 由来: 本番経路での `Content-Length` 保持を観測する**: Cloudflare エッジ→origin が chunked になると早期ガードが不発になる。Pod ログに `Content-Length is missing` / `is not a valid size` が出ていないかを確認し、出ている場合は `readFormData` の 400 が唯一の受け皿になっている状態として別途対処を検討する（32MB 未満は正しく 413 に落ちるため致命ではない）。あわせて Cloudflare ゾーンの Maximum Upload Size を 25MB 未満に下げていないかを確認する（Free/Pro の既定 100MB なら律速しない）。
 - **#301 由来: メモリと同時実行**: `replicas: 1` / memory limit 1Gi に対し、25MB アップロード1本で proxy バッファ＋`File`＋`Buffer` の3コピー ≈ 75〜100MB。バッファ上限を 32MB に留めたのはこのため。**同時実行制御を入れずに上限をさらに引き上げてはならない**。Phase 4b の DoS ハードリミット（ページ数・タイムアウト）と同時に設計する。
 - **#301 由来: 認証の置き場所とボディバッファ（Phase 5 / Auth0）**: ボディバッファは `proxy.ts` の matcher に `/api/:path*` が含まれることの副作用。認証を DAL / Route Handler 側へ移せば `proxyClientMaxBodySize` 自体が不要になりうる。ADR-2（Auth0）着手時の設計材料として §3.2 に詳述。
+- **#304 由来: HTTP エラー応答→`AppError` の変換が2箇所に分かれている**: crop 経路は `lib/api/drawing-api.ts` の `fallbackCodeForStatus` / `toAppError` で解消したが、本注文経路の `hooks/use-order-processing.ts` `handleApiResponse` は **fallback コードを呼び出し側が渡す設計**（`ERR_CLASSIFY` / `ERR_EXTRACT`）のため、`proxy.ts` が返す `code` なしの 401 を必ず誤写像する（Cloudflare Access のセッション切れが「リクエスト失敗」と案内される）。統合は **Phase 4b（`lib/ai/contracts.ts` の zod 化）** と同時に行う: `handleApiResponse` は「エラー応答→`AppError`」と「成功応答の zod 検証」の2つを担っており、**切り出すべきは前者のみ**。fix PR で本注文側の fallback の決まり方を変えるのは挙動変更にあたるため見送った。
+- **#304 由来: 仮注文画面の入力バリデーションが無言**: `use-provisional-order.ts` の `handleFiles` は PDF 以外（`file.type` と拡張子の双方が一致しないもの）を `croppedFiles` に追加せず**無言で破棄**する。ユーザーには何も表示されないため「ファイルを選んだのに画面が変わらない」状態になる。`'error'` 状態は #304 で導入済みなので、弾いたファイルを error 行として出せば同じ枠組みで可視化できる。§3.4 の UI 作り直しに送らず単独 fix にする価値があるかは、実機での再現条件（特にモバイルのファイルピッカーが `type` を空で返すケース）を確認してから判断する。
 - 進捗チェックリストは各エポックの詳細計画側で管理する（本書は方針と順序の正とする）。
 
 ## 5. 本書の変更管理
