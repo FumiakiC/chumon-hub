@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { PDFDocument } from 'pdf-lib'
 
-import { validateUploadFile } from '@/lib/ai/pipeline'
+import {
+  checkRequestBodySize,
+  readFormData,
+  validateUploadFile,
+} from '@/lib/ai/pipeline'
 import { validationErrorResponse } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 
@@ -97,8 +101,20 @@ function detectPageSize(widthPt: number, heightPt: number): ISOSize {
 
 export async function POST(request: NextRequest) {
   try {
-    // FormDataを取得
-    const formData = await request.formData()
+    // proxy のボディバッファ上限による切り詰めを、パース前に明示的な 413 へ落とす。
+    const sizeCheck = checkRequestBodySize(request)
+    if (!sizeCheck.ok) {
+      logger.warn('Request rejected by the early body size guard')
+      return validationErrorResponse(sizeCheck.status)
+    }
+
+    // FormDataを取得（パース失敗は壊れた入力なので 400。500 に落とさない）
+    const parsed = await readFormData(request)
+    if (!parsed.ok) {
+      return validationErrorResponse(parsed.status)
+    }
+
+    const { formData } = parsed
     // `as File[]` は string エントリを File と偽って通し、後段の file.type 参照で
     // TypeError → 500 を招くため除去する。実体の検証は validateUploadFile に委譲。
     const files = formData.getAll('file')
