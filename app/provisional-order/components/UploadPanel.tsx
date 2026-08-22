@@ -1,6 +1,13 @@
 'use client'
 
-import { CheckCircle2, Crop, Play, Trash2, UploadCloud } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Crop,
+  Play,
+  Trash2,
+  UploadCloud,
+} from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,6 +45,15 @@ function CropStatusBadge({ status }: { status: CropStatus }) {
           className="gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
         >
           <Crop className="size-3" /> クロップ済
+        </Badge>
+      )
+    case 'error':
+      return (
+        <Badge
+          variant="secondary"
+          className="gap-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+        >
+          <AlertCircle className="size-3" /> 失敗
         </Badge>
       )
     case 'completed':
@@ -172,6 +188,18 @@ export function UploadPanel({
                           >
                             プレビュー確認
                           </button>
+                        )}
+                        {file.status === 'error' && file.errorMessage && (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] text-red-600 dark:text-red-400">
+                              {file.errorMessage}
+                            </span>
+                            {file.errorAction && (
+                              <span className="text-muted-foreground text-[10px]">
+                                {file.errorAction}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </TableCell>
