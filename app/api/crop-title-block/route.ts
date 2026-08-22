@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { PDFDocument } from 'pdf-lib'
 
+import { validateUploadFile } from '@/lib/ai/pipeline'
+import { validationErrorResponse } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 
 // 単位変換定数: 1mm ≒ 2.8346ポイント
@@ -97,7 +99,9 @@ export async function POST(request: NextRequest) {
   try {
     // FormDataを取得
     const formData = await request.formData()
-    const files = formData.getAll('file') as File[]
+    // `as File[]` は string エントリを File と偽って通し、後段の file.type 参照で
+    // TypeError → 500 を招くため除去する。実体の検証は validateUploadFile に委譲。
+    const files = formData.getAll('file')
 
     if (!files || files.length === 0) {
       return NextResponse.json(
@@ -110,20 +114,23 @@ export async function POST(request: NextRequest) {
 
     // OOM回避のため並列処理を避け、1件ずつ順次処理する
     for (const file of files) {
-      // PDFファイルかチェック
-      if (!file.type.includes('pdf') && !file.name.endsWith('.pdf')) {
-        logger.warn('Skipping non-PDF file')
-        croppedFileResults.push(null)
-        continue
+      // 入力検証は集中実装に委譲する（instanceof File → 400 / 25MB 超過 → 413 /
+      // マジックバイト不一致 → 415）。申告値 file.type・拡張子は詐称可能なので信頼しない。
+      const validation = await validateUploadFile(file)
+      if (!validation.ok) {
+        logger.warn(`Upload validation failed (status: ${validation.status})`)
+        return validationErrorResponse(validation.status)
+      }
+
+      // 許可 MIME には画像も含まれるが、本ルートは pdf-lib に渡すため PDF のみ通す。
+      if (validation.mimeType !== 'application/pdf') {
+        logger.warn('Rejecting non-PDF upload')
+        return validationErrorResponse(415)
       }
 
       try {
-        // ファイルをArrayBufferとして読み込む
-        const arrayBuffer = await file.arrayBuffer()
-        const uint8Array = new Uint8Array(arrayBuffer)
-
-        // PDFドキュメントをロード
-        const pdfDoc = await PDFDocument.load(uint8Array)
+        // 検証済みバッファをそのまま使う（arrayBuffer の二重読み込みと余分なコピーを避ける）
+        const pdfDoc = await PDFDocument.load(validation.buffer)
 
         // ページ数を確認
         const pageCount = pdfDoc.getPageCount()
@@ -188,7 +195,7 @@ export async function POST(request: NextRequest) {
         const dataUri = `data:application/pdf;base64,${base64String}`
 
         croppedFileResults.push({
-          fileName: file.name,
+          fileName: validation.file.name,
           base64: dataUri,
         })
       } catch (fileError) {
