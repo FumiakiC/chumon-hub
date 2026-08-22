@@ -139,6 +139,8 @@
 - **取引先マスタ管理画面**: admin 限定。一覧・検索・登録・編集・論理削除（`is_active=false`）、電子交付承諾フラグの管理。
 - **権限（RBAC・テナント/部署分離前提）**: role＝admin／user。一般ユーザーのデータアクセスは**自テナント・自部署**に分離。**admin は部署を跨いで案件の確認・操作が可能**。マスタ編集は admin のみ。注文の編集は作成者本人または admin。検収・支払確定操作を admin 限定にするかは Phase 5 詳細設計で決定（現状は実質単一ユーザーのため、モデルとして持ちつつ運用は緩く開始してよい）。
 - **照合ステータス表示**: 「完全一致」「許容差内一致（Warning 寄り・自動承認）」「不一致（保留）」を視覚的に区別（§2.3）。
+- **既知バグ（2026-08-22 発見 / 申し送り）**: 仮注文書作成画面の「すべて解析」ボタンに実行中ガードが無く、連打すると `ADD_ITEMS` が同一 `id`（`CroppedFile.id` を流用）の明細行を重複 append する。React の duplicate key 警告（`AnalysisTable.tsx`）は症状にすぎず、実害は**明細行の同一性の崩壊**＝`UPDATE_ITEM` / `REMOVE_ITEM` が id 一致行を全件処理するため、重複行は常に同期更新され、1行だけ削除しようとすると両方消える。加えて Gemini API を件数分二重に呼び、チャンク単位のレート制御も無効化される。UI は Phase 5 後に作り直す前提だが、明細行は仮注文書の中身そのもの（§2.2）のため放置しない。エポック0 の `fix/analyze-double-submit` で (a) 実行中の再入禁止（ボタン disabled ＋ ハンドラ側ガード）、(b) 明細化済み `CroppedFile` の再投入防止、の最小修正のみ行う。
+  - UI 作り直し時に引き継ぐ原則: **明細行の id は行の identity であり、入力ファイルの id と同一視しない**（1入力→N明細になる split 実装後はなおさら成立しない。§3.2）。
 
 ### 3.5 PDF証憑（Phase 6）
 
@@ -293,7 +295,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 
 | 順 | エポック | ブランチ prefix | 内容 | 依存 |
 |---|---|---|---|---|
-| 0 | fix 3本 | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ check-document-type orphan cleanup ／ **proxy ボディ上限**（`fix/proxy-body-size-limit`。#295 のスモークで判明。25MB ハードリミットが到達不能な状態の解消。§3.2） | なし（即着手可） |
+| 0 | fix 4本 | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ **proxy ボディ上限**（`fix/proxy-body-size-limit`。#295 のスモークで判明。25MB ハードリミットが到達不能な状態の解消。§3.2）／ **解析ボタン二重押下**（`fix/analyze-double-submit`。明細行の同一性が壊れる実バグ。§3.4） | なし（即着手可） |
 | 1 | **Phase 4a** | `feat/eval-harness` | golden set 正解ラベル付与＋評価ハーネス | なし |
 | 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（**2026-10-16 期限**。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
 | 3 | **Phase 4b** | `feat/order-schema-v2` | 2層スキーマ分離＋v2 項目反映＋**ページ分割（split）ステージ・DoSハードリミット**（複数PRに分割） | 要件定義確定 |
@@ -303,6 +305,13 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 | 7 | **Phase 6** | `feat/pdf-*` | PDF証憑出力＋5年保存運用（電帳法一次確認） | Phase 5 |
 
 - 各エポックは着手時に「1 PR = 1 関心事」の粒度へ分割し、詳細計画を本書または独立文書に展開する。
+
+### エポック0 の申し送り（#297 由来）
+
+- **リモートファイル寿命の設計（決定・実装済み）**: Google File API 上のファイルの寿命は `withUploadedFile` の `remoteCleanup: 'always' | 'on-error' | 'never'` で制御する。`check-document-type` は `'on-error'`（成功時は暗号トークンで `extract-order` へ寿命を手渡すため削除しない）。**「トークンの手渡しが起きなかった経路はすべて orphan になる」**のが本質で、handler の throw だけでなく **`isQuotation: false` 判定時も orphan** になっていた（2026-08-20 の残置ファイルとして実発生を確認）。後者は route 内で明示削除し、応答契約 `checkDocumentTypeResponseSchema` を `isQuotation` の判別可能ユニオンにして、参照先が存在しない `fileId` を返さない構造にした。
+- **残存する orphan（Phase 5 で解消）**: 判定成功後にユーザーがブラウザを閉じる等で `extract-order` が呼ばれないケース。トークン TTL 5分に対しファイルは48時間残る。リクエストのライフサイクルから切り離した寿命管理が要るため、**非同期ジョブ実行基盤（基本設計 §3）と同時に解消**する。
+- **小さな後追い（どの fix に相乗りしてもよい）**: `app/api/extract-order/route.ts` の削除処理が独自実装のままで、(a) `deleteRemoteFile` と重複、(b) 生の error を `logger.error` に渡しており #297 のレビュー指摘（SDK の `ApiError.message` は API のエラー応答本文そのものでリソース名が混入しうる）が未適用。`deleteRemoteFile` への一元化で両方が解消する。
+- **ログの原則**: リモート削除の失敗ログは固定文言＋`error.name`＋HTTPステータスに限定し、例外オブジェクトを渡さない。`error.name` だけでは 403 / 404 / 429 / ネットワーク障害を判別できず orphan の原因追跡ができないため、値域の限定された `status` は残す。
 - 進捗チェックリストは各エポックの詳細計画側で管理する（本書は方針と順序の正とする）。
 
 ## 5. 本書の変更管理
