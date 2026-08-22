@@ -190,16 +190,16 @@ export function UploadPanel({
                           </button>
                         )}
                         {file.status === 'error' && file.errorMessage && (
-                          <span
-                            className="max-w-[150px] text-[10px] text-red-600 dark:text-red-400"
-                            title={
-                              file.errorAction
-                                ? `${file.errorMessage} ${file.errorAction}`
-                                : file.errorMessage
-                            }
-                          >
-                            {file.errorMessage}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] text-red-600 dark:text-red-400">
+                              {file.errorMessage}
+                            </span>
+                            {file.errorAction && (
+                              <span className="text-muted-foreground text-[10px]">
+                                {file.errorAction}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </TableCell>

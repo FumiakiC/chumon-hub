@@ -11,12 +11,15 @@ import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
 /**
  * 本文に `code` を持たない応答のための、HTTP ステータス由来の既定コード。
  * crop-title-block は validationErrorResponse を通らない経路（素の 400 / 500）が
- * あるため、その受け皿になる。
+ * あるため、その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
+ * 返す（`code` を持たない）ため、ここで補う必要がある。
  */
 function fallbackCodeForStatus(status: number): AppErrorCode {
   switch (status) {
     case 400:
       return 'ERR_VALIDATION'
+    case 401:
+      return 'ERR_UNAUTHORIZED'
     case 413:
       return 'ERR_FILE_TOO_LARGE'
     case 415:
