@@ -56,11 +56,14 @@ export interface EvalSummary {
 
 /**
  * 抽出結果（AI 出力）側の入力。
+ *
  * 評価ロジックは `drawingSchema` に直接依存せず、フィールド名で引くだけにする
  * （スキーマ v2 で項目が増えても評価側が壊れないようにするため）。
+ * 評価対象外のキー（`reasoning` / `confidence` など）を持つ抽出結果をそのまま
+ * 渡せるよう、インデックスシグネチャを交差させて余剰プロパティを許容する。
  */
 export type ExtractionActual = Readonly<
-  Partial<Record<EvaluatedField, unknown>>
+  Partial<Record<EvaluatedField, unknown>> & Record<string, unknown>
 >
 
 function mapFields<T>(

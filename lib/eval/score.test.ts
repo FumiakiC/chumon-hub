@@ -72,6 +72,22 @@ describe('scoreCase', () => {
     expect(result.fields).toHaveLength(6)
   })
 
+  it('評価対象外のキーを含む抽出結果をそのまま渡せる', () => {
+    // reasoning / confidence を持つ抽出結果を object literal で渡しても
+    // 余剰プロパティで型エラーにならないこと（型レベルの回帰確認を兼ねる）。
+    const result = scoreCase(label, {
+      drawingNo: '12D925-101',
+      partName: 'ブラケット',
+      material: 'SS400',
+      quantity: 4,
+      surfaceTreatment: '',
+      notes: '',
+      reasoning: '表題欄から読み取った',
+      confidence: 92,
+    })
+    expect(result.allMatch).toBe(true)
+  })
+
   it('1項目でも外れれば allMatch は false', () => {
     const result = scoreCase(label, { drawingNo: '12D925-101', quantity: 2 })
     expect(result.allMatch).toBe(false)

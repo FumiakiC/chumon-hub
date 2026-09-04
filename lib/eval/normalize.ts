@@ -25,8 +25,12 @@ const HYPHEN_LIKE = /[-\u2010-\u2015\u2212\u30FC\uFF0D]/g
 /** ひらがな（U+3041〜U+3096）。カタカナへは +0x60 でそのまま写せる。 */
 const HIRAGANA = /[\u3041-\u3096]/g
 
-/** 10 進の整数・小数のみを数値として受け付ける（`Number()` の緩い変換を使わない）。 */
-const DECIMAL_NUMBER = /^-?\d+(?:\.\d+)?$/
+/**
+ * 10 進の整数・小数のみを数値として受け付ける（`Number()` の緩い変換を使わない）。
+ * 桁区切りのカンマは 3 桁ごとに正しく置かれている場合だけ許可する。除去してから
+ * 検証すると `'1,,200'` や `'1,2'` が `1200` / `12` に化け、誤抽出が一致になってしまう。
+ */
+const DECIMAL_NUMBER = /^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/
 
 interface TextFieldSpec {
   kind: 'text'
@@ -105,11 +109,15 @@ function normalizeNumber(value: unknown): NormalizedValue {
     return { kind: 'text', value: String(value) }
   }
 
+  // 区切り文字は「除去してから検証」しない。先に除去すると `'1,,200'` や `'1 2'` が
+  // `1200` / `12` に化け、誤抽出が一致として数えられてしまう。
   const raw = typeof value === 'string' ? value : String(value)
-  const compact = normalizeBase(raw).replace(/[\s,]/g, '')
-  if (compact === '') return { kind: 'empty' }
-  if (!DECIMAL_NUMBER.test(compact)) return { kind: 'text', value: compact }
-  return { kind: 'number', value: Number(compact) }
+  const normalized = normalizeBase(raw)
+  if (normalized === '') return { kind: 'empty' }
+  if (!DECIMAL_NUMBER.test(normalized)) {
+    return { kind: 'text', value: normalized }
+  }
+  return { kind: 'number', value: Number(normalized.replace(/,/g, '')) }
 }
 
 function normalizeText(value: unknown, spec: TextFieldSpec): NormalizedValue {

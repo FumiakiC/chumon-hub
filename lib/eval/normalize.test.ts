@@ -76,6 +76,40 @@ describe('normalizeField', () => {
       value: '0x10',
     })
   })
+
+  it('桁区切りが壊れた数量を数値に化けさせない', () => {
+    expect(normalizeField('quantity', '1,,200')).toEqual({
+      kind: 'text',
+      value: '1,,200',
+    })
+    expect(normalizeField('quantity', '1,2')).toEqual({
+      kind: 'text',
+      value: '1,2',
+    })
+    expect(normalizeField('quantity', '1,20')).toEqual({
+      kind: 'text',
+      value: '1,20',
+    })
+    expect(normalizeField('quantity', '1,2000')).toEqual({
+      kind: 'text',
+      value: '1,2000',
+    })
+    expect(normalizeField('quantity', '1 2')).toEqual({
+      kind: 'text',
+      value: '1 2',
+    })
+  })
+
+  it('正しい桁区切りは数値として受け付ける', () => {
+    expect(normalizeField('quantity', '12,345')).toEqual({
+      kind: 'number',
+      value: 12345,
+    })
+    expect(normalizeField('quantity', '1,234,567')).toEqual({
+      kind: 'number',
+      value: 1234567,
+    })
+  })
 })
 
 describe('valuesEqual', () => {

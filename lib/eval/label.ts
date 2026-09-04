@@ -48,11 +48,28 @@ export const goldenAcceptedSchema = z.strictObject({
   notes: z.array(z.string()).optional(),
 })
 
+/**
+ * `GOLDEN_SET_DIR` の内側に収まる相対パスか。
+ *
+ * 絶対パス・Windows のドライブレター・`..` によるディレクトリ脱出を弾く。
+ * ラベルは手書きなので、書き間違いが golden set の外を読む形にならないよう
+ * スキーマ側で不変条件にしておく。実際に開く直前に解決後パスの包含も確認するのは
+ * ハーネス側の責務（多層防御）。
+ */
+function isContainedRelativePath(value: string): boolean {
+  if (value.startsWith('/') || value.startsWith('\\')) return false
+  if (/^[A-Za-z]:/.test(value)) return false
+  return !value.split(/[/\\]/).includes('..')
+}
+
 export const goldenLabelSchema = z.strictObject({
   /** golden set 内で一意なケース ID。結果 JSON のキーになる。 */
   caseId: z.string().min(1),
   /** `GOLDEN_SET_DIR` からの相対パス（墨消し済みの元図面 PDF）。 */
-  file: z.string().min(1),
+  file: z.string().min(1).refine(isContainedRelativePath, {
+    message:
+      'file は GOLDEN_SET_DIR からの相対パスである必要があります（絶対パス・.. は不可）',
+  }),
   expected: goldenExpectedSchema,
   accepted: goldenAcceptedSchema.optional(),
   /** ラベル作成時の判断メモ。評価には使わない。 */

@@ -35,6 +35,27 @@ describe('goldenLabelSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  it('絶対パス・ディレクトリ脱出を含む file を拒否する', () => {
+    for (const file of [
+      '/etc/passwd',
+      '../outside/dummy-001.pdf',
+      'pdf/../../dummy-001.pdf',
+      'C:\\golden\\dummy-001.pdf',
+    ]) {
+      expect(goldenLabelSchema.safeParse({ ...validLabel, file }).success).toBe(
+        false
+      )
+    }
+  })
+
+  it('GOLDEN_SET_DIR 配下の相対パスは通る', () => {
+    const result = goldenLabelSchema.safeParse({
+      ...validLabel,
+      file: 'pdf/sub/dummy-001.pdf',
+    })
+    expect(result.success).toBe(true)
+  })
+
   it('記載なしの数量は null で表す', () => {
     const result = goldenLabelSchema.safeParse({
       ...validLabel,
