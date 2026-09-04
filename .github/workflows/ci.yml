@@ -81,3 +81,6 @@ jobs:
       - name: Format check
         if: ${{ !cancelled() }}
         run: pnpm format:check
+      - name: Test
+        if: ${{ !cancelled() }}
+        run: pnpm test
