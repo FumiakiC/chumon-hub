@@ -127,6 +127,13 @@
 - **非同期ジョブ実行（決定）**: アップロード完了後の解析は HTTP リクエストのライフサイクルから切り離し、**ブラウザのページを閉じても処理が継続する**サーバーサイドのジョブとして実行する。ユーザーは後から結果に戻れる（ジョブステータスの永続化＋一覧表示＋完了時のアプリ内通知）。設計は §基本設計 3。
 - 施策候補（すべて測定とセット）: モデルカスケード（低信頼フィールドのみ上位モデル再抽出）／フィールド単位ルーティング／critic パス／OCR×VLM ハイブリッド（bbox 根拠付き）。
 - 期限制約: `gemini-2.5-*` shutdown **2026-10-16**。3.x 移行 chore はハーネス整備直後に実施。**スタンス: 現行システム自体が完成形ではないため、精度低下リスクを過度に警戒したり厳密な合格基準を設けたりしない。ハーネスで before-after を測定・記録しつつ、期限に向けて淡々と移行する**（測定結果は Phase 4c の施策検討の入力として使う）。
+  - **移行対象と期限（2つある）**: 現行モデルは `classify`=`gemini-2.5-flash-lite` / `extractOrder`=`gemini-2.5-flash` / `extractDrawing`=`gemini-3.1-flash-lite`（2026-09-05 に実コードで確認）。
+    - **2026-10-16**: 2.5 系の `classify` と `extractOrder`。本 chore の必須対象。
+    - **2027-05-07**: `gemini-3.1-flash-lite` の shutdown（Gemini deprecations ページで公表済み。推奨移行先は `gemini-3.5-flash-lite`）。`extractDrawing` も**任意の更新ではなく期限のある必須更新**であり、期限が後ろにあるだけ。本 chore に相乗りさせるか別 chore に分けるかは着手時に判断する。
+  - **モデル選定方針**: **移行時点での最新モデルを採る。ただし具体的なモデル ID は本書に書かず `lib/ai/models.ts` を正とする**。Flash 系は 3.5 → 3.6 → 3.7（2026-08-13）→ 3.8（2026-09-03 GA）と6週間で3世代動いており、計画書に ID を固定すると即座に陳腐化するため。本書には用途と系列の対応だけを残す。
+    - `classify` / `extractOrder` / `extractDrawing` はいずれも分類・構造化抽出・文書理解であり、Google が Flash-Lite 系に割り当てている用途に一致する。**既定は Flash-Lite 系の最新**とし、精度が足りない場合のみ Flash 系の最新を候補に上げてハーネスで比較する。
+    - 2026-09-05 時点の最新は Flash-Lite 系が `gemini-3.5-flash-lite`、Flash 系が `gemini-3.8-flash`（一次情報: ai.google.dev / DeepMind モデルカード）。**着手時に必ず再確認する**。
+  - **移行の実装コストは小さい**: `generateStructured`（`lib/ai/generate.ts`）は `temperature` / `top_p` / `top_k` / `thinking_budget` を設定せず、単一の user ターンのみを送る。Gemini 3 系の破壊的変更（サンプリングパラメータの無視・`thinking_budget`→`thinking_level`・末尾 Model ロール禁止）はいずれも該当しないため、実質はモデル ID の差し替えと測定になる。ただし 3.5 Flash-Lite は thinking の既定が `minimal` のため、`extractDrawing` を 3.1 Flash-Lite から移す際の品質差はハーネスで確認する。
 
 ### 3.3 DB・状態遷移（Phase 5）
 
@@ -344,15 +351,21 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 
 **テスト基盤**
 
-- **Vitest 4** を devDependency に追加（着手時点 latest 4.1.x。5.0 は RC につき見送り）。
+- **Vitest 4** を devDependency に追加（`^4.1.11`）。**5.0.0 は 2026-09-03 に GA したが、以下の理由で 4 系を採用する**（2026-09-05 に npm registry で確認）。
+  - GA 直後であり、測定基盤自体の不安定さが精度スコアの信頼性を損なう。
+  - 5 系は `vite` を `dependencies` から外し**必須 peer** にしたため、採用すると `vite` の明示的な devDependency 追加が必要になり方針8（依存を増やさない）と衝突する。
+  - 4→5 は Dependabot の major として、テストが揃ってから「1 major = 1 チャット」で対応する。
 - 役割分担: 決定的な純関数（正規化・スコアラー）は vitest で `ci.yml` に常時実行を追加。AI を呼ぶハーネス本体は tsx スクリプトの手動実行とし CI に載せない。
 - `orderReducer` のユニットテストは Phase 4a 後続の別 PR（関心事の分離）。
 
 **PR 分割と受け入れ条件**
 
-1. `feat/eval-harness` — vitest 導入＋ラベル zod スキーマ＋正規化・スコアラー（ユニットテスト付き）＋ハーネス実行系（A / C-2′ の入力段。C-1 / C-2 は入力段を差し替え可能な形にしておくに留める）。肥大する場合は「vitest＋正規化・スコアラー」と「ハーネス実行系」の2本に分割可。
-2. 後続 `chore/`: orderReducer ユニットテスト。
-3. 現行 CropBox 方式の是正は **Phase 4a の測定結果を待って別 PR**（`feat/` または `fix/`）。是正までの間、図面本体が外部送信され続ける点は既知のリスクとして受容する。
+**2本に分割して実施する**（当初の「肥大する場合は分割可」を実績として確定）。
+
+1. `feat/eval-harness`（**完了 #319 / 2026-09-05**） — vitest 4 導入＋ラベル zod スキーマ＋正規化・スコアラー（ユニットテスト31件）＋ラベル形式ドキュメント（`docs/eval/GOLDEN_SET.md`）。AI にも PDF にも依存しない純関数のみで構成し、golden set が未整備でも完結して CI に常時載る。
+2. `feat/eval-harness-runner` — 現行クロップ処理の `lib/` への切り出し（挙動不変。ハーネスと本番が同一コードで A 方式を実行するため）＋入力段 A / C-2′＋`GOLDEN_SET_DIR` ローダ＋tsx 実行系＋結果 JSON 出力＋合成ダミー1件。C-1 / C-2 は入力段を差し替え可能な形にしておくに留める。
+3. 後続 `chore/`: orderReducer ユニットテスト。
+4. 現行 CropBox 方式の是正は **Phase 4a の測定結果を待って別 PR**（`feat/` または `fix/`）。是正までの間、図面本体が外部送信され続ける点は既知のリスクとして受容する。
 
 受け入れ条件: 手動トリガで golden set 10件を **A / C-2′ の2方式**で評価し、per-field スコアと差分内訳を JSON 出力できる。入力段は C-1 / C-2 を後から追加できるインターフェースになっている。API キーは既存の 1Password（`op run`）経由で注入し、CI では AI 呼び出しを行わない。
 
@@ -361,8 +374,8 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 | 順 | エポック | ブランチ prefix | 内容 | 依存 |
 |---|---|---|---|---|
 | 0 | fix 5本（**完了 / 2026-08-23**） | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ ~~proxy ボディ上限~~（**完了 #301 / 2026-08-22**。25MB ハードリミットが到達不能な状態を解消。§3.2）／ ~~解析ボタン二重押下~~（**完了 #299 / 2026-08-22**。明細行の同一性が壊れる実バグ。§3.4）／ ~~クロップ失敗の UI 表示~~（**完了 #304 / 2026-08-23**。失敗が「クロップ済」に見え 413 が握り潰される問題を解消。§3.4） | なし（消化済み） |
-| 1 | **Phase 4a** | `feat/eval-harness` | golden set（墨消し済み元PDF）＋評価ハーネス（A / C-2′ 測定）＋vitest 基盤導入（詳細は基本設計 §3「Phase 4a 詳細計画」。orderReducer テストは後続 chore、最小化方式の是正は測定後の別 PR） | なし |
-| 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（**2026-10-16 期限**。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
+| 1 | **Phase 4a**（**1/2 完了**） | `feat/eval-harness*` | golden set（墨消し済み元PDF）＋評価ハーネス（A / C-2′ 測定）＋vitest 基盤導入。**2本に分割**: ~~基盤＋スコアラー~~（**完了 #319 / 2026-09-05**）／ 実行系 `feat/eval-harness-runner`（詳細は基本設計 §3「Phase 4a 詳細計画」。orderReducer テストは後続 chore、最小化方式の是正は測定後の別 PR） | なし |
+| 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（必須対象は 2.5 系の `classify` / `extractOrder`＝**2026-10-16 期限**。`extractDrawing` の 3.1 Flash-Lite は**別期限 2027-05-07** の必須更新で、本 chore に相乗りさせるかは着手時に判断。**移行時点の最新モデルを採用**し、モデル ID の正は `lib/ai/models.ts`。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
 | 3 | **Phase 4b** | `feat/order-schema-v2` | 2層スキーマ分離＋v2 項目反映＋**ページ分割（split）ステージ・DoSハードリミット**（複数PRに分割） | 要件定義確定 |
 | 4 | **Phase 4c** | `feat/ai-pipeline-*` | カスケード／critic 等（測定裏付き・施策ごとに独立PR） | 4a, 4b |
 | 5 | **Phase 5** | `feat/db-*` | DB・状態機械（キャンセル境界・赤黒処理・多段承認フロー・版管理）・採番・数量会計・照合保留・楽観的排他制御・テナント/部署分離・取引先マスタ・支払条件マスタ・AppUser/RBAC（Auth0）・支払期日管理（60日ルール）・AuditLog・原本保存基盤・**非同期ジョブ実行基盤**・通知基盤・**権限マトリクス／THREAT_MODEL.md 作成・テナント分離CIテスト**（ADR-1/3 の基盤決定を先行 or 並行） | 4b、ADR-2/3 |
