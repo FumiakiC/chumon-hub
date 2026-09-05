@@ -127,7 +127,9 @@
 - **非同期ジョブ実行（決定）**: アップロード完了後の解析は HTTP リクエストのライフサイクルから切り離し、**ブラウザのページを閉じても処理が継続する**サーバーサイドのジョブとして実行する。ユーザーは後から結果に戻れる（ジョブステータスの永続化＋一覧表示＋完了時のアプリ内通知）。設計は §基本設計 3。
 - 施策候補（すべて測定とセット）: モデルカスケード（低信頼フィールドのみ上位モデル再抽出）／フィールド単位ルーティング／critic パス／OCR×VLM ハイブリッド（bbox 根拠付き）。
 - 期限制約: `gemini-2.5-*` shutdown **2026-10-16**。3.x 移行 chore はハーネス整備直後に実施。**スタンス: 現行システム自体が完成形ではないため、精度低下リスクを過度に警戒したり厳密な合格基準を設けたりしない。ハーネスで before-after を測定・記録しつつ、期限に向けて淡々と移行する**（測定結果は Phase 4c の施策検討の入力として使う）。
-  - **移行対象**: 2.5 系の `classify`（`gemini-2.5-flash-lite`）と `extractOrder`（`gemini-2.5-flash`）。`extractDrawing` は既に 3.1 Flash-Lite で shutdown 対象外だが、下記方針により最新化の対象には含める（2026-09-05 に実コードで確認）。
+  - **移行対象と期限（2つある）**: 現行モデルは `classify`=`gemini-2.5-flash-lite` / `extractOrder`=`gemini-2.5-flash` / `extractDrawing`=`gemini-3.1-flash-lite`（2026-09-05 に実コードで確認）。
+    - **2026-10-16**: 2.5 系の `classify` と `extractOrder`。本 chore の必須対象。
+    - **2027-05-07**: `gemini-3.1-flash-lite` の shutdown（Gemini deprecations ページで公表済み。推奨移行先は `gemini-3.5-flash-lite`）。`extractDrawing` も**任意の更新ではなく期限のある必須更新**であり、期限が後ろにあるだけ。本 chore に相乗りさせるか別 chore に分けるかは着手時に判断する。
   - **モデル選定方針**: **移行時点での最新モデルを採る。ただし具体的なモデル ID は本書に書かず `lib/ai/models.ts` を正とする**。Flash 系は 3.5 → 3.6 → 3.7（2026-08-13）→ 3.8（2026-09-03 GA）と6週間で3世代動いており、計画書に ID を固定すると即座に陳腐化するため。本書には用途と系列の対応だけを残す。
     - `classify` / `extractOrder` / `extractDrawing` はいずれも分類・構造化抽出・文書理解であり、Google が Flash-Lite 系に割り当てている用途に一致する。**既定は Flash-Lite 系の最新**とし、精度が足りない場合のみ Flash 系の最新を候補に上げてハーネスで比較する。
     - 2026-09-05 時点の最新は Flash-Lite 系が `gemini-3.5-flash-lite`、Flash 系が `gemini-3.8-flash`（一次情報: ai.google.dev / DeepMind モデルカード）。**着手時に必ず再確認する**。
@@ -373,7 +375,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 |---|---|---|---|---|
 | 0 | fix 5本（**完了 / 2026-08-23**） | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ ~~proxy ボディ上限~~（**完了 #301 / 2026-08-22**。25MB ハードリミットが到達不能な状態を解消。§3.2）／ ~~解析ボタン二重押下~~（**完了 #299 / 2026-08-22**。明細行の同一性が壊れる実バグ。§3.4）／ ~~クロップ失敗の UI 表示~~（**完了 #304 / 2026-08-23**。失敗が「クロップ済」に見え 413 が握り潰される問題を解消。§3.4） | なし（消化済み） |
 | 1 | **Phase 4a**（**1/2 完了**） | `feat/eval-harness*` | golden set（墨消し済み元PDF）＋評価ハーネス（A / C-2′ 測定）＋vitest 基盤導入。**2本に分割**: ~~基盤＋スコアラー~~（**完了 #319 / 2026-09-05**）／ 実行系 `feat/eval-harness-runner`（詳細は基本設計 §3「Phase 4a 詳細計画」。orderReducer テストは後続 chore、最小化方式の是正は測定後の別 PR） | なし |
-| 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（**2026-10-16 期限**。2.5 系の `classify` / `extractOrder` が必須対象、`extractDrawing` も最新化に含める。**移行時点の最新モデルを採用**し、モデル ID の正は `lib/ai/models.ts`。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
+| 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（必須対象は 2.5 系の `classify` / `extractOrder`＝**2026-10-16 期限**。`extractDrawing` の 3.1 Flash-Lite は**別期限 2027-05-07** の必須更新で、本 chore に相乗りさせるかは着手時に判断。**移行時点の最新モデルを採用**し、モデル ID の正は `lib/ai/models.ts`。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
 | 3 | **Phase 4b** | `feat/order-schema-v2` | 2層スキーマ分離＋v2 項目反映＋**ページ分割（split）ステージ・DoSハードリミット**（複数PRに分割） | 要件定義確定 |
 | 4 | **Phase 4c** | `feat/ai-pipeline-*` | カスケード／critic 等（測定裏付き・施策ごとに独立PR） | 4a, 4b |
 | 5 | **Phase 5** | `feat/db-*` | DB・状態機械（キャンセル境界・赤黒処理・多段承認フロー・版管理）・採番・数量会計・照合保留・楽観的排他制御・テナント/部署分離・取引先マスタ・支払条件マスタ・AppUser/RBAC（Auth0）・支払期日管理（60日ルール）・AuditLog・原本保存基盤・**非同期ジョブ実行基盤**・通知基盤・**権限マトリクス／THREAT_MODEL.md 作成・テナント分離CIテスト**（ADR-1/3 の基盤決定を先行 or 並行） | 4b、ADR-2/3 |
