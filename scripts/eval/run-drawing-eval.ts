@@ -6,7 +6,12 @@ import { parseArgs } from 'node:util'
 import { extractDrawing } from '@/lib/ai/extract-drawing'
 import { GEMINI_MODELS } from '@/lib/ai/models'
 import { withUploadedFile } from '@/lib/ai/pipeline'
-import { getGitHead, loadGoldenSet, resolveGoldenFile } from '@/lib/eval/golden'
+import {
+  assertRealPathWithin,
+  getGitHead,
+  loadGoldenSet,
+  resolveGoldenFile,
+} from '@/lib/eval/golden'
 import {
   INPUT_STAGES,
   type InputStage,
@@ -55,7 +60,11 @@ async function runStage(
     const startedAt = Date.now()
     try {
       const resolved = resolveGoldenFile(options.goldenDir, label.file)
-      const buffer = await readFile(resolved)
+      const verifiedPath = await assertRealPathWithin(
+        options.goldenDir,
+        resolved
+      )
+      const buffer = await readFile(verifiedPath)
       const output = await stage.prepare({
         buffer,
         fileName: path.basename(label.file),
@@ -209,7 +218,10 @@ async function main(): Promise<void> {
 
     const fileName = `${toFileTimestamp(run.runAt)}-${stageId}.json`
     const outputPath = path.join(outputDir, fileName)
-    await writeFile(outputPath, `${JSON.stringify(run, null, 2)}\n`, 'utf8')
+    await writeFile(outputPath, `${JSON.stringify(run, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+    })
 
     printSummary(run, outputPath)
   }
