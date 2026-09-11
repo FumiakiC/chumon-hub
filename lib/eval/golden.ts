@@ -103,3 +103,33 @@ export async function getGitHead(dir: string): Promise<string | null> {
     return null
   }
 }
+
+/**
+ * `dir` の作業ツリーに未コミット変更があるかを返す。
+ * `paths` を指定するとその範囲に限定し、gitignore 済みでも `--ignored` で dirty 扱いにする
+ * （golden の入力ファイルが誤って ignore されたまま編集される事故を検出するため）。
+ * `paths` が空なら作業ツリー全体を対象にし `--ignored` は付けない。
+ * git repo でない・git が無い等の失敗時は throw せず `null` を返す。
+ * shell を経由しないよう `execFile` を使い、pathspec マジックの誤解釈を避けるため
+ * `--literal-pathspecs` を付ける。
+ */
+export async function getGitDirty(
+  dir: string,
+  paths: readonly string[] = []
+): Promise<boolean | null> {
+  try {
+    const { stdout } = await execFileAsync('git', [
+      '--literal-pathspecs',
+      '-C',
+      dir,
+      'status',
+      '--porcelain',
+      ...(paths.length > 0 ? ['--ignored'] : []),
+      '--',
+      ...paths,
+    ])
+    return stdout.trim() !== ''
+  } catch {
+    return null
+  }
+}

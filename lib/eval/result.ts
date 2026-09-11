@@ -22,12 +22,16 @@ export type EvalCaseRecord =
     }
 
 export interface EvalRunResult {
-  schemaVersion: 1
+  schemaVersion: 2
   runAt: string
   stage: { id: InputStageId; label: string }
   model: string
   appCommit: string | null
+  /** `null` は git repo でない等で判定不能。app リポジトリの作業ツリー全体を対象に判定する。 */
+  appDirty: boolean | null
   goldenCommit: string | null
+  /** `null` は git repo でない等で判定不能。`labels.json` と評価対象ケースの `file` に限定して判定する。 */
+  goldenDirty: boolean | null
   cases: EvalCaseRecord[]
   summary: EvalSummary
   failedCases: number
