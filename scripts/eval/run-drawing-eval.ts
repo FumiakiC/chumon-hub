@@ -8,6 +8,8 @@ import { GEMINI_MODELS } from '@/lib/ai/models'
 import { withUploadedFile } from '@/lib/ai/pipeline'
 import {
   assertRealPathWithin,
+  collectGoldenDirtyPaths,
+  getGitDirty,
   getGitHead,
   loadGoldenSet,
   resolveGoldenFile,
@@ -48,7 +50,9 @@ async function runStage(
     apiKey: string
     model: string
     appCommit: string | null
+    appDirty: boolean | null
     goldenCommit: string | null
+    goldenDirty: boolean | null
   }
 ): Promise<EvalRunResult> {
   const runAt = new Date().toISOString()
@@ -129,12 +133,14 @@ async function runStage(
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runAt,
     stage: { id: stage.id, label: stage.label },
     model: options.model,
     appCommit: options.appCommit,
+    appDirty: options.appDirty,
     goldenCommit: options.goldenCommit,
+    goldenDirty: options.goldenDirty,
     cases,
     summary: summarize(scored),
     failedCases: cases.filter((entry) => entry.status === 'failed').length,
@@ -203,6 +209,20 @@ async function main(): Promise<void> {
 
   const appCommit = await getGitHead(process.cwd())
   const goldenCommit = await getGitHead(goldenDir)
+  const appDirty = await getGitDirty(process.cwd())
+  const goldenDirtyPaths = await collectGoldenDirtyPaths(goldenDir, [
+    'labels.json',
+    ...labels.map((label) => label.file),
+  ])
+  const goldenDirty = await getGitDirty(goldenDir, goldenDirtyPaths)
+
+  if (appDirty === true || goldenDirty === true) {
+    const dirtyLabel = (value: boolean | null): string =>
+      value === null ? 'unknown' : value ? 'dirty' : 'clean'
+    process.stderr.write(
+      `warning: 未コミットの変更があります（app: ${dirtyLabel(appDirty)}, golden: ${dirtyLabel(goldenDirty)}）。goldenCommit / appCommit は実際の入力と一致しない可能性があります。\n`
+    )
+  }
 
   await mkdir(outputDir, { recursive: true })
 
@@ -213,7 +233,9 @@ async function main(): Promise<void> {
       apiKey,
       model,
       appCommit,
+      appDirty,
       goldenCommit,
+      goldenDirty,
     })
 
     const fileName = `${toFileTimestamp(run.runAt)}-${stageId}.json`

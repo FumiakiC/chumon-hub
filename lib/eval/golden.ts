@@ -75,6 +75,37 @@ export async function assertRealPathWithin(
 }
 
 /**
+ * golden set の入力パスと、repo 内 symlink が指す実体パスを dirty 判定用に集める。
+ * realpath の解決に失敗した入力や goldenDir の外を指す入力は元パスだけを残す。
+ */
+export async function collectGoldenDirtyPaths(
+  goldenDir: string,
+  files: readonly string[]
+): Promise<string[]> {
+  const paths = new Set(files)
+
+  let realDir: string
+  try {
+    realDir = await realpath(goldenDir)
+  } catch {
+    return [...paths]
+  }
+
+  for (const file of files) {
+    try {
+      const realFile = await realpath(path.resolve(goldenDir, file))
+      if (isWithin(realDir, realFile)) {
+        paths.add(path.relative(realDir, realFile))
+      }
+    } catch {
+      // 欠損ファイル等は元の pathspec だけで判定を続ける。
+    }
+  }
+
+  return [...paths]
+}
+
+/**
  * `<goldenDir>/labels.json` を読み、`goldenSetSchema` で検証して返す。
  * 読めない／不正な場合は fs / zod の例外をそのまま投げる。
  */
@@ -99,6 +130,36 @@ export async function getGitHead(dir: string): Promise<string | null> {
     ])
     const head = stdout.trim()
     return /^[0-9a-f]{40}$/i.test(head) ? head : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * `dir` の作業ツリーに未コミット変更があるかを返す。
+ * `paths` を指定するとその範囲に限定し、gitignore 済みでも `--ignored` で dirty 扱いにする
+ * （golden の入力ファイルが誤って ignore されたまま編集される事故を検出するため）。
+ * `paths` が空なら作業ツリー全体を対象にし `--ignored` は付けない。
+ * git repo でない・git が無い等の失敗時は throw せず `null` を返す。
+ * shell を経由しないよう `execFile` を使い、pathspec マジックの誤解釈を避けるため
+ * `--literal-pathspecs` を付ける。
+ */
+export async function getGitDirty(
+  dir: string,
+  paths: readonly string[] = []
+): Promise<boolean | null> {
+  try {
+    const { stdout } = await execFileAsync('git', [
+      '--literal-pathspecs',
+      '-C',
+      dir,
+      'status',
+      '--porcelain',
+      ...(paths.length > 0 ? ['--ignored'] : []),
+      '--',
+      ...paths,
+    ])
+    return stdout.trim() !== ''
   } catch {
     return null
   }
