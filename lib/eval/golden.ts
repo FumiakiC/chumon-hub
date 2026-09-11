@@ -75,6 +75,37 @@ export async function assertRealPathWithin(
 }
 
 /**
+ * golden set の入力パスと、repo 内 symlink が指す実体パスを dirty 判定用に集める。
+ * realpath の解決に失敗した入力や goldenDir の外を指す入力は元パスだけを残す。
+ */
+export async function collectGoldenDirtyPaths(
+  goldenDir: string,
+  files: readonly string[]
+): Promise<string[]> {
+  const paths = new Set(files)
+
+  let realDir: string
+  try {
+    realDir = await realpath(goldenDir)
+  } catch {
+    return [...paths]
+  }
+
+  for (const file of files) {
+    try {
+      const realFile = await realpath(path.resolve(goldenDir, file))
+      if (isWithin(realDir, realFile)) {
+        paths.add(path.relative(realDir, realFile))
+      }
+    } catch {
+      // 欠損ファイル等は元の pathspec だけで判定を続ける。
+    }
+  }
+
+  return [...paths]
+}
+
+/**
  * `<goldenDir>/labels.json` を読み、`goldenSetSchema` で検証して返す。
  * 読めない／不正な場合は fs / zod の例外をそのまま投げる。
  */

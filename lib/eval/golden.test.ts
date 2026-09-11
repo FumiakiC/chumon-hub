@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   assertRealPathWithin,
+  collectGoldenDirtyPaths,
   getGitDirty,
   resolveGoldenFile,
 } from '@/lib/eval/golden'
@@ -103,6 +104,64 @@ describe('assertRealPathWithin', () => {
   })
 })
 
+describe('collectGoldenDirtyPaths', () => {
+  it('通常ファイルは重複を除いた入力の相対パスを返す', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'golden-dirty-paths-'))
+    temporaryDirectories.push(root)
+    const goldenDir = path.join(root, 'golden')
+    await mkdir(path.join(goldenDir, 'pdf'), { recursive: true })
+    await writeFile(path.join(goldenDir, 'labels.json'), '{}')
+    await writeFile(path.join(goldenDir, 'pdf', 'case.pdf'), 'dummy')
+
+    await expect(
+      collectGoldenDirtyPaths(goldenDir, [
+        'labels.json',
+        'pdf/case.pdf',
+        'labels.json',
+      ])
+    ).resolves.toEqual(['labels.json', 'pdf/case.pdf'])
+  })
+
+  it('repo 内 symlink は元パスとリンク先の相対パスを返す', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'golden-dirty-paths-'))
+    temporaryDirectories.push(root)
+    const goldenDir = path.join(root, 'golden')
+    const sourcePath = path.join(goldenDir, 'pdf', 'source.pdf')
+    const symlinkPath = path.join(goldenDir, 'pdf', 'case.pdf')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(sourcePath, 'dummy')
+    await symlink(sourcePath, symlinkPath)
+
+    await expect(
+      collectGoldenDirtyPaths(goldenDir, ['pdf/case.pdf'])
+    ).resolves.toEqual(['pdf/case.pdf', 'pdf/source.pdf'])
+  })
+
+  it('存在しないファイルは元パスだけを返し throw しない', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'golden-dirty-paths-'))
+    temporaryDirectories.push(root)
+
+    await expect(
+      collectGoldenDirtyPaths(root, ['pdf/missing.pdf'])
+    ).resolves.toEqual(['pdf/missing.pdf'])
+  })
+
+  it('goldenDir の外を指す symlink は元パスだけを返す', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'golden-dirty-paths-'))
+    temporaryDirectories.push(root)
+    const goldenDir = path.join(root, 'golden')
+    const outsidePath = path.join(root, 'outside.pdf')
+    const symlinkPath = path.join(goldenDir, 'escape.pdf')
+    await mkdir(goldenDir)
+    await writeFile(outsidePath, 'dummy')
+    await symlink(outsidePath, symlinkPath)
+
+    await expect(
+      collectGoldenDirtyPaths(goldenDir, ['escape.pdf'])
+    ).resolves.toEqual(['escape.pdf'])
+  })
+})
+
 describe('getGitDirty', () => {
   it('全ファイルコミット済みで paths 指定なら false', async () => {
     const root = await initTempGitRepo()
@@ -121,6 +180,29 @@ describe('getGitDirty', () => {
     await writeFile(path.join(root, 'labels.json'), '{"changed":true}')
 
     await expect(getGitDirty(root, ['labels.json'])).resolves.toBe(true)
+  })
+
+  it('repo 内 symlink のリンク先変更を dirty として検出する', async () => {
+    const root = await initTempGitRepo()
+    const sourcePath = path.join(root, 'pdf', 'source.pdf')
+    const symlinkPath = path.join(root, 'pdf', 'case.pdf')
+    await mkdir(path.dirname(sourcePath), { recursive: true })
+    await writeFile(path.join(root, 'labels.json'), '{}')
+    await writeFile(sourcePath, 'initial')
+    await symlink(sourcePath, symlinkPath)
+    await execFileAsync('git', ['-C', root, 'add', 'labels.json', 'pdf'])
+    await execFileAsync('git', ['-C', root, 'commit', '--quiet', '-m', 'init'])
+    await writeFile(sourcePath, 'changed')
+
+    const paths = await collectGoldenDirtyPaths(root, [
+      'labels.json',
+      'pdf/case.pdf',
+    ])
+
+    await expect(
+      getGitDirty(root, ['labels.json', 'pdf/case.pdf'])
+    ).resolves.toBe(false)
+    await expect(getGitDirty(root, paths)).resolves.toBe(true)
   })
 
   it('paths 内に未追跡ファイルがあると true', async () => {

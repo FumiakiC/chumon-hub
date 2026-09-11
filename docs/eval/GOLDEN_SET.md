@@ -20,7 +20,7 @@
 - `labels.json` の各要素の `file` は `GOLDEN_SET_DIR` からの相対パス。
 - git 管理は必須ではない（`getGitHead` は取得失敗時に `null` を返す）が、推奨する。結果 JSON の `goldenCommit` が「同じ正解ラベルで測った」ことの根拠になるためである。ラベルは許容リストを育てる過程で変化するため、コミットハッシュがないと過去の測定と比較できない。
 - `getGitHead` が記録するのは `git rev-parse HEAD` の結果のみであり、作業ツリーの未コミット変更は反映されない。`labels.json` や PDF をコミットせずに編集したまま測定すると、`goldenCommit` は変わらず、実際に評価した入力と一致しないハッシュが記録される。
-- このため結果 JSON には `goldenDirty` / `appDirty`（`boolean | null`）も記録される。`goldenDirty` は golden repo の `labels.json` と評価対象ケースの PDF（`--case` で絞った場合は絞った後のケースのみ）に限定した判定で、gitignore 済みの入力も dirty 扱いにする。`appDirty` は本体リポジトリの作業ツリー全体の判定。いずれも git repo でない等で判定不能な場合は `null` になる。dirty のときは実行時に stderr へ警告が出るが、実行は中断されない。
+- このため結果 JSON には `goldenDirty` / `appDirty`（`boolean | null`）も記録される。`goldenDirty` は golden repo の `labels.json` と評価対象ケースの PDF（`--case` で絞った場合は絞った後のケースのみ）に限定した判定で、gitignore 済みの入力も dirty 扱いにする。入力が repo 内 symlink の場合は、そのリンク先も判定に含める。`appDirty` は本体リポジトリの作業ツリー全体の判定。いずれも git repo でない等で判定不能な場合は `null` になる。dirty のときは実行時に stderr へ警告が出るが、実行は中断されない。
 - `goldenCommit` 単独では再現性を保証しない。測定前に golden repo の変更をコミットし、`goldenDirty` / `appDirty` が `false` であることを確認してから `pnpm eval:drawing` を実行することを推奨する。
 - **本体リポジトリの作業ツリー内には置かない**。正解ラベルを本体 repo にコミットする事故を防ぐためである。
 - Dev Container にはホスト側ディレクトリ用の追加マウント設定がないため、ホスト側の clone はコンテナから見えない。コンテナ内かつワークスペース外（例: `/home/node/chumon-hub-golden`）に置き、`.env.local` に `GOLDEN_SET_DIR=/home/node/chumon-hub-golden` を記載する。`GOLDEN_SET_DIR` は秘匿値ではないため、`op://` 参照は不要。
@@ -96,7 +96,7 @@
 
 - 置き場所は既定で golden repo 側の `results/`（`--out` > `EVAL_OUTPUT_DIR` > `<GOLDEN_SET_DIR>/results` の優先順）。ファイル名は `<runAt を YYYYMMDDTHHmmssZ 形式にしたもの>-<stageId>.json`。
 - `expected` / `actual` の生値（＝正解ラベルの実値）を含むため **機密であり本体 repo にはコミットしない**。
-- 主なフィールド（`schemaVersion` は `2`）: `runAt`（ISO 8601 UTC） / `stage`（id・表示名） / `model` / `appCommit`（本体 repo の git HEAD） / `appDirty`（本体 repo の作業ツリー全体が未コミット変更を含むか。`null` は判定不能） / `goldenCommit`（golden repo の git HEAD） / `goldenDirty`（golden repo の `labels.json` と評価対象ケースの PDF に限定した未コミット判定。`null` は判定不能） / `cases`（ケースごとの `scored` または `failed` 記録。`scored` は per-field 判定と参考値 `reasoning`/`confidence` を含む） / `summary`（`scored` のみで集計） / `failedCases`。
+- 主なフィールド（`schemaVersion` は `2`）: `runAt`（ISO 8601 UTC） / `stage`（id・表示名） / `model` / `appCommit`（本体 repo の git HEAD） / `appDirty`（本体 repo の作業ツリー全体が未コミット変更を含むか。`null` は判定不能） / `goldenCommit`（golden repo の git HEAD） / `goldenDirty`（golden repo の `labels.json` と評価対象ケースの PDF に限定した未コミット判定。入力が repo 内 symlink の場合はリンク先も含む。`null` は判定不能） / `cases`（ケースごとの `scored` または `failed` 記録。`scored` は per-field 判定と参考値 `reasoning`/`confidence` を含む） / `summary`（`scored` のみで集計） / `failedCases`。
 - Gemini の `fileUri` やリモート `name` は結果 JSON にもログにも出さない。
 
 ## 合成ダミー

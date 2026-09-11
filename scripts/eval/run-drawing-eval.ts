@@ -8,6 +8,7 @@ import { GEMINI_MODELS } from '@/lib/ai/models'
 import { withUploadedFile } from '@/lib/ai/pipeline'
 import {
   assertRealPathWithin,
+  collectGoldenDirtyPaths,
   getGitDirty,
   getGitHead,
   loadGoldenSet,
@@ -209,10 +210,11 @@ async function main(): Promise<void> {
   const appCommit = await getGitHead(process.cwd())
   const goldenCommit = await getGitHead(goldenDir)
   const appDirty = await getGitDirty(process.cwd())
-  const goldenDirty = await getGitDirty(goldenDir, [
+  const goldenDirtyPaths = await collectGoldenDirtyPaths(goldenDir, [
     'labels.json',
     ...labels.map((label) => label.file),
   ])
+  const goldenDirty = await getGitDirty(goldenDir, goldenDirtyPaths)
 
   if (appDirty === true || goldenDirty === true) {
     const dirtyLabel = (value: boolean | null): string =>
