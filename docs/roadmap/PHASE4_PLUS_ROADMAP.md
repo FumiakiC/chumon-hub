@@ -347,7 +347,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 - **領域検出は AI に依存できない**: 検出のために全体像を VLM へ送れば最小化の目的が消える。検出はローカル完結（罫線・矩形検出等）である必要がある。数量が表題欄外（粗さ記号の直上）にあるため最低2領域を扱う。現行の用紙サイズ別ハードコード座標はこの制約下では妥当な出発点であり、安易に廃止しない（テナント依存の外部化は §5 の未決事項）。
 - 判定は2層: ①機械的正規化（NFKC・trim・連続空白統一・ハイフン類統一・空文字/undefined 同一視。フィールド別に大文字化・空白除去・ひらがな→カタカナ統一）②ラベル側許容リスト（`accepted` 配列）。同義語辞書は先回りで作らず、落ちた実例から `accepted` に育てる。
 - 集計は match / mismatch / **both-empty** の3値（空欄一致による accuracy 水増しの可視化）。per-field accuracy＋全フィールド一致率。
-- 出力: 実行ごとに model ID・日時・golden コミットハッシュ・per-case per-field 内訳を JSON 保存（`chore/gemini-3x` の before-after 材料）。
+- 出力: 実行ごとに model ID・日時・golden コミットハッシュ・**未コミット状態（`appDirty` / `goldenDirty`）**・per-case per-field 内訳を JSON 保存（`chore/gemini-3x` の before-after 材料）。
 
 **テスト基盤**
 
@@ -360,7 +360,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 
 **PR 分割と受け入れ条件**
 
-**2本に分割して実施する**（当初の「肥大する場合は分割可」を実績として確定）。
+**2本に分割して実施する**（当初の「肥大する場合は分割可」を実績として確定）。実測前の前提整備として、レビュー指摘由来の 1 本を追加した。
 
 1. `feat/eval-harness`（**完了 #319 / 2026-09-05**） — vitest 4 導入＋ラベル zod スキーマ＋正規化・スコアラー（ユニットテスト31件）＋ラベル形式ドキュメント（`docs/eval/GOLDEN_SET.md`）。AI にも PDF にも依存しない純関数のみで構成し、golden set が未整備でも完結して CI に常時載る。
 2. `feat/eval-harness-runner`（**完了 #321 / 2026-09-08**） — 現行クロップ処理を `lib/pdf/crop-title-block.ts` へ、抽出処理（プロンプト・`normalizeDrawingNo`）を `lib/ai/extract-drawing.ts` へ切り出し（挙動不変）、route は HTTP 層のみに限定。当初計画になかった抽出側の切り出しも行った。ハーネス側でプロンプトを複製すると本番と乖離し、`chore/gemini-3x` の before-after が信用できなくなるためである。
@@ -369,12 +369,15 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
   - `scripts/eval/run-drawing-eval.ts`: tsx で手動実行し、stage 別に直列評価して結果 JSON を出力。1件の失敗で run 全体を止めない。
   - `scripts/eval/make-dummy-golden.ts`: pdf-lib による合成ダミー1件。golden set 未整備でも配線を確認できる。
   - ユニットテストは31件から44件へ拡充。依存追加なし（`tsx` / `pdf-lib` / `vitest` は既存、引数パーサは `node:util` の `parseArgs`）。
-3. **実測（未実施）** — A / C-2′ の測定は未実施。golden set repo（`chumon-hub-golden`）が未作成であり、Adobe Acrobat Pro で墨消し済みの元図面 PDF 10件と `labels.json` の整備が残っているためである。測定結果は本節に追記し、`chore/gemini-3x` の before-after 比較の基準とする。
-4. **#321 で保留した事項**
+3. `feat/eval-harness-dirty`（**完了 #331 / 2026-09-12**。issue #330、#329 のレビュー指摘由来） — 結果 JSON の `goldenCommit` / `appCommit` が HEAD のみを記録し、未コミットの `labels.json` / PDF で測定しても検知できなかった問題を解消。`getGitDirty` を追加し `appDirty` / `goldenDirty`（`boolean | null`）を記録、`schemaVersion` を 2 へ。
+  - **判定範囲の決定**: `goldenDirty` は作業ツリー全体ではなく **`labels.json`＋評価対象ケースの `file`（`--case` 絞り込み後）に限定**。既定の出力先が `<GOLDEN_SET_DIR>/results/` のため、全体判定では 2 回目以降が前回結果の未追跡 JSON で常に dirty になる。gitignore 済み入力は `goldenCommit` が固定しないため dirty 扱い（`--ignored`）。repo 内 symlink はリンク先の realpath も判定に含める（ボットレビュー指摘）。`appDirty` は本体 repo の作業ツリー全体。
+  - dirty 時は stderr 警告のみで実行は継続。git 不在・非 repo は `null`。pathspec は `--literal-pathspecs` で渡す。ユニットテストは44件から56件へ。
+4. **実測（未実施）** — A / C-2′ の測定は未実施。golden set repo（`chumon-hub-golden`）は Dev Container 内で合成ダミー1件により初期化済み（2026-09-12。#331 のスモークで使用）だが、Adobe Acrobat Pro で墨消し済みの元図面 PDF 10件と `labels.json` の整備が残っている。測定結果は本節に追記し、`chore/gemini-3x` の before-after 比較の基準とする。
+5. **#321 で保留した事項**
   - **`cropY` の上限 clamp（issue: #328）**: `lib/pdf/crop-title-block.ts` の `cropY` に上限 clamp がなく、ISO サイズ判定に失敗して A2 既定へフォールバックした高さ 72mm 未満のページでは CropBox / MediaBox が元ページ外へはみ出す。実運用の図面（A1〜A4）では到達しない。#321 は挙動不変の切り出しを契約としたため据え置き、方式 A のクロップ座標を調整するタイミングで対応する。
   - **TOCTOU 指摘は現行の配置・運用では却下**: `realpath` 検査と `readFile` の間の競合は、`output: 'standalone'` の本番イメージに `scripts/` が含まれず、`lib/eval/*` もアプリケーションコードから import されないため tracing に拾われず、本番の攻撃面にならない。ローカル側は、golden set ディレクトリをハーネスを実行する本人のみが所有・書き込みする前提で受容する。この前提下で並行改竄できる主体は、既にハーネス実行者と同一のユーザー権限を持つ。`app/` 側から `lib/eval` を import する変更が入った場合、または golden set を共有ディレクトリ（group 書き込み・ACL・NAS・共有 CI ランナー等）に置く運用にした場合は再評価する。後者では TOCTOU が実害を持つため、ディスクリプタ経由の読み取り等、原子的に開く実装を検討する。
-5. 後続 `chore/`: orderReducer ユニットテスト。
-6. 現行 CropBox 方式の是正は **Phase 4a の測定結果を待って別 PR**（`feat/` または `fix/`）。是正までの間、図面本体が外部送信され続ける点は既知のリスクとして受容する。
+6. 後続 `chore/`: orderReducer ユニットテスト。
+7. 現行 CropBox 方式の是正は **Phase 4a の測定結果を待って別 PR**（`feat/` または `fix/`）。是正までの間、図面本体が外部送信され続ける点は既知のリスクとして受容する。
 
 受け入れ条件: 手動トリガで golden set 10件を **A / C-2′ の2方式**で評価し、per-field スコアと差分内訳を JSON 出力できる。入力段は C-1 / C-2 を後から追加できるインターフェースになっている。API キーは既存の 1Password（`op run`）経由で注入し、CI では AI 呼び出しを行わない。
 
@@ -383,7 +386,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 | 順 | エポック | ブランチ prefix | 内容 | 依存 |
 |---|---|---|---|---|
 | 0 | fix 5本（**完了 / 2026-08-23**） | `fix/` | ~~crop-title-block validation~~（**完了 #295 / 2026-08-22**）／ ~~check-document-type orphan cleanup~~（**完了 #297 / 2026-08-22**）／ ~~proxy ボディ上限~~（**完了 #301 / 2026-08-22**。25MB ハードリミットが到達不能な状態を解消。§3.2）／ ~~解析ボタン二重押下~~（**完了 #299 / 2026-08-22**。明細行の同一性が壊れる実バグ。§3.4）／ ~~クロップ失敗の UI 表示~~（**完了 #304 / 2026-08-23**。失敗が「クロップ済」に見え 413 が握り潰される問題を解消。§3.4） | なし（消化済み） |
-| 1 | **Phase 4a**（**実装完了 / 測定待ち**） | `feat/eval-harness*` | golden set（墨消し済み元PDF）＋評価ハーネス（A / C-2′ 測定）＋vitest 基盤導入。**実装2本は完了**: ~~基盤＋スコアラー~~（**完了 #319 / 2026-09-05**）／ ~~実行系 `feat/eval-harness-runner`~~（**完了 #321 / 2026-09-08**）。残作業は golden set の整備と測定（詳細は基本設計 §3「Phase 4a 詳細計画」。orderReducer テストは後続 chore、最小化方式の是正は測定後の別 PR） | なし |
+| 1 | **Phase 4a**（**実装完了 / 測定待ち**） | `feat/eval-harness*` | golden set（墨消し済み元PDF）＋評価ハーネス（A / C-2′ 測定）＋vitest 基盤導入。**実装は完了**: ~~基盤＋スコアラー~~（**完了 #319 / 2026-09-05**）／ ~~実行系 `feat/eval-harness-runner`~~（**完了 #321 / 2026-09-08**）／ ~~未コミット状態の記録 `feat/eval-harness-dirty`~~（**完了 #331 / 2026-09-12**）。残作業は golden set の整備（墨消し PDF 10件＋ラベル）と測定（詳細は基本設計 §3「Phase 4a 詳細計画」。orderReducer テストは後続 chore、最小化方式の是正は測定後の別 PR） | なし |
 | 2 | chore | `chore/gemini-3x` | Gemini 3.x 移行（必須対象は 2.5 系の `classify` / `extractOrder`＝**2026-10-16 期限**。`extractDrawing` の 3.1 Flash-Lite は**別期限 2027-05-07** の必須更新で、本 chore に相乗りさせるかは着手時に判断。**移行時点の最新モデルを採用**し、モデル ID の正は `lib/ai/models.ts`。ハーネスで before-after を記録しつつ淡々と実施） | 4a |
 | 3 | **Phase 4b** | `feat/order-schema-v2` | 2層スキーマ分離＋v2 項目反映＋**ページ分割（split）ステージ・DoSハードリミット**（複数PRに分割） | 要件定義確定 |
 | 4 | **Phase 4c** | `feat/ai-pipeline-*` | カスケード／critic 等（測定裏付き・施策ごとに独立PR） | 4a, 4b |
