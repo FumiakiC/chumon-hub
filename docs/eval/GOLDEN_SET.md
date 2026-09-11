@@ -9,18 +9,25 @@
 - ハーネスは環境変数 `GOLDEN_SET_DIR` でローカル clone を参照する。
 - 実行結果 JSON には golden repo のコミットハッシュを記録し、モデル × ラベル版の組で測定を再現できるようにする。
 
+## golden set repo の準備
+
+ルート直下のラベルファイル名は `labels.json` で固定する。PDF は `pdf/` 配下へ置き、`results/` はハーネスの初回出力時に自動生成される。
+
+    labels.json        # GoldenSet（ラベルの配列）
+    pdf/<caseId>.pdf   # 墨消し済みの元図面
+    results/           # ハーネスが自動生成する結果 JSON
+
+- `labels.json` の各要素の `file` は `GOLDEN_SET_DIR` からの相対パス。
+- git 管理は必須ではない（`getGitHead` は取得失敗時に `null` を返す）が、推奨する。結果 JSON の `goldenCommit` が「同じ正解ラベルで測った」ことの根拠になるためである。ラベルは許容リストを育てる過程で変化するため、コミットハッシュがないと過去の測定と比較できない。
+- **本体リポジトリの作業ツリー内には置かない**。正解ラベルを本体 repo にコミットする事故を防ぐためである。
+- Dev Container にはホスト側ディレクトリ用の追加マウント設定がないため、ホスト側の clone はコンテナから見えない。コンテナ内かつワークスペース外（例: `/home/node/chumon-hub-golden`）に置き、`.env.local` に `GOLDEN_SET_DIR=/home/node/chumon-hub-golden` を記載する。`GOLDEN_SET_DIR` は秘匿値ではないため、`op://` 参照は不要。
+- Dev Container をリビルドするとコンテナ内のデータは失われる。結果 JSON を残す場合はコンテナ外へ退避するか、リモートを持つ運用にする。
+
 ## PDF の要件
 
 - Adobe Acrobat Pro の**墨消し（Redact）**でコンテンツ自体を削除したもの。黒塗り注釈は不可（コンテンツストリームが残る）。
 - 残す領域: 表題欄（図番・品名・材質・表面処理・備考）と、数量の記載部（粗さ記号の直上。表題欄外）。
 - 用紙サイズ・ページ構造は原本のまま維持する（`detectPageSize` と座標系を変えないため）。
-
-## ディレクトリ構成（`GOLDEN_SET_DIR`）
-
-    labels.json        # GoldenSet（ラベルの配列）
-    pdf/<caseId>.pdf   # 墨消し済みの元図面
-
-`labels.json` の各要素の `file` は `GOLDEN_SET_DIR` からの相対パス。
 
 ## ラベル形式
 
