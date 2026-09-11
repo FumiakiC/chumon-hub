@@ -372,7 +372,7 @@ Notification（通知）… 宛先ユーザー・イベント種別・既読。�
 3. **実測（未実施）** — A / C-2′ の測定は未実施。golden set repo（`chumon-hub-golden`）が未作成であり、Adobe Acrobat Pro で墨消し済みの元図面 PDF 10件と `labels.json` の整備が残っているためである。測定結果は本節に追記し、`chore/gemini-3x` の before-after 比較の基準とする。
 4. **#321 で保留した事項**
   - **`cropY` の上限 clamp（issue: #328）**: `lib/pdf/crop-title-block.ts` の `cropY` に上限 clamp がなく、ISO サイズ判定に失敗して A2 既定へフォールバックした高さ 72mm 未満のページでは CropBox / MediaBox が元ページ外へはみ出す。実運用の図面（A1〜A4）では到達しない。#321 は挙動不変の切り出しを契約としたため据え置き、方式 A のクロップ座標を調整するタイミングで対応する。
-  - **TOCTOU 指摘は却下**: `realpath` 検査と `readFile` の間の競合は、`output: 'standalone'` の本番イメージに `scripts/` が含まれず、`lib/eval/*` もアプリケーションコードから import されないため tracing に拾われず、本番の攻撃面にならない。ローカルでも `GOLDEN_SET_DIR` へ並行書き込みできる権限があれば `.env.local` から API キーを直接取得できるため、ここは信頼境界にならない。`app/` 側から `lib/eval` を import する変更が入った場合は再評価する。
+  - **TOCTOU 指摘は現行の配置・運用では却下**: `realpath` 検査と `readFile` の間の競合は、`output: 'standalone'` の本番イメージに `scripts/` が含まれず、`lib/eval/*` もアプリケーションコードから import されないため tracing に拾われず、本番の攻撃面にならない。ローカル側は、golden set ディレクトリをハーネスを実行する本人のみが所有・書き込みする前提で受容する。この前提下で並行改竄できる主体は、既にハーネス実行者と同一のユーザー権限を持つ。`app/` 側から `lib/eval` を import する変更が入った場合、または golden set を共有ディレクトリ（group 書き込み・ACL・NAS・共有 CI ランナー等）に置く運用にした場合は再評価する。後者では TOCTOU が実害を持つため、ディスクリプタ経由の読み取り等、原子的に開く実装を検討する。
 5. 後続 `chore/`: orderReducer ユニットテスト。
 6. 現行 CropBox 方式の是正は **Phase 4a の測定結果を待って別 PR**（`feat/` または `fix/`）。是正までの間、図面本体が外部送信され続ける点は既知のリスクとして受容する。
 

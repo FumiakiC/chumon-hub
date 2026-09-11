@@ -19,6 +19,8 @@
 
 - `labels.json` の各要素の `file` は `GOLDEN_SET_DIR` からの相対パス。
 - git 管理は必須ではない（`getGitHead` は取得失敗時に `null` を返す）が、推奨する。結果 JSON の `goldenCommit` が「同じ正解ラベルで測った」ことの根拠になるためである。ラベルは許容リストを育てる過程で変化するため、コミットハッシュがないと過去の測定と比較できない。
+- `getGitHead` が記録するのは `git rev-parse HEAD` の結果のみであり、作業ツリーの未コミット変更は反映されない。`labels.json` や PDF をコミットせずに編集したまま測定すると、`goldenCommit` は変わらず、実際に評価した入力と一致しないハッシュが記録される。
+- `goldenCommit` 単独では再現性を保証しない。測定前に golden repo の変更をコミットし、`git status --porcelain` が空であることを確認してから `pnpm eval:drawing` を実行する。結果 JSON への未コミット状態の記録は今後の課題（issue `#TODO`）。
 - **本体リポジトリの作業ツリー内には置かない**。正解ラベルを本体 repo にコミットする事故を防ぐためである。
 - Dev Container にはホスト側ディレクトリ用の追加マウント設定がないため、ホスト側の clone はコンテナから見えない。コンテナ内かつワークスペース外（例: `/home/node/chumon-hub-golden`）に置き、`.env.local` に `GOLDEN_SET_DIR=/home/node/chumon-hub-golden` を記載する。`GOLDEN_SET_DIR` は秘匿値ではないため、`op://` 参照は不要。
 - Dev Container をリビルドするとコンテナ内のデータは失われる。結果 JSON を残す場合はコンテナ外へ退避するか、リモートを持つ運用にする。
