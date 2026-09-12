@@ -96,7 +96,7 @@ export const drawingSchema = z.object({
   material: z
     .string()
     .describe(
-      'Material (材質) ※明確な記載（SS400、SUS、SOBなど）のみ抽出すること。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
+      'Material (材質) ※材質欄の明確な記載（SS400、SUS、S45C、SUS304（片面ミガキ鋼板 t2）など）を、括弧書きの補足（板厚・仕上げ等）も含めて記載どおりに抽出すること。SOB は表面処理であり材質ではない。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
     ),
   quantity: z
     .number()
@@ -108,7 +108,7 @@ export const drawingSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Surface Treatment (表面処理) ※明確な記載（めっき、塗装、アルマイト、無電解ニッケル、四三酸化鉄皮膜など）のみ抽出すること。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
+      'Surface Treatment (表面処理) ※明確な記載（SOB、めっき、塗装、アルマイト、無電解ニッケル、四三酸化鉄皮膜など）のみ抽出すること。記載がない場合は必ず空文字("")にすること。人名や日付を誤って入れないこと。'
     ),
   notes: z.string().optional().describe('Notes/Remarks (備考)'),
   confidence: z.coerce.number().describe('Confidence level (0-100)'),
