@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, degrees } from 'pdf-lib'
 
 import { logger } from '@/lib/logger'
 
@@ -161,7 +161,8 @@ export async function cropTitleBlockPdf(
 
   const rawAngle = page.getRotation().angle
   const rotation = normalizeRotation(rawAngle)
-  if (rotation === 0 && rawAngle % 90 !== 0) {
+  const isNonOrthogonalRotation = rotation === 0 && rawAngle % 90 !== 0
+  if (isNonOrthogonalRotation) {
     logger.warn(
       `Non-orthogonal page rotation: ${rawAngle}deg. Treating as 0deg.`
     )
@@ -214,6 +215,11 @@ export async function cropTitleBlockPdf(
 
   copiedPage.setCropBox(finalX, finalY, userRect.width, userRect.height)
   copiedPage.setMediaBox(finalX, finalY, userRect.width, userRect.height)
+
+  // 不正な /Rotate は 0 扱いに正規化し、クロップ座標と表示の向きを一致させる。
+  if (isNonOrthogonalRotation) {
+    copiedPage.setRotation(degrees(0))
+  }
 
   croppedPdfDoc.addPage(copiedPage)
 

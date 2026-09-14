@@ -226,11 +226,13 @@ describe('cropTitleBlockPdf', () => {
     if (!result.ok) return
 
     const output = await PDFDocument.load(result.pdfBytes)
-    expectRect(output.getPage(0).getMediaBox(), {
+    const page = output.getPage(0)
+    expectRect(page.getMediaBox(), {
       x: 0,
       y: 7 * MM_TO_POINTS,
       width: 210 * MM_TO_POINTS,
       height: 70 * MM_TO_POINTS,
     })
+    expect(page.getRotation().angle).toBe(0)
   })
 })
