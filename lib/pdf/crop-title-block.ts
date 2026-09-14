@@ -52,6 +52,60 @@ export type CropTitleBlockResult =
   | { ok: true; pdfBytes: Uint8Array; detectedSize: IsoPageSize }
   | { ok: false; reason: 'no-pages' }
 
+// ページの回転角（/Rotate）。pdf-lib は読み取り時に 90 の倍数を保証しないため、
+// 正規化して 90 の倍数でない場合は 0 として扱う。
+export type PageRotation = 0 | 90 | 180 | 270
+
+export interface CropRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * 表示（/Rotate 適用後）座標系の矩形を PDF ユーザー空間の矩形へ変換する。
+ * pageWidth / pageHeight は MediaBox の幅・高さ（未回転）。MediaBox 原点の加算は呼び出し側で行う。
+ */
+export function displayRectToUserSpace(
+  rect: CropRect,
+  pageWidth: number,
+  pageHeight: number,
+  rotation: PageRotation
+): CropRect {
+  const { x: dx, y: dy, width: dw, height: dh } = rect
+  const W = pageWidth
+  const H = pageHeight
+
+  switch (rotation) {
+    case 90:
+      return { x: W - dy - dh, y: dx, width: dh, height: dw }
+    case 180:
+      return { x: W - dx - dw, y: H - dy - dh, width: dw, height: dh }
+    case 270:
+      return { x: dy, y: H - dx - dw, width: dh, height: dw }
+    case 0:
+    default:
+      return { x: dx, y: dy, width: dw, height: dh }
+  }
+}
+
+/**
+ * 任意の角度を 0/90/180/270 に正規化する。90 の倍数でない場合は 0 を返す。
+ */
+function normalizeRotation(angle: number): PageRotation {
+  const normalized = ((angle % 360) + 360) % 360
+  if (
+    normalized === 0 ||
+    normalized === 90 ||
+    normalized === 180 ||
+    normalized === 270
+  ) {
+    return normalized
+  }
+  return 0
+}
+
 /**
  * ページサイズからISO用紙サイズを判定
  * @param widthPt ページ幅（ポイント）
@@ -104,15 +158,31 @@ export async function cropTitleBlockPdf(
   }
 
   const page = pdfDoc.getPage(0)
-  const { width: pageWidth, height: pageHeight } = page.getSize()
 
-  const detectedSize = detectPageSize(pageWidth, pageHeight)
+  const rawAngle = page.getRotation().angle
+  const rotation = normalizeRotation(rawAngle)
+  if (rotation === 0 && rawAngle % 90 !== 0) {
+    logger.warn(
+      `Non-orthogonal page rotation: ${rawAngle}deg. Treating as 0deg.`
+    )
+  }
+
+  // MediaBox は未回転の幅・高さと原点を返す。
+  const mediaBox = page.getMediaBox()
+
+  // 表示（/Rotate 適用後）サイズ。90/270 は幅・高さを入れ替える。
+  const displayWidth =
+    rotation === 90 || rotation === 270 ? mediaBox.height : mediaBox.width
+  const displayHeight =
+    rotation === 90 || rotation === 270 ? mediaBox.width : mediaBox.height
+
+  const detectedSize = detectPageSize(displayWidth, displayHeight)
   const cropConfig = CROP_SETTINGS[detectedSize]
 
-  const widthMm = (pageWidth / MM_TO_POINTS).toFixed(1)
-  const heightMm = (pageHeight / MM_TO_POINTS).toFixed(1)
+  const widthMm = (displayWidth / MM_TO_POINTS).toFixed(1)
+  const heightMm = (displayHeight / MM_TO_POINTS).toFixed(1)
   logger.debug(
-    `Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm) | ` +
+    `Detected size: ${detectedSize} (${widthMm}mm x ${heightMm}mm, rotation ${rotation}deg) | ` +
       `Crop: ${cropConfig.width}mm x ${cropConfig.height}mm`
   )
 
@@ -121,17 +191,29 @@ export async function cropTitleBlockPdf(
   const offsetX = cropConfig.offsetX * MM_TO_POINTS
   const offsetY = cropConfig.offsetY * MM_TO_POINTS
 
-  const actualCropWidth = Math.min(cropWidth, pageWidth)
-  const actualCropHeight = Math.min(cropHeight, pageHeight)
+  // 以降の矩形計算はすべて表示座標系で行う。
+  // 原点は右下: offsetX は右端から左方向、offsetY は下端から上方向。
+  const actualCropWidth = Math.min(cropWidth, displayWidth)
+  const actualCropHeight = Math.min(cropHeight, displayHeight)
 
-  const cropX = Math.max(0, pageWidth - actualCropWidth - offsetX)
+  const cropX = Math.max(0, displayWidth - actualCropWidth - offsetX)
   const cropY = Math.max(0, offsetY)
+
+  // 表示座標系の矩形を PDF ユーザー空間へ変換し、MediaBox 原点を加算する。
+  const userRect = displayRectToUserSpace(
+    { x: cropX, y: cropY, width: actualCropWidth, height: actualCropHeight },
+    mediaBox.width,
+    mediaBox.height,
+    rotation
+  )
+  const finalX = userRect.x + mediaBox.x
+  const finalY = userRect.y + mediaBox.y
 
   const croppedPdfDoc = await PDFDocument.create()
   const [copiedPage] = await croppedPdfDoc.copyPages(pdfDoc, [0])
 
-  copiedPage.setCropBox(cropX, cropY, actualCropWidth, actualCropHeight)
-  copiedPage.setMediaBox(cropX, cropY, actualCropWidth, actualCropHeight)
+  copiedPage.setCropBox(finalX, finalY, userRect.width, userRect.height)
+  copiedPage.setMediaBox(finalX, finalY, userRect.width, userRect.height)
 
   croppedPdfDoc.addPage(copiedPage)
 
