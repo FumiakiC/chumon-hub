@@ -129,7 +129,6 @@ export function useDrawingAnalysis(
                     material: result.material || '',
                     quantity: result.quantity ?? null,
                     surfaceTreatment: result.surfaceTreatment || '',
-                    notes: result.notes || '',
                     confidence: result.confidence || 0,
                     needsReview: (result.confidence || 0) < 85,
                     status:

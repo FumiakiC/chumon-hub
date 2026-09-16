@@ -39,6 +39,15 @@ describe('scoreField', () => {
     expect(result.actualNormalized).toBe('千葉')
   })
 
+  it('正解の notes が非空で抽出結果に notes キーが無ければ mismatch', () => {
+    const labelWithNotes: GoldenLabel = {
+      ...label,
+      expected: { ...label.expected, notes: '図面本文の注記' },
+    }
+
+    expect(scoreField('notes', labelWithNotes, {}).verdict).toBe('mismatch')
+  })
+
   it('accepted に載っていれば match（根拠は accepted）', () => {
     const withAccepted: GoldenLabel = {
       ...label,
