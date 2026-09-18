@@ -147,6 +147,19 @@ describe('rasterizeCropRegion', () => {
     }
   )
 
+  it('NodeのBuffer入力を受け付け、呼び出し側の入力をdetachしない', async () => {
+    const pdfBytes = await makeA4PdfWithDisplayRect(0, 'crop')
+    const input = Buffer.from(pdfBytes)
+    const originalByteLength = input.byteLength
+
+    const result = await rasterizeCropRegion(input, { dpi: 72 })
+
+    expect(Buffer.isBuffer(input)).toBe(true)
+    expect(result.ok).toBe(true)
+    expect(input.byteLength).toBe(originalByteLength)
+    expect(input.byteLength).toBeGreaterThan(0)
+  })
+
   it('出力PNGの幅と高さを切り出しpt×dpi/72の四捨五入で求める', async () => {
     const input = await makeA4PdfWithDisplayRect(0, 'crop')
     const dpi = 144

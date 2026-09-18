@@ -69,6 +69,14 @@ export async function rasterizeCropRegion(
   const dpi = options?.dpi ?? DEFAULT_DPI
   const scale = dpi / POINTS_PER_INCH
 
+  // pdfjs は `getDocument` の内部で `Buffer` を明示的に拒否する
+  // （"Please provide binary data as `Uint8Array`, rather than `Buffer`." を throw）。
+  // 評価ハーネスは node:fs の readFile が返す Buffer を渡してくるため、素の
+  // Uint8Array へ正規化する。さらに pdfjs は渡したバッファを detach するので、
+  // 呼び出し側の入力を壊さないよう必ず複製を渡す（input 自体は渡さない）。
+  const data = new Uint8Array(input.byteLength)
+  data.set(input)
+
   // 信頼できない PDF を読む。pdfjs 6.3.289 では eval を使う経路そのものが無く、
   // CVE-2024-4367 の回避策として使われていた `isEvalSupported` も廃止済み。
   // 将来 pdfjs の依存を差し替える場合は、eval 経路の有無を再確認すること。
@@ -76,7 +84,7 @@ export async function rasterizeCropRegion(
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
   const loadingTask = getDocument({
-    data: input,
+    data,
     useSystemFonts: false,
     standardFontDataUrl: resolveStandardFontDataUrl(),
   })
