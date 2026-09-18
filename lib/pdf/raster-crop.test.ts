@@ -13,7 +13,7 @@ import {
 import {
   MAX_RENDER_PIXELS,
   rasterizeCropRegion,
-  resolveStandardFontDataUrl,
+  resolvePdfjsDataUrl,
 } from '@/lib/pdf/raster-crop'
 
 const A4_WIDTH_PT = 210 * MM_TO_POINTS
@@ -191,16 +191,22 @@ describe('rasterizeCropRegion', () => {
     expect(widthPx * heightPx).toBeGreaterThan(MAX_RENDER_PIXELS)
   })
 
-  it('同梱標準フォントデータの代替フォントが実在する', () => {
-    const standardFontDataUrl = resolveStandardFontDataUrl()
+  it('pdfjs同梱データの代表ファイルが実在する', () => {
+    const expectedFiles = {
+      standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
+      wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],
+      cmaps: ['UniJIS-UCS2-H.bcmap'],
+      iccs: ['CGATS001Compat-v2-micro.icc'],
+    } as const
 
-    expect(standardFontDataUrl.endsWith(path.sep)).toBe(true)
-    expect(
-      existsSync(path.join(standardFontDataUrl, 'LiberationSans-Regular.ttf'))
-    ).toBe(true)
-    expect(
-      existsSync(path.join(standardFontDataUrl, 'FoxitDingbats.pfb'))
-    ).toBe(true)
+    for (const [subdirectory, files] of Object.entries(expectedFiles)) {
+      const dataUrl = resolvePdfjsDataUrl(subdirectory)
+      expect(dataUrl.endsWith(path.sep)).toBe(true)
+
+      for (const file of files) {
+        expect(existsSync(path.join(dataUrl, file))).toBe(true)
+      }
+    }
   })
 
   it('非埋め込みHelveticaを警告なしで同梱標準フォントから描画する', async () => {

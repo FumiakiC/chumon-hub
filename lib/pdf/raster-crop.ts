@@ -35,15 +35,13 @@ export type RasterCropResult =
   | { ok: false; reason: 'no-pages' | 'too-many-pixels' }
 
 /**
- * pdfjs-dist に同梱された標準フォントデータのディレクトリ URL を解決する。
- * 対象 PDF は Helvetica / ZapfDingbats を非埋め込みで参照するため、これを
- * 明示的に読み込ませないと本番コンテナ（フォント未インストール）で文字が欠落する。
+ * pdfjs-dist に同梱されたデータのディレクトリを解決する。
  * pdfjs の仕様に合わせ、末尾はセパレータ付きで返す。
  */
-export function resolveStandardFontDataUrl(): string {
+export function resolvePdfjsDataUrl(subdirectory: string): string {
   const require = createRequire(import.meta.url)
   const pkgPath = require.resolve('pdfjs-dist/package.json')
-  return path.join(path.dirname(pkgPath), 'standard_fonts') + path.sep
+  return path.join(path.dirname(pkgPath), subdirectory) + path.sep
 }
 
 /**
@@ -80,13 +78,18 @@ export async function rasterizeCropRegion(
   // 信頼できない PDF を読む。pdfjs 6.3.289 では eval を使う経路そのものが無く、
   // CVE-2024-4367 の回避策として使われていた `isEvalSupported` も廃止済み。
   // 将来 pdfjs の依存を差し替える場合は、eval 経路の有無を再確認すること。
-  // useSystemFonts を false にし、標準フォントは同梱データのみから解決する。
+  // 標準フォント・WASMデコーダ・定義済みCMap・ICCプロファイルはすべて
+  // pdfjs-distの同梱データから解決し、OSや外部ネットワークに依存させない。
+  // これらを未指定にすると警告だけで処理が続き、文字や画像が無言で欠落しうる。
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
 
   const loadingTask = getDocument({
     data,
     useSystemFonts: false,
-    standardFontDataUrl: resolveStandardFontDataUrl(),
+    standardFontDataUrl: resolvePdfjsDataUrl('standard_fonts'),
+    wasmUrl: resolvePdfjsDataUrl('wasm'),
+    cMapUrl: resolvePdfjsDataUrl('cmaps'),
+    iccUrl: resolvePdfjsDataUrl('iccs'),
   })
 
   try {
