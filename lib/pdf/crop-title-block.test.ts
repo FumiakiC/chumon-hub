@@ -7,6 +7,7 @@ import {
   type IsoPageSize,
   MM_TO_POINTS,
   type PageRotation,
+  computeDisplayCropRect,
   cropTitleBlockPdf,
   detectPageSize,
   displayRectToUserSpace,
@@ -93,6 +94,38 @@ describe('displayRectToUserSpace', () => {
       )
     }
   )
+})
+
+describe('computeDisplayCropRect', () => {
+  it('ISO判定でA2へ落ちる高さ72mm未満のページでも矩形がページ内に収まる', () => {
+    const displayWidth = 100 * MM_TO_POINTS
+    const displayHeight = 50 * MM_TO_POINTS
+    const detectedSize = detectPageSize(displayWidth, displayHeight)
+
+    expect(detectedSize).toBe('A2')
+
+    const rect = computeDisplayCropRect(
+      displayWidth,
+      displayHeight,
+      detectedSize
+    )
+
+    expect(rect.x).toBeGreaterThanOrEqual(0)
+    expect(rect.y).toBeGreaterThanOrEqual(0)
+    expect(rect.x + rect.width).toBeLessThanOrEqual(displayWidth)
+    expect(rect.y + rect.height).toBeLessThanOrEqual(displayHeight)
+    expect(rect.y).toBe(0)
+    expect(rect.height).toBe(displayHeight)
+  })
+
+  it('X方向も左右両端でclampし、矩形がページ内に収まる', () => {
+    const displayWidth = 100 * MM_TO_POINTS
+    const displayHeight = 100 * MM_TO_POINTS
+    const rect = computeDisplayCropRect(displayWidth, displayHeight, 'A2')
+
+    expect(rect.x).toBeGreaterThanOrEqual(0)
+    expect(rect.x + rect.width).toBeLessThanOrEqual(displayWidth)
+  })
 })
 
 describe('detectPageSize', () => {

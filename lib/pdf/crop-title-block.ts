@@ -107,6 +107,47 @@ function normalizeRotation(angle: number): PageRotation {
 }
 
 /**
+ * 表示（/Rotate 適用後）座標系での切り出し矩形を計算する純関数。
+ *
+ * 原点は右下: offsetX は右端から左方向、offsetY は下端から上方向。
+ * `cropTitleBlockPdf` と `rasterizeCropRegion` の両方から共有する。
+ *
+ * #328: 切り出し高さ＋オフセットがページ高さを超えると矩形がページ外へはみ出すため、
+ * 下限（0）だけでなく上限（ページ端）でも clamp する。actualCropWidth/Height は
+ * ページサイズ自体で clamp 済みなので、上限側の clamp 結果は必ず 0 以上になる。
+ */
+export function computeDisplayCropRect(
+  displayWidth: number,
+  displayHeight: number,
+  size: IsoPageSize
+): CropRect {
+  const cropConfig = CROP_SETTINGS[size]
+
+  const cropWidth = cropConfig.width * MM_TO_POINTS
+  const cropHeight = cropConfig.height * MM_TO_POINTS
+  const offsetX = cropConfig.offsetX * MM_TO_POINTS
+  const offsetY = cropConfig.offsetY * MM_TO_POINTS
+
+  const actualCropWidth = Math.min(cropWidth, displayWidth)
+  const actualCropHeight = Math.min(cropHeight, displayHeight)
+
+  // 下限 0・上限（ページ端 - 切り出しサイズ）の両側で clamp し、矩形が必ず
+  // ページ内に収まるようにする。X 側は現行でも上限を満たすが式で明示する。
+  const cropX = Math.min(
+    Math.max(0, displayWidth - actualCropWidth - offsetX),
+    displayWidth - actualCropWidth
+  )
+  const cropY = Math.min(Math.max(0, offsetY), displayHeight - actualCropHeight)
+
+  return {
+    x: cropX,
+    y: cropY,
+    width: actualCropWidth,
+    height: actualCropHeight,
+  }
+}
+
+/**
  * ページサイズからISO用紙サイズを判定
  * @param widthPt ページ幅（ポイント）
  * @param heightPt ページ高さ（ポイント）
@@ -187,22 +228,16 @@ export async function cropTitleBlockPdf(
       `Crop: ${cropConfig.width}mm x ${cropConfig.height}mm`
   )
 
-  const cropWidth = cropConfig.width * MM_TO_POINTS
-  const cropHeight = cropConfig.height * MM_TO_POINTS
-  const offsetX = cropConfig.offsetX * MM_TO_POINTS
-  const offsetY = cropConfig.offsetY * MM_TO_POINTS
-
   // 以降の矩形計算はすべて表示座標系で行う。
-  // 原点は右下: offsetX は右端から左方向、offsetY は下端から上方向。
-  const actualCropWidth = Math.min(cropWidth, displayWidth)
-  const actualCropHeight = Math.min(cropHeight, displayHeight)
-
-  const cropX = Math.max(0, displayWidth - actualCropWidth - offsetX)
-  const cropY = Math.max(0, offsetY)
+  const displayRect = computeDisplayCropRect(
+    displayWidth,
+    displayHeight,
+    detectedSize
+  )
 
   // 表示座標系の矩形を PDF ユーザー空間へ変換し、MediaBox 原点を加算する。
   const userRect = displayRectToUserSpace(
-    { x: cropX, y: cropY, width: actualCropWidth, height: actualCropHeight },
+    displayRect,
     mediaBox.width,
     mediaBox.height,
     rotation

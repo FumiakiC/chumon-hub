@@ -22,9 +22,10 @@ export type EvalCaseRecord =
     }
 
 export interface EvalRunResult {
-  schemaVersion: 2
+  schemaVersion: 3
   runAt: string
-  stage: { id: InputStageId; label: string }
+  /** 入力段。dpi はラスタライズを伴う段のみ。A / C2p は null。 */
+  stage: { id: InputStageId; label: string; dpi: number | null }
   model: string
   appCommit: string | null
   /** `null` は git repo でない等で判定不能。app リポジトリの作業ツリー全体を対象に判定する。 */

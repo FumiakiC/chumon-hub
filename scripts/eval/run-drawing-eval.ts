@@ -30,10 +30,40 @@ function fail(message: string): never {
 
 function parseStageArg(value: string | undefined): InputStageId[] {
   const stage = value ?? 'all'
-  if (stage === 'all') return ['A', 'C2p']
-  if (stage === 'A' || stage === 'C2p') return [stage]
+  if (stage === 'all') return ['A', 'C2p', 'C1']
+  if (stage === 'A' || stage === 'C2p' || stage === 'C1') return [stage]
   fail(
-    `--stage は A / C2p / all のいずれかを指定してください（指定値: ${stage}）`
+    `--stage は A / C2p / C1 / all のいずれかを指定してください（指定値: ${stage}）`
+  )
+}
+
+/** --dpi を正の整数としてパースする。既定値は 300。 */
+function parseDpiArg(value: string | undefined): number {
+  if (value === undefined) return 300
+  if (!/^\d+$/.test(value.trim())) {
+    fail(`--dpi は正の整数を指定してください（指定値: ${value}）`)
+  }
+  const dpi = Number(value)
+  if (!Number.isInteger(dpi) || dpi <= 0) {
+    fail(`--dpi は正の整数を指定してください（指定値: ${value}）`)
+  }
+  return dpi
+}
+
+function printHelp(): void {
+  process.stdout.write(
+    [
+      'Usage: pnpm eval:drawing:local -- [options]',
+      '',
+      'Options:',
+      '  --stage <A|C2p|C1|all>  入力段（既定: all）',
+      '  --dpi <number>           C1 のラスタライズ DPI（既定: 300）',
+      '  --model <model>          Gemini モデル ID',
+      '  --case <case-id>         対象ケース（複数指定可）',
+      '  --out <directory>        結果出力先',
+      '  --help                   このヘルプを表示',
+      '',
+    ].join('\n')
   )
 }
 
@@ -49,6 +79,7 @@ async function runStage(
     goldenDir: string
     apiKey: string
     model: string
+    dpi: number
     appCommit: string | null
     appDirty: boolean | null
     goldenCommit: string | null
@@ -69,16 +100,19 @@ async function runStage(
         resolved
       )
       const buffer = await readFile(verifiedPath)
-      const output = await stage.prepare({
-        buffer,
-        fileName: path.basename(label.file),
-      })
+      const output = await stage.prepare(
+        {
+          buffer,
+          fileName: path.basename(label.file),
+        },
+        { dpi: options.dpi }
+      )
 
       const actual = await withUploadedFile(
         {
           buffer: output.buffer,
           mimeType: output.mimeType,
-          ext: 'pdf',
+          ext: output.ext,
           displayName: output.displayName,
           apiKey: options.apiKey,
         },
@@ -133,9 +167,13 @@ async function runStage(
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     runAt,
-    stage: { id: stage.id, label: stage.label },
+    stage: {
+      id: stage.id,
+      label: stage.label,
+      dpi: stage.id === 'C1' ? options.dpi : null,
+    },
     model: options.model,
     appCommit: options.appCommit,
     appDirty: options.appDirty,
@@ -172,10 +210,20 @@ async function main(): Promise<void> {
     options: {
       stage: { type: 'string' },
       model: { type: 'string' },
+      dpi: { type: 'string' },
       case: { type: 'string', multiple: true },
       out: { type: 'string' },
+      help: { type: 'boolean' },
     },
   })
+
+  // ヘルプでは環境変数や AI 呼び出しを要求しない。stage/dpi の妥当性だけ先に確認する。
+  if (values.help) {
+    parseStageArg(values.stage)
+    parseDpiArg(values.dpi)
+    printHelp()
+    return
+  }
 
   const goldenDir = process.env.GOLDEN_SET_DIR
   if (!goldenDir) {
@@ -193,6 +241,7 @@ async function main(): Promise<void> {
 
   const stageIds = parseStageArg(values.stage)
   const model = values.model ?? GEMINI_MODELS.extractDrawing
+  const dpi = parseDpiArg(values.dpi)
   const caseFilter = values.case ? new Set(values.case) : null
 
   const outputDir =
@@ -232,6 +281,7 @@ async function main(): Promise<void> {
       goldenDir,
       apiKey,
       model,
+      dpi,
       appCommit,
       appDirty,
       goldenCommit,
