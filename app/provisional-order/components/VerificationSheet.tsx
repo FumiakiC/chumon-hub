@@ -1,5 +1,4 @@
 'use client'
-/* eslint-disable @next/next/no-img-element */
 import type { UseFormReturn } from 'react-hook-form'
 
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +45,7 @@ export function VerificationSheet({
           </SheetHeader>
           <div className="bg-muted mt-4 aspect-video overflow-hidden rounded border">
             {previewFile?.base64 && (
+              // eslint-disable-next-line @next/next/no-img-element -- API の data URI PNG は最適化対象外（next.config.mjs の images.unoptimized: true）。
               <img
                 src={previewFile.base64}
                 className="h-full w-full object-contain"
@@ -66,6 +66,7 @@ export function VerificationSheet({
             <div className="space-y-4 py-4">
               <div className="bg-muted relative aspect-[16/9] overflow-hidden rounded border">
                 {selectedItem.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- API の data URI PNG は最適化対象外（next.config.mjs の images.unoptimized: true）。
                   <img
                     src={selectedItem.previewUrl}
                     className="h-full w-full object-contain"

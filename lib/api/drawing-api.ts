@@ -10,8 +10,8 @@ import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
 
 /**
  * 本文に `code` を持たない応答のための、HTTP ステータス由来の既定コード。
- * crop-title-block は validationErrorResponse を通らない経路（素の 400 / 500）が
- * あるため、その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
+ * crop-title-block のファイル未指定・全件処理失敗の 400 は code を持たないため、
+ * その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
  * 返す（`code` を持たない）ため、ここで補う必要がある。
  */
 function fallbackCodeForStatus(status: number): AppErrorCode {
@@ -71,13 +71,10 @@ export async function cropTitleBlock(
   const data: CropTitleBlockResponse = await response.json()
   const base64 = data?.croppedFiles?.[0]?.base64
   const mimeType = data?.croppedFiles?.[0]?.mimeType
+  const expectedMimeType: CropTitleBlockResponse['croppedFiles'][number]['mimeType'] =
+    'image/png'
 
-  if (
-    typeof base64 !== 'string' ||
-    !base64 ||
-    typeof mimeType !== 'string' ||
-    !mimeType
-  ) {
+  if (typeof base64 !== 'string' || !base64 || mimeType !== expectedMimeType) {
     throw new AppError('ERR_INVALID_RESULT', 'No cropped file data in response')
   }
 

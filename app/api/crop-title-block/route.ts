@@ -6,7 +6,11 @@ import {
   readFormData,
   validateUploadFile,
 } from '@/lib/ai/pipeline'
-import { ConfigError, validationErrorResponse } from '@/lib/errors'
+import {
+  ConfigError,
+  errorResponse,
+  validationErrorResponse,
+} from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { rasterizeCropRegion } from '@/lib/pdf/raster-crop'
 
@@ -102,9 +106,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     logger.error('Error in crop-title-block API:', error)
-    return NextResponse.json(
-      { error: 'PDFのクロップ処理中にエラーが発生しました' },
-      { status: 500 }
-    )
+    return errorResponse(error, { code: 'ERR_REQUEST_FAILED', status: 500 })
   }
 }
