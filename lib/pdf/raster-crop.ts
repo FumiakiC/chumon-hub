@@ -1,7 +1,10 @@
 import { createCanvas } from '@napi-rs/canvas'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
+import { ConfigError } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 import {
   type IsoPageSize,
   computeDisplayCropRect,
@@ -34,14 +37,66 @@ export type RasterCropResult =
     }
   | { ok: false; reason: 'no-pages' | 'too-many-pixels' }
 
+export const PDFJS_DATA_FILES = {
+  standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
+  wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],
+  cmaps: ['UniJIS-UCS2-H.bcmap'],
+  iccs: ['CGATS001Compat-v2-micro.icc'],
+} as const
+
+const dataUrls = new Map<string, string | ConfigError>()
+const pdfjsWarnMarker = Symbol.for('chumon-hub.pdfjsWarn')
+type MarkedWarn = typeof console.warn & { [pdfjsWarnMarker]?: boolean }
+
+if (!(console.warn as MarkedWarn)[pdfjsWarnMarker]) {
+  const originalWarn = console.warn.bind(console)
+  console.warn = Object.assign(
+    (...args: unknown[]) => {
+      const message = args[0]
+      if (typeof message === 'string' && message.startsWith('Warning: ')) {
+        logger.warn('PDF renderer emitted a warning')
+        logger.debug(message)
+        return
+      }
+      originalWarn(...args)
+    },
+    { [pdfjsWarnMarker]: true }
+  )
+}
+
 /**
  * pdfjs-dist に同梱されたデータのディレクトリを解決する。
  * pdfjs の仕様に合わせ、末尾はセパレータ付きで返す。
  */
 export function resolvePdfjsDataUrl(subdirectory: string): string {
-  const require = createRequire(import.meta.url)
-  const pkgPath = require.resolve('pdfjs-dist/package.json')
-  return path.join(path.dirname(pkgPath), subdirectory) + path.sep
+  const cached = dataUrls.get(subdirectory)
+  if (cached instanceof ConfigError) throw cached
+  if (cached !== undefined) return cached
+
+  try {
+    const files = Object.entries(PDFJS_DATA_FILES).find(
+      ([directory]) => directory === subdirectory
+    )?.[1]
+    if (!files) throw new ConfigError('Unknown PDF renderer data directory')
+
+    const require = createRequire(import.meta.url)
+    const pkgPath = require.resolve('pdfjs-dist/package.json')
+    const dataUrl = path.join(path.dirname(pkgPath), subdirectory) + path.sep
+    if (!files.every((file) => existsSync(path.join(dataUrl, file)))) {
+      throw new ConfigError('PDF renderer bundled data is missing')
+    }
+    dataUrls.set(subdirectory, dataUrl)
+    return dataUrl
+  } catch (error) {
+    const configError =
+      error instanceof ConfigError
+        ? error
+        : new ConfigError('Cannot resolve PDF renderer bundled data', {
+            cause: error,
+          })
+    dataUrls.set(subdirectory, configError)
+    throw configError
+  }
 }
 
 /**

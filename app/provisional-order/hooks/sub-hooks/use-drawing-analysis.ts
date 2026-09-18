@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, useCallback, useRef, useState } from 'react'
 
 import { extractDrawingData } from '@/lib/api/drawing-api'
+import { AppError } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 
 import type { CroppedFile, OrderItem } from '../../schema'
@@ -101,9 +102,16 @@ export function useDrawingAnalysis(
               })
 
               // Convert Base64 to Blob
-              const blob = await base64ToBlob(file.base64, 'application/pdf')
-              const fileObject = new File([blob], file.fileName, {
-                type: 'application/pdf',
+              if (!file.mimeType) {
+                throw new AppError(
+                  'ERR_INVALID_RESULT',
+                  'クロップ画像の形式が取得できませんでした'
+                )
+              }
+              const blob = await base64ToBlob(file.base64, file.mimeType)
+              const pngFileName = file.fileName.replace(/\.[^.]+$/, '') + '.png'
+              const fileObject = new File([blob], pngFileName, {
+                type: file.mimeType,
               })
 
               // Mark as analyzing

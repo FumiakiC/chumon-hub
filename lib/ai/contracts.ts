@@ -19,6 +19,8 @@ export type CheckDocumentTypeResponse = z.infer<
 export type CropTitleBlockResponse = {
   croppedFiles: {
     fileName: string
+    /** `data:image/png;base64,...` 形式の data URI */
     base64: string
+    mimeType: 'image/png'
   }[]
 }

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import type { CropTitleBlockResponse } from '@/lib/ai/contracts'
 import {
   checkRequestBodySize,
   readFormData,
   validateUploadFile,
 } from '@/lib/ai/pipeline'
-import { validationErrorResponse } from '@/lib/errors'
+import { ConfigError, validationErrorResponse } from '@/lib/errors'
 import { logger } from '@/lib/logger'
-import { cropTitleBlockPdf } from '@/lib/pdf/crop-title-block'
+import { rasterizeCropRegion } from '@/lib/pdf/raster-crop'
 
-interface CroppedFile {
-  fileName: string
-  base64: string
-}
+type CroppedFile = CropTitleBlockResponse['croppedFiles'][number]
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
         return validationErrorResponse(validation.status)
       }
 
-      // 許可 MIME には画像も含まれるが、本ルートは pdf-lib に渡すため PDF のみ通す。
+      // 許可 MIME には画像も含まれるが、本ルートは pdfjs に渡すため PDF のみ通す。
       if (validation.mimeType !== 'application/pdf') {
         logger.warn('Rejecting non-PDF upload')
         return validationErrorResponse(415)
@@ -61,23 +59,25 @@ export async function POST(request: NextRequest) {
 
       try {
         // 検証済みバッファをそのまま使う（arrayBuffer の二重読み込みと余分なコピーを避ける）
-        const cropResult = await cropTitleBlockPdf(validation.buffer)
+        const cropResult = await rasterizeCropRegion(validation.buffer)
 
         if (!cropResult.ok) {
-          logger.warn('No pages found in PDF')
+          logger.warn(`PDF raster crop failed (reason: ${cropResult.reason})`)
           croppedFileResults.push(null)
           continue
         }
 
         // Base64に変換（Data URI形式）
-        const base64String = Buffer.from(cropResult.pdfBytes).toString('base64')
-        const dataUri = `data:application/pdf;base64,${base64String}`
+        const base64String = Buffer.from(cropResult.pngBytes).toString('base64')
+        const dataUri = `data:image/png;base64,${base64String}`
 
         croppedFileResults.push({
           fileName: validation.file.name,
           base64: dataUri,
+          mimeType: 'image/png',
         })
       } catch (fileError) {
+        if (fileError instanceof ConfigError) throw fileError
         logger.error('Error processing file:', fileError)
         // 個別のファイルエラーは警告として処理し、処理を続行
         croppedFileResults.push(null)
