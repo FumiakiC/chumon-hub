@@ -44,7 +44,9 @@ jobs:
             assert(png.length > 8)
             assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
 
-            const pdfjsRoot = path.dirname(require.resolve('pdfjs-dist/package.json'))
+            // 素の Node の require.resolve はバンドラの書き換えを受けないため、
+            // アプリと同じ cwd 基点で確認し、解決基点のずれを見逃さない。
+            const pdfjsRoot = path.join(process.cwd(), 'node_modules', 'pdfjs-dist')
             const files = {
               standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
               wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],

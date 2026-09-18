@@ -253,6 +253,17 @@ describe('rasterizeCropRegion', () => {
     expect(widthPx * heightPx).toBeGreaterThan(MAX_RENDER_PIXELS)
   })
 
+  it('同梱データはcwd配下の絶対パスを末尾セパレータ付きで返す', () => {
+    for (const subdirectory of Object.keys(PDFJS_DATA_FILES)) {
+      const dataUrl = resolvePdfjsDataUrl(subdirectory)
+      expect(path.isAbsolute(dataUrl)).toBe(true)
+      expect(dataUrl).toBe(
+        path.join(process.cwd(), 'node_modules', 'pdfjs-dist', subdirectory) +
+          path.sep
+      )
+    }
+  })
+
   it('pdfjs同梱データの代表ファイルが実在する', () => {
     for (const [subdirectory, files] of Object.entries(PDFJS_DATA_FILES)) {
       const dataUrl = resolvePdfjsDataUrl(subdirectory)

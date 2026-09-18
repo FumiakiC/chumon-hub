@@ -1,6 +1,5 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { ConfigError } from '@/lib/errors'
@@ -79,11 +78,22 @@ export function resolvePdfjsDataUrl(subdirectory: string): string {
     )?.[1]
     if (!files) throw new ConfigError('Unknown PDF renderer data directory')
 
-    const require = createRequire(import.meta.url)
-    const pkgPath = require.resolve('pdfjs-dist/package.json')
-    const dataUrl = path.join(path.dirname(pkgPath), subdirectory) + path.sep
-    if (!files.every((file) => existsSync(path.join(dataUrl, file)))) {
-      throw new ConfigError('PDF renderer bundled data is missing')
+    // Turbopack は require.resolve の戻り値をモジュール ID に書き換える。
+    // createRequire 経由でも同じで、本番ビルドも Turbopack のため使用しない。
+    // dev はプロジェクトルート、本番は WORKDIR /app から起動し、cwd に
+    // node_modules があることを前提に同梱データを解決する。
+    // 本番の k8s/deployment.yaml は workingDir も command も上書きしていないため、
+    // コンテナの WORKDIR（/app）がそのまま cwd になる。マニフェストで作業ディレクトリを
+    // 変更するとこの解決は無言で壊れ、起動時ではなく最初のクロップ要求で 500 になる。
+    const packageRoot = path.join(process.cwd(), 'node_modules', 'pdfjs-dist')
+    const dataUrl = path.join(packageRoot, subdirectory) + path.sep
+    const missingFile = files.find(
+      (file) => !existsSync(path.join(dataUrl, file))
+    )
+    if (missingFile !== undefined) {
+      throw new ConfigError(
+        `PDF renderer bundled data is missing: base=${import.meta.url}, package=${packageRoot}, file=${path.join(dataUrl, missingFile)}`
+      )
     }
     dataUrls.set(subdirectory, dataUrl)
     return dataUrl
@@ -91,9 +101,10 @@ export function resolvePdfjsDataUrl(subdirectory: string): string {
     const configError =
       error instanceof ConfigError
         ? error
-        : new ConfigError('Cannot resolve PDF renderer bundled data', {
-            cause: error,
-          })
+        : new ConfigError(
+            `Cannot resolve PDF renderer bundled data: base=${import.meta.url}`,
+            { cause: error }
+          )
     dataUrls.set(subdirectory, configError)
     throw configError
   }
