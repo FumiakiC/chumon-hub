@@ -4,6 +4,8 @@ import path from 'node:path'
 import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib'
 import { describe, expect, it, vi } from 'vitest'
 
+import { ConfigError } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 import {
   MM_TO_POINTS,
   type PageRotation,
@@ -12,6 +14,7 @@ import {
 } from '@/lib/pdf/crop-title-block'
 import {
   MAX_RENDER_PIXELS,
+  PDFJS_DATA_FILES,
   rasterizeCropRegion,
   resolvePdfjsDataUrl,
 } from '@/lib/pdf/raster-crop'
@@ -111,6 +114,65 @@ async function makeHelveticaPdf(): Promise<Uint8Array> {
 }
 
 describe('rasterizeCropRegion', () => {
+  it.each(['crop', 'outside'] as const)(
+    '#343 原点・幅・高さが異なるCropBoxの右下を基準に描画する: %s',
+    async (placement) => {
+      const document = await PDFDocument.create()
+      const page = document.addPage([A4_WIDTH_PT + 200, A4_HEIGHT_PT + 300])
+      const originX = 50
+      const originY = 100
+      page.setCropBox(originX, originY, A4_WIDTH_PT, A4_HEIGHT_PT)
+      const cropRect = computeDisplayCropRect(A4_WIDTH_PT, A4_HEIGHT_PT, 'A4')
+      const rectangle =
+        placement === 'crop'
+          ? {
+              x: originX + cropRect.x,
+              y: originY + cropRect.y,
+              width: cropRect.width,
+              height: cropRect.height,
+            }
+          : {
+              x: originX + cropRect.x,
+              y: originY + cropRect.height + 30,
+              width: 20,
+              height: 20,
+            }
+      page.drawRectangle({ ...rectangle, color: rgb(0, 0, 0) })
+      page.drawRectangle({
+        x: A4_WIDTH_PT + 160,
+        y: 10,
+        width: 20,
+        height: 20,
+        color: rgb(1, 0, 0),
+      })
+
+      const result = await rasterizeCropRegion(await document.save(), {
+        dpi: 72,
+      })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+
+      expect(result.detectedSize).toBe('A4')
+      expect(result.widthPx).toBe(Math.round(cropRect.width))
+      expect(result.heightPx).toBe(Math.round(cropRect.height))
+      const image = await decodePng(result.pngBytes)
+      const matchingPixels = countPixels(image.data, (red, green, blue) =>
+        placement === 'crop'
+          ? red < 32 && green < 32 && blue < 32
+          : red > 240 && green > 240 && blue > 240
+      )
+      expect(matchingPixels / (image.width * image.height)).toBeGreaterThan(
+        0.98
+      )
+      expect(
+        countPixels(
+          image.data,
+          (red, green, blue) => red > 200 && green < 32 && blue < 32
+        )
+      ).toBe(0)
+    }
+  )
+
   it.each(ROTATIONS)(
     '/Rotate $0 の切り出し領域と一致する黒矩形をほぼ黒く描画する',
     async (rotation) => {
@@ -191,15 +253,19 @@ describe('rasterizeCropRegion', () => {
     expect(widthPx * heightPx).toBeGreaterThan(MAX_RENDER_PIXELS)
   })
 
-  it('pdfjs同梱データの代表ファイルが実在する', () => {
-    const expectedFiles = {
-      standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
-      wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],
-      cmaps: ['UniJIS-UCS2-H.bcmap'],
-      iccs: ['CGATS001Compat-v2-micro.icc'],
-    } as const
+  it('同梱データはcwd配下の絶対パスを末尾セパレータ付きで返す', () => {
+    for (const subdirectory of Object.keys(PDFJS_DATA_FILES)) {
+      const dataUrl = resolvePdfjsDataUrl(subdirectory)
+      expect(path.isAbsolute(dataUrl)).toBe(true)
+      expect(dataUrl).toBe(
+        path.join(process.cwd(), 'node_modules', 'pdfjs-dist', subdirectory) +
+          path.sep
+      )
+    }
+  })
 
-    for (const [subdirectory, files] of Object.entries(expectedFiles)) {
+  it('pdfjs同梱データの代表ファイルが実在する', () => {
+    for (const [subdirectory, files] of Object.entries(PDFJS_DATA_FILES)) {
       const dataUrl = resolvePdfjsDataUrl(subdirectory)
       expect(dataUrl.endsWith(path.sep)).toBe(true)
 
@@ -210,9 +276,7 @@ describe('rasterizeCropRegion', () => {
   })
 
   it('非埋め込みHelveticaを警告なしで同梱標準フォントから描画する', async () => {
-    const warnSpy = vi
-      .spyOn(console, 'warn')
-      .mockImplementation(() => undefined)
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
 
     try {
       const input = await makeHelveticaPdf()
@@ -231,6 +295,74 @@ describe('rasterizeCropRegion', () => {
       expect(warnSpy).not.toHaveBeenCalled()
     } finally {
       warnSpy.mockRestore()
+    }
+  })
+
+  it('存在しない同梱データディレクトリはConfigErrorになる', () => {
+    expect(() => resolvePdfjsDataUrl('missing-data')).toThrow(ConfigError)
+  })
+
+  it('pdfjs警告は固定warnと原文のみのdebugに振り分ける', () => {
+    const wrappedWarn = console.warn
+    const consoleWarnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined)
+    const consoleDebugSpy = vi
+      .spyOn(console, 'debug')
+      .mockImplementation(() => undefined)
+    const warnSpy = vi.spyOn(logger, 'warn')
+    const debugSpy = vi.spyOn(logger, 'debug')
+    try {
+      wrappedWarn('Warning: synthetic pdfjs warning', 'must not be forwarded')
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+        'PDF renderer emitted a warning'
+      )
+      expect(debugSpy).toHaveBeenCalledExactlyOnceWith(
+        'Warning: synthetic pdfjs warning'
+      )
+      expect(consoleWarnSpy).toHaveBeenCalledExactlyOnceWith(
+        'PDF renderer emitted a warning'
+      )
+      expect(consoleDebugSpy).toHaveBeenCalledExactlyOnceWith(
+        'Warning: synthetic pdfjs warning'
+      )
+    } finally {
+      warnSpy.mockRestore()
+      debugSpy.mockRestore()
+      consoleWarnSpy.mockRestore()
+      consoleDebugSpy.mockRestore()
+    }
+  })
+
+  it('再ロードでも警告ラッパーは二重適用されない', async () => {
+    const wrappedWarn = console.warn
+    vi.resetModules()
+    await import('@/lib/pdf/raster-crop')
+    expect(console.warn).toBe(wrappedWarn)
+  })
+
+  it('代表ファイル欠落はConfigErrorになり、検証結果を再利用する', async () => {
+    vi.resetModules()
+    const existsSpy = vi.fn(() => false)
+    vi.doMock('node:fs', () => ({ existsSync: existsSpy }))
+    try {
+      const { resolvePdfjsDataUrl: resolveDataUrl } =
+        await import('@/lib/pdf/raster-crop')
+      const { ConfigError: ReloadedConfigError } = await import('@/lib/errors')
+      expect(() => resolveDataUrl('standard_fonts')).toThrow(
+        ReloadedConfigError
+      )
+      expect(() => resolveDataUrl('standard_fonts')).toThrow(
+        ReloadedConfigError
+      )
+      expect(existsSpy).toHaveBeenCalledTimes(1)
+      existsSpy.mockReturnValue(true)
+      const dataUrl = resolveDataUrl('wasm')
+      expect(resolveDataUrl('wasm')).toBe(dataUrl)
+      expect(existsSpy).toHaveBeenCalledTimes(1 + PDFJS_DATA_FILES.wasm.length)
+    } finally {
+      vi.doUnmock('node:fs')
+      vi.resetModules()
     }
   })
 })

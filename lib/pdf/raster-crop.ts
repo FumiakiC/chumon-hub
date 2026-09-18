@@ -1,7 +1,9 @@
 import { createCanvas } from '@napi-rs/canvas'
-import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 
+import { ConfigError } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 import {
   type IsoPageSize,
   computeDisplayCropRect,
@@ -34,14 +36,78 @@ export type RasterCropResult =
     }
   | { ok: false; reason: 'no-pages' | 'too-many-pixels' }
 
+export const PDFJS_DATA_FILES = {
+  standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
+  wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],
+  cmaps: ['UniJIS-UCS2-H.bcmap'],
+  iccs: ['CGATS001Compat-v2-micro.icc'],
+} as const
+
+const dataUrls = new Map<string, string | ConfigError>()
+const pdfjsWarnMarker = Symbol.for('chumon-hub.pdfjsWarn')
+type MarkedWarn = typeof console.warn & { [pdfjsWarnMarker]?: boolean }
+
+if (!(console.warn as MarkedWarn)[pdfjsWarnMarker]) {
+  const originalWarn = console.warn.bind(console)
+  console.warn = Object.assign(
+    (...args: unknown[]) => {
+      const message = args[0]
+      if (typeof message === 'string' && message.startsWith('Warning: ')) {
+        logger.warn('PDF renderer emitted a warning')
+        logger.debug(message)
+        return
+      }
+      originalWarn(...args)
+    },
+    { [pdfjsWarnMarker]: true }
+  )
+}
+
 /**
  * pdfjs-dist に同梱されたデータのディレクトリを解決する。
  * pdfjs の仕様に合わせ、末尾はセパレータ付きで返す。
  */
 export function resolvePdfjsDataUrl(subdirectory: string): string {
-  const require = createRequire(import.meta.url)
-  const pkgPath = require.resolve('pdfjs-dist/package.json')
-  return path.join(path.dirname(pkgPath), subdirectory) + path.sep
+  const cached = dataUrls.get(subdirectory)
+  if (cached instanceof ConfigError) throw cached
+  if (cached !== undefined) return cached
+
+  try {
+    const files = Object.entries(PDFJS_DATA_FILES).find(
+      ([directory]) => directory === subdirectory
+    )?.[1]
+    if (!files) throw new ConfigError('Unknown PDF renderer data directory')
+
+    // Turbopack は require.resolve の戻り値をモジュール ID に書き換える。
+    // createRequire 経由でも同じで、本番ビルドも Turbopack のため使用しない。
+    // dev はプロジェクトルート、本番は WORKDIR /app から起動し、cwd に
+    // node_modules があることを前提に同梱データを解決する。
+    // 本番の k8s/deployment.yaml は workingDir も command も上書きしていないため、
+    // コンテナの WORKDIR（/app）がそのまま cwd になる。マニフェストで作業ディレクトリを
+    // 変更するとこの解決は無言で壊れ、起動時ではなく最初のクロップ要求で 500 になる。
+    const packageRoot = path.join(process.cwd(), 'node_modules', 'pdfjs-dist')
+    const dataUrl = path.join(packageRoot, subdirectory) + path.sep
+    const missingFile = files.find(
+      (file) => !existsSync(path.join(dataUrl, file))
+    )
+    if (missingFile !== undefined) {
+      throw new ConfigError(
+        `PDF renderer bundled data is missing: base=${import.meta.url}, package=${packageRoot}, file=${path.join(dataUrl, missingFile)}`
+      )
+    }
+    dataUrls.set(subdirectory, dataUrl)
+    return dataUrl
+  } catch (error) {
+    const configError =
+      error instanceof ConfigError
+        ? error
+        : new ConfigError(
+            `Cannot resolve PDF renderer bundled data: base=${import.meta.url}`,
+            { cause: error }
+          )
+    dataUrls.set(subdirectory, configError)
+    throw configError
+  }
 }
 
 /**

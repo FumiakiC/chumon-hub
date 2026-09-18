@@ -10,8 +10,8 @@ import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
 
 /**
  * 本文に `code` を持たない応答のための、HTTP ステータス由来の既定コード。
- * crop-title-block は validationErrorResponse を通らない経路（素の 400 / 500）が
- * あるため、その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
+ * crop-title-block のファイル未指定・全件処理失敗の 400 は code を持たないため、
+ * その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
  * 返す（`code` を持たない）ため、ここで補う必要がある。
  */
 function fallbackCodeForStatus(status: number): AppErrorCode {
@@ -50,10 +50,12 @@ async function toAppError(response: Response): Promise<AppError> {
 /**
  * Crops the title block from a PDF file
  * @param file The original File object to crop
- * @returns Promise resolving to the Base64 string of the cropped content
+ * @returns Promise resolving to the cropped PNG data URI and MIME type
  * @throws {AppError} 失敗時。`code` により呼び出し側で日本語UXへ写像できる
  */
-export async function cropTitleBlock(file: File): Promise<string> {
+export async function cropTitleBlock(
+  file: File
+): Promise<{ base64: string; mimeType: string }> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -67,13 +69,16 @@ export async function cropTitleBlock(file: File): Promise<string> {
   }
 
   const data: CropTitleBlockResponse = await response.json()
-  const base64 = data.croppedFiles?.[0]?.base64
+  const base64 = data?.croppedFiles?.[0]?.base64
+  const mimeType = data?.croppedFiles?.[0]?.mimeType
+  const expectedMimeType: CropTitleBlockResponse['croppedFiles'][number]['mimeType'] =
+    'image/png'
 
-  if (!base64) {
+  if (typeof base64 !== 'string' || !base64 || mimeType !== expectedMimeType) {
     throw new AppError('ERR_INVALID_RESULT', 'No cropped file data in response')
   }
 
-  return base64
+  return { base64, mimeType }
 }
 
 /**

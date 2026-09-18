@@ -13,6 +13,7 @@ export interface CroppedFile {
   progress: number
   thumbnailUrl: string
   base64?: string
+  mimeType?: string
   /** status === 'error' のときのみ設定される（resolveError の日本語メッセージ）。 */
   errorMessage?: string
   /** status === 'error' のときのみ設定される（resolveError の推奨アクション）。 */

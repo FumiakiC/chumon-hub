@@ -188,6 +188,11 @@ export function detectPageSize(widthPt: number, heightPt: number): IsoPageSize {
   return 'A2'
 }
 
+/**
+ * 本番経路では使用せず、評価ハーネスの A 段（従来方式のベースライン）専用。
+ * 基準箱は意図的に MediaBox のまま残す。本番の rasterizeCropRegion は
+ * 表示箱（CropBox ∩ MediaBox）を基準とする。参照: issue #343。
+ */
 export async function cropTitleBlockPdf(
   input: Uint8Array
 ): Promise<CropTitleBlockResult> {

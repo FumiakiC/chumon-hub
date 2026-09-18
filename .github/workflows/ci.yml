@@ -29,6 +29,43 @@ jobs:
 
           cache-to: type=gha,mode=max
 
+      - name: Check raster dependencies in production image
+        run: |
+          docker run --rm -i --entrypoint node chumon-hub:ci <<'NODE'
+          const assert = require('node:assert/strict')
+          const { statSync } = require('node:fs')
+          const path = require('node:path')
+          const { createCanvas } = require('@napi-rs/canvas')
+
+          async function check() {
+            const canvas = createCanvas(2, 2)
+            canvas.getContext('2d').fillRect(0, 0, 2, 2)
+            const png = await canvas.encode('png')
+            assert(png.length > 8)
+            assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
+
+            // 素の Node の require.resolve はバンドラの書き換えを受けないため、
+            // アプリと同じ cwd 基点で確認し、解決基点のずれを見逃さない。
+            const pdfjsRoot = path.join(process.cwd(), 'node_modules', 'pdfjs-dist')
+            const files = {
+              standard_fonts: ['LiberationSans-Regular.ttf', 'FoxitDingbats.pfb'],
+              wasm: ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm'],
+              cmaps: ['UniJIS-UCS2-H.bcmap'],
+              iccs: ['CGATS001Compat-v2-micro.icc'],
+            }
+            for (const [directory, names] of Object.entries(files)) {
+              for (const name of names) {
+                assert(statSync(path.join(pdfjsRoot, directory, name)).isFile())
+              }
+            }
+            console.log('Raster dependencies OK: canvas PNG and all four pdfjs data directories')
+          }
+          check().catch((error) => {
+            console.error(error)
+            process.exit(1)
+          })
+          NODE
+
       # ビルド成功だけでは実行時の起動失敗を検知できないため、
       # 実際にコンテナを起動して / が 200 を返すことまで確認する.
       # 検証パスの / は proxy.ts の matcher 外なので Cloudflare Access なしで応答する.

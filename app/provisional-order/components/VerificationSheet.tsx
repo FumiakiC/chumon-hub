@@ -1,5 +1,4 @@
 'use client'
-
 import type { UseFormReturn } from 'react-hook-form'
 
 import { Badge } from '@/components/ui/badge'
@@ -46,10 +45,11 @@ export function VerificationSheet({
           </SheetHeader>
           <div className="bg-muted mt-4 aspect-video overflow-hidden rounded border">
             {previewFile?.base64 && (
-              <iframe
+              // eslint-disable-next-line @next/next/no-img-element -- API の data URI PNG は最適化対象外（next.config.mjs の images.unoptimized: true）。
+              <img
                 src={previewFile.base64}
-                className="h-full w-full"
-                title="図面プレビュー"
+                className="h-full w-full object-contain"
+                alt="図面プレビュー"
               />
             )}
           </div>
@@ -66,10 +66,11 @@ export function VerificationSheet({
             <div className="space-y-4 py-4">
               <div className="bg-muted relative aspect-[16/9] overflow-hidden rounded border">
                 {selectedItem.previewUrl ? (
-                  <iframe
+                  // eslint-disable-next-line @next/next/no-img-element -- API の data URI PNG は最適化対象外（next.config.mjs の images.unoptimized: true）。
+                  <img
                     src={selectedItem.previewUrl}
-                    className="h-full w-full"
-                    title="抽出結果図面プレビュー"
+                    className="h-full w-full object-contain"
+                    alt="抽出結果図面プレビュー"
                   />
                 ) : (
                   <div className="text-muted-foreground flex h-full items-center justify-center">

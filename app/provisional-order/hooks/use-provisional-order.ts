@@ -98,7 +98,7 @@ export function useProvisionalOrder() {
     }, 150)
 
     try {
-      const base64 = await cropTitleBlock(file)
+      const { base64, mimeType } = await cropTitleBlock(file)
 
       clearInterval(progressInterval)
 
@@ -110,6 +110,7 @@ export function useProvisionalOrder() {
                 progress: 100,
                 status: 'cropped',
                 base64,
+                mimeType,
               }
             : f
         )
