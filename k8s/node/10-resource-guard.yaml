@@ -1,4 +1,11 @@
-# ノード側 k3s の設定。ホストの /etc/rancher/k3s/config.yaml に配置する。
+# ノード側 k3s の設定のドロップイン。
+# ホストの /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml に配置する。
+# k3s は /etc/rancher/k3s/config.yaml と /etc/rancher/k3s/config.yaml.d/*.yaml を
+# アルファベット順に読み込んでマージするため、既存の config.yaml を書き換えずに
+# 設定を追加できる。
+# 注意: 同じキーが複数のファイルにある場合、後から読まれた値で置き換わる。
+# 既存の config.yaml や他のドロップインに kubelet-arg がある場合は、本ファイルの
+# キーを `kubelet-arg+` に変えて追記にすること（docs/ops/k3s-node-config.md 参照）。
 # このファイル自体はクラスタに apply しない（kubectl の対象ではない）。
 # 適用・検証・ロールバック手順: docs/ops/k3s-node-config.md
 #

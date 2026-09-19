@@ -4,7 +4,7 @@
 
 Pod の `limits` はその Pod の上限にすぎず、OS とコントロールプレーンを含む使用量の合計がノード容量に収まることを保証しない。ノード側で OS と k3s の取り分を予約し、Pod に渡す Allocatable を減らす。あわせてアプリのメモリ上限を 512Mi に下げ、メモリ不足時の hard eviction を設定する。
 
-[版管理する k3s 設定](../../k8s/node/k3s-config.yaml)はホストの `/etc/rancher/k3s/config.yaml` 用であり、Kubernetes マニフェストではない。`kubectl apply` の対象にしない。
+[版管理する k3s 設定](../../k8s/node/10-resource-guard.yaml)はホストの `/etc/rancher/k3s/config.yaml.d/` へ置くドロップインであり、Kubernetes マニフェストではない。`kubectl apply` の対象にしない。
 
 `enforce-node-allocatable` は既定の `pods` のままとする。`system-reserved-cgroup` / `kube-reserved-cgroup` による OS・k3s 自体への強制上限は設けない。予約は Pod 側の予算を減らす仕組みであり、OS・k3s の使用量や全 Pod の limits 総和を自動的に制限するものではない。スケジューラは requests で配置を判断するため、limits と実使用量の予算管理も継続する。
 
@@ -27,7 +27,9 @@ Pod の `limits` はその Pod の上限にすぎず、OS とコントロール�
 
 予約の合計（576Mi + 256Mi = 832Mi）は次の実測から決めている。ノード全体の working set 1320Mi から Pod 合計 295Mi を引いた 1025Mi が Pod 以外（OS + k3s + containerd。page cache を含む）の使用量であり、これを予約 832Mi と eviction しきい値 200Mi の合計 1032Mi で覆う。`*-cgroup` による強制を行わない以上、Allocatable に効くのは合計だけであり、kube と system への内訳は表示上の区別にすぎない。
 
-無制限の system pods の使用量が残余に収まる保証はない。適用前後の実測と継続監視が必要。また、既存の RollingUpdate は維持するため、更新中にアプリが一時的に 2 Pod となる場合は limits が合計 1024Mi になる。これは上記予算を超えるため、更新は無負荷時に行い、Pending / Evicted やメモリ圧迫を監視する。本変更だけで更新中を含めた limits 総和の適合が保証されるわけではない。
+無制限の system pods の使用量が残余に収まる保証はない。適用前後の実測と継続監視が必要。
+
+更新中の Pod 数についても予算を守る。`replicas: 1` に既定の RollingUpdate を適用すると `maxSurge: 25%` は 1 に切り上げられ（`maxUnavailable: 25%` は 0 に切り捨てられる）、更新のたびに一時的に 2 Pod が並ぶ。memory limit の合計は 1024Mi となり上記予算を超えるため、`maxSurge: 0` / `maxUnavailable: 1` を明示して surge を禁止する。**代償として、デプロイのたびに旧 Pod の停止から新 Pod の Ready までの数十秒、サービスが停止する。** 単一ノード・`replicas: 1` の構成では無停止更新と予算遵守を両立できないため、予算側を優先する。
 
 ## 適用前の記録
 
@@ -62,18 +64,24 @@ sudo cp -p /etc/rancher/k3s/config.yaml "$SNAPSHOT/config.yaml.original"
 sudo chmod 600 "$SNAPSHOT/config.yaml.original"
 ```
 
-既存ファイルに他の設定がある場合は上書きコピーを中止し、その設定を保ったマージ内容を事前に準備・レビューする。サービス起動引数や設定断片にも同じ kubelet 引数がないか確認する。`eviction-hard` は map 全体を置き換えるため、memory のみを追記して nodefs / imagefs のしきい値を消さない。既存の追加しきい値がある場合も、削除してよいか確認する。
+本変更はドロップインとして配置するため、既存の `config.yaml` そのものは書き換えない。ただし同じキーは後勝ちで置き換わるため、既存の `kubelet-arg` の有無は必ず確認する（手順は「適用」を参照）。`eviction-hard` は map 全体を置き換えるため、memory のみを追記して nodefs / imagefs のしきい値を消さない。既存の追加しきい値がある場合も、削除してよいか確認する。
 
 ## 適用
 
 1. **先に `/healthz` を含むアプリイメージを配布し、現在の probe 設定のまま起動と `/healthz` の HTTP 200 を確認する。** 古いイメージに `/healthz` probe を適用すると 404 で startupProbe が通らず、起動失敗になる。配布は本変更を `main` へ merge することで `deploy.yml` が自動的に行う（ビルド → GHCR への push → `kubectl rollout restart`）。この時点では probe はまだ `/` を見ているため、`/healthz` の確認は後述の `kubectl port-forward` で行う。既存のデプロイ完了を確認してから、以下のノード変更・手動 apply を行う。
-2. 対象ホスト上のチェックアウトで、既存設定を失わないことを確認して設定をコピーし、k3s を再起動する。
+2. 設定をドロップインとして配置し、k3s を再起動する。既存の `/etc/rancher/k3s/config.yaml` は書き換えない。配置前に、同じ `kubelet-arg` が他の場所で指定されていないかを確認する。
 
 ```sh
-sudo mkdir -p /etc/rancher/k3s
-sudo cp k8s/node/k3s-config.yaml /etc/rancher/k3s/config.yaml
+# 既存の kubelet-arg の有無を確認する（何も出力されなければ競合なし）
+sudo grep -n 'kubelet-arg' /etc/rancher/k3s/config.yaml /etc/rancher/k3s/config.yaml.d/*.yaml 2>/dev/null
+sudo grep -n 'kubelet-arg' /etc/systemd/system/k3s.service
+
+sudo mkdir -p /etc/rancher/k3s/config.yaml.d
+sudo cp k8s/node/10-resource-guard.yaml /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml
 sudo systemctl restart k3s
 ```
+
+既存の `kubelet-arg` が見つかった場合は、そのままコピーしない。同じキーは後から読まれた側で**置き換わる**ため、既存の指定が失われる。その場合は本ファイルのキーを `kubelet-arg+` に変えて追記にするか、既存側へ統合した内容をレビューしてから配置する。`k3s.service` の起動引数に `--kubelet-arg` がある場合は CLI 引数が設定ファイルより優先されるため、ドロップインを置いても反映されない。
 
 3. **Pod が Running / Ready になるまで 2〜3 分待つ。** 過去の障害では再起動から 27 秒で回復しないと見切り、追加の停止・起動を行った。通常の起動・イメージ取得時間を考慮し、27 秒程度で再操作しない。API が戻るまでは接続に失敗する場合がある。
 
@@ -97,7 +105,7 @@ kubectl rollout status deployment/chumon-hub --timeout=360s
 
 **現行の [deploy.yml](../../.github/workflows/deploy.yml) は `kubectl rollout restart` と状態確認だけを行い、マニフェストを apply しない。この `kubectl apply -f k8s/deployment.yaml` は手動でしか行われない。** ノード設定のコピー・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
 
-`progressDeadlineSeconds: 300` は進捗停止の失敗判定であり、自動ロールバックではない。CI の `rollout status` は 180 秒で先に打ち切られる。ここでは Deployment の判定も観測できるよう、手動確認を 360 秒としている。
+`progressDeadlineSeconds: 300` は進捗停止の失敗判定であり、自動ロールバックではない。CI の `rollout status` は 180 秒で先に打ち切られる。ここでは Deployment の判定も観測できるよう、手動確認を 360 秒としている。なお `maxSurge: 0` のため、この apply は旧 Pod を停止してから新 Pod を起動する。数十秒の断が出る。
 
 ## 適用後の検証
 
@@ -123,6 +131,7 @@ curl --fail --include http://127.0.0.1:18080/healthz
 - `evictionHard` に `memory.available: 200Mi`、`nodefs.available: 5%`、`imagefs.available: 5%` が反映されている。
 - 既存 Pod に新たな Evicted / Pending がなく、アプリが Running / Ready。OOMKilled や再起動の増加、Node の MemoryPressure がない。
 - アプリの memory limit が 512Mi、3つの probe が `/healthz`、startup 5秒/3秒/24回、liveness 30秒/10秒/5回、readiness 10秒/5秒/3回になっている。
+- Deployment の `strategy` が `maxSurge: 0` / `maxUnavailable: 1` で、rollout 中に chumon-hub の Pod が 2 つ並ばない。
 - `/healthz` が HTTP 200、本文 `ok`、`cache-control: no-store` を返す。`proxy.ts` は無変更で、このパスは matcher の対象外。
 - `/healthz` はアプリ層では無認証のため、外部からの到達は前段の Cloudflare Access が防いでいることを確認する。Access のポリシーがホスト全体に掛かっていればよく、パス単位の除外があるとこのパスが公開される。
 
@@ -130,19 +139,14 @@ curl --fail --include http://127.0.0.1:18080/healthz
 
 ## ロールバック
 
-ホスト設定を今回新設した場合は、以下で設定を退避して k3s を再起動する。既存の `.bak` があれば先に別名へ保全する。
+ドロップインを取り除いて k3s を再起動する。既存の `/etc/rancher/k3s/config.yaml` には触れていないため、戻す対象はこの 1 ファイルだけである。
 
 ```sh
-sudo mv /etc/rancher/k3s/config.yaml{,.bak}
+sudo mv /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml "$SNAPSHOT/"
 sudo systemctl restart k3s
 ```
 
-既存設定を置き換えた場合は、上記の `mv` 後、再起動の前にバックアップを戻す。
-
-```sh
-sudo cp -p "$SNAPSHOT/config.yaml.original" /etc/rancher/k3s/config.yaml
-sudo systemctl restart k3s
-```
+既存の `config.yaml` へ統合する形で配置した場合は、代わりに記録しておいたバックアップを戻す。
 
 再び断が出るため利用者のいない時間帯に実施し、2〜3 分待ってノードと Pod を確認する。API 復旧後、Deployment も戻す。
 
@@ -155,6 +159,6 @@ kubectl describe node "$NODE"
 kubectl get --raw "/api/v1/nodes/${NODE}/proxy/configz"
 ```
 
-別の rollout が挟まった場合は、適用前に記録した revision を `--to-revision` で指定する。`rollout undo` が戻すのは Pod template のため、Deployment 直下の `progressDeadlineSeconds` は戻らない。適用前に未設定だった場合は `kubectl patch deployment chumon-hub --type=merge -p '{"spec":{"progressDeadlineSeconds":null}}'` で今回の明示設定を取り除き、元の既定値に戻す。明示設定があった場合は記録した値に戻す。可変の `latest` タグは undo で過去のイメージに戻る保証もないため、ここでの目的は limits / probe の復元である。
+別の rollout が挟まった場合は、適用前に記録した revision を `--to-revision` で指定する。`rollout undo` が戻すのは Pod template のため、Deployment 直下の `progressDeadlineSeconds` と `strategy` は戻らない。適用前に未設定だった場合は `kubectl patch deployment chumon-hub --type=merge -p '{"spec":{"progressDeadlineSeconds":null,"strategy":null}}'` で今回の明示設定を取り除き、元の既定値に戻す。明示設定があった場合は記録した値に戻す。
 
 最後に configz・Allocatable・limits / probe を適用前の記録と比較する。緊急 undo は保存済みマニフェストを変更しないため、次回 apply 時に本変更が再適用される点にも注意する。

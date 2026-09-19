@@ -4,6 +4,16 @@ metadata:
   name: chumon-hub
 spec:
   replicas: 1
+  # 単一ノードの Pod 予算は Allocatable 874Mi。既定の RollingUpdate は
+  # replicas:1 でも maxSurge を 1 に切り上げるため、更新中に 2 Pod が並び
+  # memory limit の合計が 1024Mi となって予算を超える。surge を禁止し、
+  # 旧 Pod を停止してから新 Pod を起動する。
+  # 代償として、デプロイのたびに数十秒のサービス断が出る。
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   # ロールアウトが進まない場合に失敗として確定させる
   # (deploy.yml の rollout status は 180s で打ち切るため、それより後ろに置く)
   progressDeadlineSeconds: 300
