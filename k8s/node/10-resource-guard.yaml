@@ -1,0 +1,30 @@
+# ノード側 k3s の設定のドロップイン。
+# ホストの /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml に配置する。
+# k3s は /etc/rancher/k3s/config.yaml と /etc/rancher/k3s/config.yaml.d/*.yaml を
+# アルファベット順に読み込んでマージするため、既存の config.yaml を書き換えずに
+# 設定を追加できる。
+# 注意: 同じキーが複数のファイルにある場合、後から読まれた値で置き換わる。
+# 既存の config.yaml や他のドロップインに kubelet-arg がある場合は、本ファイルの
+# キーを `kubelet-arg+` に変えて追記にすること（docs/ops/k3s-node-config.md 参照）。
+# このファイル自体はクラスタに apply しない（kubectl の対象ではない）。
+# 適用・検証・ロールバック手順: docs/ops/k3s-node-config.md
+#
+# 目的: limits の総和がノード容量を超えないようにし、OS と k3s の取り分を確保する。
+# enforce-node-allocatable は既定の `pods` のままとし、*-cgroup による
+# system-reserved / kube-reserved の強制は行わない（公式が、徹底的なプロファイルと
+# 監視が整うまでは pods への Allocatable 強制から始めるよう推奨しているため）。
+# 強制しない以上、Allocatable に効くのは下記2つの「合計 832Mi」であり、
+# kube と system への内訳は表示上の区別にすぎない。
+# 合計の根拠: ノード全体の working set 1320Mi − Pod 合計 295Mi = Pod 以外 1025Mi。
+# これを予約 832Mi + eviction 200Mi = 1032Mi で覆っている。
+kubelet-arg:
+  # k3s（apiserver / controller / scheduler / kubelet / containerd）の取り分
+  - kube-reserved=cpu=500m,memory=576Mi
+  # OS（sshd / systemd / journald 等）の取り分
+  - system-reserved=cpu=200m,memory=256Mi
+  # メモリの hard eviction しきい値。
+  # 設定前は evictionHard に memory.available の項目が存在せず（configz で確認済み）、
+  # メモリが枯渇しても kubelet が何もしない状態だった。ここが本設定の中核。
+  # 2GB ノードでは既定の 100Mi は薄いため 200Mi とする。
+  # このフラグは map 全体を置き換えるため、nodefs / imagefs の既定値(5%)も明示する。
+  - eviction-hard=memory.available<200Mi,nodefs.available<5%,imagefs.available<5%
