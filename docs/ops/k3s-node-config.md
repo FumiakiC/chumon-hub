@@ -77,9 +77,15 @@ sudo grep -n 'kubelet-arg' /etc/rancher/k3s/config.yaml /etc/rancher/k3s/config.
 sudo grep -n 'kubelet-arg' /etc/systemd/system/k3s.service
 
 sudo mkdir -p /etc/rancher/k3s/config.yaml.d
-sudo cp k8s/node/10-resource-guard.yaml /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml
+# ホスト上のチェックアウトは古い可能性があるため、必ず main から取得する
+sudo curl -fsSL https://raw.githubusercontent.com/FumiakiC/chumon-hub/main/k8s/node/10-resource-guard.yaml \
+	-o /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml
+# 機能行だけを目視する（コメントを除いた4行が想定どおりか）
+grep -v '^\s*#' /etc/rancher/k3s/config.yaml.d/10-resource-guard.yaml | grep -v '^\s*$'
 sudo systemctl restart k3s
 ```
+
+2026-09-19 の初回適用時は本番ホストにリポジトリのチェックアウトが無く、ヒアドキュメントで直接作成した。そのため設置済みファイルのコメントは英語だが、`kubelet-arg` の3行はリポジトリ版と一致している。上の `curl` で上書きしても挙動は変わらない。
 
 既存の `kubelet-arg` が見つかった場合は、そのままコピーしない。同じキーは後から読まれた側で**置き換わる**ため、既存の指定が失われる。その場合は本ファイルのキーを `kubelet-arg+` に変えて追記にするか、既存側へ統合した内容をレビューしてから配置する。`k3s.service` の起動引数に `--kubelet-arg` がある場合は CLI 引数が設定ファイルより優先されるため、ドロップインを置いても反映されない。
 
@@ -98,12 +104,21 @@ kubectl wait --for=condition=Ready pod -l app=chumon-hub --timeout=180s
 ```sh
 kubectl describe node "$NODE"
 kubectl get --raw "/api/v1/nodes/${NODE}/proxy/configz"
-kubectl get pods -A -o wide
-kubectl apply -f k8s/deployment.yaml
+# 適用前の Pod 名を控える（適用後に変わったことで反映を判定する）
+kubectl get pods -l app=chumon-hub -o wide
+# ホスト上のチェックアウトは使わない。main から取得し、期待する要素が揃うことを確認してから適用する
+curl -fsSL https://raw.githubusercontent.com/FumiakiC/chumon-hub/main/k8s/deployment.yaml -o /tmp/deployment.yaml
+grep -nE "memory: '512Mi'|/healthz|maxSurge|progressDeadlineSeconds" /tmp/deployment.yaml
+kubectl apply -f /tmp/deployment.yaml
 kubectl rollout status deployment/chumon-hub --timeout=360s
+kubectl get pods -l app=chumon-hub -o wide
 ```
 
-**現行の [deploy.yml](../../.github/workflows/deploy.yml) は `kubectl rollout restart` と状態確認だけを行い、マニフェストを apply しない。この `kubectl apply -f k8s/deployment.yaml` は手動でしか行われない。** ノード設定のコピー・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
+**`kubectl apply` が `configured` を返しても、反映された証拠にはならない。** Pod template に差分が無ければアノテーションだけが更新され、rollout も起きずに `successfully rolled out` が即座に返る。**Pod 名が変わったことを必ず確認する。** 2026-09-19 の適用作業では、ホスト上に 8 か月前の `~/k8s/deployment.yaml` が残っており、それを apply して「成功したのに何も変わらない」状態になった。
+
+**現行の [deploy.yml](../../.github/workflows/deploy.yml) は `kubectl rollout restart` と状態確認だけを行い、マニフェストを apply しない。この `kubectl apply` は手動でしか行われない。** ノード設定の配置・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
+
+**この非自動化の帰結として、repo のマニフェストと本番の実体は乖離しうる。** 2026-09-19 時点で `env` の 2 項目（Cloudflare の team domain / audience）が repo では `secretKeyRef`、本番では平文の `value` になっており、`apply` が型不整合で拒否された。**repo のマニフェストをレビューしても本番を検証したことにはならない**という問題であり、`fix/manifest-drift` として起票済み。適用前には `kubectl get deploy chumon-hub -o yaml` と repo の差分を確認すること。
 
 `progressDeadlineSeconds: 300` は進捗停止の失敗判定であり、自動ロールバックではない。CI の `rollout status` は 180 秒で先に打ち切られる。ここでは Deployment の判定も観測できるよう、手動確認を 360 秒としている。なお `maxSurge: 0` のため、この apply は旧 Pod を停止してから新 Pod を起動する。数十秒の断が出る。
 
