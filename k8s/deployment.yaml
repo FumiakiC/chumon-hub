@@ -4,6 +4,9 @@ metadata:
   name: chumon-hub
 spec:
   replicas: 1
+  # ロールアウトが進まない場合に失敗として確定させる
+  # (deploy.yml の rollout status は 180s で打ち切るため、それより後ろに置く)
+  progressDeadlineSeconds: 300
   selector:
     matchLabels:
       app: chumon-hub
@@ -31,27 +34,44 @@ spec:
             # Limits: Podが使用できる最大リソース（上限）
             limits:
               cpu: '1000m' # 1 コア(これを超えるとPodが制限される)
-              memory: '1Gi' # 1 ギガバイト（これを超えるとPodが再起動する）# --- ★★★ 今回追加: ヘルスチェック ★★★ ---
+              # ノード容量 1906Mi から k3s / OS の予約と eviction しきい値を引いた
+              # Allocatable(約 874Mi) に、他 Pod の分を残して収まる値にする。
+              # 詳細と算出根拠: docs/ops/k3s-node-config.md
+              memory: '512Mi'
 
-          # 1. Liveness Probe (生存確認: 失敗すると再起動)
+          # --- ヘルスチェック ---
+          # 応答先は /healthz（認証不要・依存なしの最小エンドポイント）。
+          # 重い同期処理でイベントループが塞がると /healthz も応答しないため、
+          # liveness は「デッドロックの検知」に限定して寛容に設定し、
+          # 負荷時の誤再起動で処理中のリクエストを巻き添えにしないようにする。
+
+          # 1. Startup Probe (起動確認: 成功するまで liveness/readiness を動かさない)
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24 # 最大 120 秒まで起動を待つ
+
+          # 2. Liveness Probe (生存確認: 失敗すると再起動)
           livenessProbe:
             httpGet:
-              path: / # トップページにアクセスして確認
+              path: /healthz
               port: 3000
-            initialDelaySeconds: 15 # 起動してから15秒はチェックしない (起動待ち)
-            periodSeconds: 20 # その後は20秒ごとにチェック
-            timeoutSeconds: 5 # 5秒以内に応答がなければ失敗とみなす
-            failureThreshold: 3 # 3回連続失敗したら再起動
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5 # 約 150 秒応答しなければ再起動
 
-          # 2. Readiness Probe (準備確認: 失敗すると通信を流さない)
+          # 3. Readiness Probe (準備確認: 失敗すると通信を流さない)
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 3000
-            initialDelaySeconds: 10 # 起動10秒後からチェック開始
-            periodSeconds: 10 # 10秒ごとにチェック
-            timeoutSeconds: 3
-            successThreshold: 1 # 1回成功すれば「準備OK」とみなす
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3 # replicas:1 のため readiness 失敗＝全断。安易に落とさない
 
           env:
             - name: GOOGLE_API_KEY
