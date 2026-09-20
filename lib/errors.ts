@@ -12,6 +12,7 @@ export const APP_ERROR_CODES = [
   'ERR_VALIDATION', // 入力不正（400）
   'ERR_FILE_TOO_LARGE', // ファイルサイズ超過（413）
   'ERR_UNSUPPORTED_MEDIA', // 非対応MIME（415）
+  'ERR_TOO_MANY_REQUESTS', // 同時実行数の上限超過（429）
   'ERR_UNAUTHORIZED', // トークン無効・期限切れ（401）
   'ERR_CLASSIFY', // 書類判定の失敗
   'ERR_EXTRACT', // 抽出の失敗
@@ -75,6 +76,7 @@ const CLIENT_SAFE_MESSAGE: Record<AppErrorCode, string> = {
   ERR_VALIDATION: 'Invalid request.',
   ERR_FILE_TOO_LARGE: 'File too large.',
   ERR_UNSUPPORTED_MEDIA: 'Unsupported media type.',
+  ERR_TOO_MANY_REQUESTS: 'Too many concurrent requests.',
   ERR_UNAUTHORIZED: 'Invalid or expired token.',
   ERR_CLASSIFY: 'Failed to classify document.',
   ERR_EXTRACT: 'Failed to extract details.',
@@ -89,6 +91,7 @@ const STATUS_BY_CODE: Record<AppErrorCode, number> = {
   ERR_VALIDATION: 400,
   ERR_FILE_TOO_LARGE: 413,
   ERR_UNSUPPORTED_MEDIA: 415,
+  ERR_TOO_MANY_REQUESTS: 429,
   ERR_UNAUTHORIZED: 401,
   ERR_CLASSIFY: 500,
   ERR_EXTRACT: 500,
@@ -127,4 +130,15 @@ export function validationErrorResponse(status: 400 | 413 | 415): Response {
         ? 'ERR_UNSUPPORTED_MEDIA'
         : 'ERR_VALIDATION'
   return Response.json({ error: CLIENT_SAFE_MESSAGE[code], code }, { status })
+}
+
+export function tooManyRequestsResponse(retryAfterSeconds: number): Response {
+  const code: AppErrorCode = 'ERR_TOO_MANY_REQUESTS'
+  return Response.json(
+    { error: CLIENT_SAFE_MESSAGE[code], code },
+    {
+      status: STATUS_BY_CODE[code],
+      headers: { 'Retry-After': String(retryAfterSeconds) },
+    }
+  )
 }

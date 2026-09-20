@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 
 import { zodResolver } from '@hookform/resolvers/zod'
 
-import { cropTitleBlock } from '@/lib/api/drawing-api'
+import { CROP_CONCURRENCY, cropTitleBlock } from '@/lib/api/drawing-api'
+import { type TaskQueue, createTaskQueue } from '@/lib/concurrency/task-queue'
 import { resolveError } from '@/lib/errorUtils'
 import { logger } from '@/lib/logger'
 
@@ -46,6 +47,8 @@ export function useProvisionalOrder() {
   const [croppedFiles, setCroppedFiles] = useState<CroppedFile[]>([])
   const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cropQueueRef = useRef<TaskQueue | null>(null)
+  const deletedCropIdsRef = useRef(new Set<string>())
 
   // --- Phase 2 ---
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null)
@@ -140,6 +143,10 @@ export function useProvisionalOrder() {
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files) return
+      if (cropQueueRef.current === null) {
+        cropQueueRef.current = createTaskQueue(CROP_CONCURRENCY)
+      }
+      const cropQueue = cropQueueRef.current
       const newFiles: Array<{ croppedFile: CroppedFile; originalFile: File }> =
         []
       for (let i = 0; i < files.length; i++) {
@@ -156,10 +163,14 @@ export function useProvisionalOrder() {
         ...newFiles.map((f) => f.croppedFile),
       ])
       newFiles.forEach(({ croppedFile, originalFile }) => {
-        setTimeout(
-          () => processCrop(croppedFile.id, originalFile),
-          Math.random() * 300
-        )
+        void cropQueue
+          .push(async () => {
+            if (deletedCropIdsRef.current.has(croppedFile.id)) return
+            await processCrop(croppedFile.id, originalFile)
+          })
+          .catch(() => {
+            // エラー表示は processCrop が担当。将来の reject も未処理拒否にしないため吸収する。
+          })
       })
     },
     [processCrop]
@@ -195,6 +206,7 @@ export function useProvisionalOrder() {
   )
 
   const handleDeleteCroppedFile = useCallback((fileId: string) => {
+    deletedCropIdsRef.current.add(fileId)
     setCroppedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }, [])
 

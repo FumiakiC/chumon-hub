@@ -6,13 +6,17 @@ import type {
   CropTitleBlockResponse,
   DrawingExtractionResult,
 } from '@/lib/ai/contracts'
+import { computeRetryDelayMs } from '@/lib/api/retry'
 import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
+
+export const CROP_CONCURRENCY = 2
 
 /**
  * 本文に `code` を持たない応答のための、HTTP ステータス由来の既定コード。
  * crop-title-block のファイル未指定・全件処理失敗の 400 は code を持たないため、
  * その受け皿になる。401 は proxy.ts が `{ error: 'Unauthorized' }` のみを
  * 返す（`code` を持たない）ため、ここで補う必要がある。
+ * 429 はプラットフォームやリバースプロキシが code なしで返す場合に備えて補う。
  */
 function fallbackCodeForStatus(status: number): AppErrorCode {
   switch (status) {
@@ -24,6 +28,8 @@ function fallbackCodeForStatus(status: number): AppErrorCode {
       return 'ERR_FILE_TOO_LARGE'
     case 415:
       return 'ERR_UNSUPPORTED_MEDIA'
+    case 429:
+      return 'ERR_TOO_MANY_REQUESTS'
     default:
       return 'ERR_REQUEST_FAILED'
   }
@@ -59,10 +65,26 @@ export async function cropTitleBlock(
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch('/api/crop-title-block', {
+  let response = await fetch('/api/crop-title-block', {
     method: 'POST',
     body: formData,
   })
+
+  for (let attempt = 1; response.status === 429 && attempt <= 2; attempt += 1) {
+    const delayMs = computeRetryDelayMs({
+      attempt,
+      retryAfterHeader: response.headers.get('Retry-After'),
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+    response = await fetch('/api/crop-title-block', {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
+  if (response.status === 429) {
+    throw new AppError('ERR_TOO_MANY_REQUESTS', 'Too many concurrent requests.')
+  }
 
   if (!response.ok) {
     throw await toAppError(response)
