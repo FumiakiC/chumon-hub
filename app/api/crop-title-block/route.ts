@@ -23,9 +23,14 @@ import { rasterizeCropRegion } from '@/lib/pdf/raster-crop'
 type CroppedFile = CropTitleBlockResponse['croppedFiles'][number]
 
 // プロセス内・replicas: 1 前提の暫定上限。恒久対策は Phase 5 のジョブ基盤。
-const cropLimiter = createInFlightLimiter(
-  resolveInFlightLimit(process.env.CROP_MAX_IN_FLIGHT, 2)
-)
+const cropMaxInFlight = resolveInFlightLimit(process.env.CROP_MAX_IN_FLIGHT, 2)
+const cropLimiter = createInFlightLimiter(cropMaxInFlight)
+
+if (cropMaxInFlight === 0) {
+  logger.warn(
+    'Crop in-flight limit is disabled; concurrent requests are unlimited'
+  )
+}
 
 export async function POST(request: NextRequest) {
   return withInFlight<Response>(cropLimiter, {
