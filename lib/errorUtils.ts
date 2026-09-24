@@ -21,7 +21,7 @@ const ERROR_BY_CODE: Record<AppErrorCode, { ja: string; action: string }> = {
   ERR_TOO_MANY_REQUESTS: {
     ja: '処理が混み合っています。',
     action:
-      '時間をおいて自動的に再試行します。解消しない場合は件数を分けてください。',
+      '少し時間をおいて再度実行してください。解消しない場合は件数を分けてください。',
   },
   ERR_UNAUTHORIZED: {
     ja: 'ファイルの有効期限が切れているか、無効です。',

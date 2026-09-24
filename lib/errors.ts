@@ -134,11 +134,15 @@ export function validationErrorResponse(status: 400 | 413 | 415): Response {
 
 export function tooManyRequestsResponse(retryAfterSeconds: number): Response {
   const code: AppErrorCode = 'ERR_TOO_MANY_REQUESTS'
+  const normalizedSeconds =
+    Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? Math.ceil(retryAfterSeconds)
+      : 1
   return Response.json(
     { error: CLIENT_SAFE_MESSAGE[code], code },
     {
       status: STATUS_BY_CODE[code],
-      headers: { 'Retry-After': String(retryAfterSeconds) },
+      headers: { 'Retry-After': String(normalizedSeconds) },
     }
   )
 }

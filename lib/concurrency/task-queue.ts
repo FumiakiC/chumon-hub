@@ -5,7 +5,9 @@ export interface TaskQueue {
 }
 
 export function createTaskQueue(concurrency: number): TaskQueue {
-  const limit = Math.max(1, Math.floor(concurrency))
+  const limit = Number.isFinite(concurrency)
+    ? Math.max(1, Math.floor(concurrency))
+    : 1
   const waiting: Array<() => void> = []
   let active = 0
 

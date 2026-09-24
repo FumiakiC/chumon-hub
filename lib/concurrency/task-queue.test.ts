@@ -3,6 +3,37 @@ import { describe, expect, it } from 'vitest'
 import { createTaskQueue } from './task-queue'
 
 describe('createTaskQueue', () => {
+  it.each([NaN, Infinity, -Infinity])(
+    'runs all tasks with one worker for non-finite concurrency %s',
+    async (concurrency) => {
+      const queue = createTaskQueue(concurrency)
+      const gates = Array.from({ length: 3 }, () =>
+        Promise.withResolvers<number>()
+      )
+      const started: number[] = []
+      const results = gates.map((gate, index) =>
+        queue.push(async () => {
+          started.push(index)
+          return await gate.promise
+        })
+      )
+
+      for (let index = 0; index < gates.length; index += 1) {
+        await Promise.resolve()
+        expect(queue.active).toBe(1)
+        expect(queue.pending).toBe(gates.length - index - 1)
+        expect(started).toEqual(
+          Array.from({ length: index + 1 }, (_, position) => position)
+        )
+        gates[index].resolve(index)
+        await expect(results[index]).resolves.toBe(index)
+      }
+      await expect(Promise.all(results)).resolves.toEqual([0, 1, 2])
+      expect(queue.active).toBe(0)
+      expect(queue.pending).toBe(0)
+    }
+  )
+
   it('runs 100 tasks in FIFO order within the concurrency limit', async () => {
     const queue = createTaskQueue(2)
     const gates = Array.from({ length: 100 }, () =>

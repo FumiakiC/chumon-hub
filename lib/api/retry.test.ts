@@ -12,7 +12,7 @@ describe('computeRetryDelayMs', () => {
           retryAfterHeader: '3',
           random: () => 0.5,
         })
-      ).toBe(3000)
+      ).toBeCloseTo(3300)
     }
   )
 
@@ -40,25 +40,28 @@ describe('computeRetryDelayMs', () => {
   })
 
   it.each([
-    [0, 0.8],
-    [0.5, 1],
-    [1, 1.2],
-  ])('applies deterministic jitter for random %s', (random, factor) => {
-    expect(
-      computeRetryDelayMs({
-        attempt: 1,
-        retryAfterHeader: '3',
-        random: () => random,
-      })
-    ).toBeCloseTo(3000 * factor)
-    expect(
-      computeRetryDelayMs({
-        attempt: 2,
-        retryAfterHeader: null,
-        random: () => random,
-      })
-    ).toBeCloseTo(4000 * factor)
-  })
+    [0, 0.8, 3000],
+    [0.5, 1, 3300],
+    [1, 1.2, 3600],
+  ])(
+    'applies deterministic jitter for random %s',
+    (random, factor, headerDelay) => {
+      expect(
+        computeRetryDelayMs({
+          attempt: 1,
+          retryAfterHeader: '3',
+          random: () => random,
+        })
+      ).toBeCloseTo(headerDelay)
+      expect(
+        computeRetryDelayMs({
+          attempt: 2,
+          retryAfterHeader: null,
+          random: () => random,
+        })
+      ).toBeCloseTo(4000 * factor)
+    }
+  )
 
   it.each([0, 0.5, 1])(
     'caps the final delay at 10000ms with random %s',
@@ -87,7 +90,7 @@ describe('computeRetryDelayMs', () => {
         retryAfterHeader: '12',
         random: () => 0,
       })
-    ).toBe(9600)
+    ).toBe(10000)
     expect(
       computeRetryDelayMs({
         attempt: 1,

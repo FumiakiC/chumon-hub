@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -49,6 +49,14 @@ export function useProvisionalOrder() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cropQueueRef = useRef<TaskQueue | null>(null)
   const deletedCropIdsRef = useRef(new Set<string>())
+  const unmountedRef = useRef(false)
+
+  useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
+  }, [])
 
   // --- Phase 2 ---
   const [selectedItem, setSelectedItem] = useState<OrderItem | null>(null)
@@ -165,8 +173,16 @@ export function useProvisionalOrder() {
       newFiles.forEach(({ croppedFile, originalFile }) => {
         void cropQueue
           .push(async () => {
-            if (deletedCropIdsRef.current.has(croppedFile.id)) return
-            await processCrop(croppedFile.id, originalFile)
+            try {
+              if (
+                unmountedRef.current ||
+                deletedCropIdsRef.current.has(croppedFile.id)
+              )
+                return
+              await processCrop(croppedFile.id, originalFile)
+            } finally {
+              deletedCropIdsRef.current.delete(croppedFile.id)
+            }
           })
           .catch(() => {
             // エラー表示は processCrop が担当。将来の reject も未処理拒否にしないため吸収する。

@@ -13,5 +13,6 @@ export function computeRetryDelayMs(options: {
     Number.isSafeInteger(seconds) &&
     seconds > 0
   const baseMs = validHeader ? seconds * 1000 : 2000 * 2 ** (attempt - 1)
-  return Math.min(10000, baseMs * (0.8 + 0.4 * random()))
+  const jitter = validHeader ? 1 + 0.2 * random() : 0.8 + 0.4 * random()
+  return Math.min(10000, baseMs * jitter)
 }
