@@ -18,6 +18,11 @@ const ERROR_BY_CODE: Record<AppErrorCode, { ja: string; action: string }> = {
     ja: '対応していないファイル形式です。',
     action: 'PDF または画像（JPEG/PNG/WebP/HEIC）を使用してください。',
   },
+  ERR_TOO_MANY_REQUESTS: {
+    ja: '処理が混み合っています。',
+    action:
+      '少し時間をおいて再度実行してください。解消しない場合は件数を分けてください。',
+  },
   ERR_UNAUTHORIZED: {
     ja: 'ファイルの有効期限が切れているか、無効です。',
     action: 'お手数ですが、最初からやり直してください。',
