@@ -1,5 +1,7 @@
 # Claude 引き継ぎコンテキスト & PR プレイブック (chumon-hub)
 
+> **2026-09-24: 本書はリファクタ期（Phase 0〜3 / PR-01〜12）の記録として凍結した。** 役割・手順の正は chumon-hub-dev スキル、Phase 4+ の決定・申し送りの正は `docs/roadmap/PHASE4_PLUS_ROADMAP.md`（「決定事項と未決事項」表、§4「エポック0 の申し送り」ほか各節）。以下の記述は更新しない。技術スタックの版、Gemini 2.5 系の shutdown 日、「Claude が出力する diff が正」とする §A などは現行と異なる。
+
 > **使い方**: 各 PR に着手するとき、新しい Claude チャットの冒頭で
 > 「このファイル全文」＋「`docs/refactoring/REFACTORING_PLAN.md` の該当 PR セクション」を貼り付ける。
 > これにより、チャットを跨いでも Claude の役割・方針・手順が一定になる。
