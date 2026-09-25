@@ -25,12 +25,7 @@ export interface CroppedFile {
 // ---------------------------------------------------------------------------
 
 export type OrderItemStatus =
-  | 'pending'
-  | 'cropping'
-  | 'analyzing'
-  | 'completed'
-  | 'needs_review'
-  | 'error'
+  'pending' | 'cropping' | 'analyzing' | 'completed' | 'needs_review' | 'error'
 
 export interface OrderItem {
   id: string
