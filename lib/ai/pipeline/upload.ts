@@ -31,8 +31,7 @@ export const MAX_REQUEST_BYTES = 26 * 1024 * 1024
 
 /** checkRequestBodySize の結果。 */
 export type RequestSizeCheck =
-  | { ok: true }
-  | { ok: false; status: 413; error: string }
+  { ok: true } | { ok: false; status: 413; error: string }
 
 /**
  * Content-Length による、パース前の早期サイズガード。
@@ -76,8 +75,7 @@ export function checkRequestBodySize(request: Request): RequestSizeCheck {
 
 /** readFormData の結果。 */
 export type FormDataParse =
-  | { ok: true; formData: FormData }
-  | { ok: false; status: 400; error: string }
+  { ok: true; formData: FormData } | { ok: false; status: 400; error: string }
 
 /**
  * multipart ボディのパースを集中実装する。

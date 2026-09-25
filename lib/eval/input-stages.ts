@@ -31,8 +31,7 @@ export interface InputStage {
 }
 
 type StagePreparationErrorCode =
-  | 'ERR_STAGE_NO_PAGES'
-  | 'ERR_STAGE_TOO_MANY_PIXELS'
+  'ERR_STAGE_NO_PAGES' | 'ERR_STAGE_TOO_MANY_PIXELS'
 
 class StagePreparationError extends Error {
   readonly name = 'StagePreparationError'
