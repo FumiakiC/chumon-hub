@@ -11,3 +11,53 @@ updates:
       interval: 'weekly'
 
     open-pull-requests-limit: 10
+    # groups は上から順に評価され、最初に一致したグループにだけ割り当てられる（順序に意味がある）。
+    # major はどのグループにも入れず、従来どおり 1 依存 = 1 PR で個別に扱う。
+    # dependabot-auto-merge.yml は PR 内で最大の semver 変更で判定するため、
+    # patch と minor を別グループに分けて「patch のみ自動マージ」を保つ。
+    groups:
+      nextjs:
+        applies-to: version-updates
+        patterns:
+          - 'next'
+          - 'eslint-config-next'
+        update-types:
+          - 'minor'
+          - 'patch'
+      react:
+        applies-to: version-updates
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # npm-minor と npm-patch の exclude-patterns は同一に保つこと。
+      # 除外した依存はグループに入らず、個別 PR として届く。
+      npm-minor:
+        applies-to: version-updates
+        patterns:
+          - '*'
+        exclude-patterns:
+          # 抽出挙動と評価ベースラインに直結する
+          - '@google/genai'
+          # ネイティブバイナリを含み、ハーネスと本番バンドルで挙動が乖離しうる（#346）
+          - 'pdfjs-dist'
+          - '@napi-rs/canvas'
+          # z.toJSONSchema の出力が Gemini に渡すスキーマに直結する
+          - 'zod'
+        update-types:
+          - 'minor'
+      npm-patch:
+        applies-to: version-updates
+        patterns:
+          - '*'
+        exclude-patterns:
+          - '@google/genai'
+          - 'pdfjs-dist'
+          - '@napi-rs/canvas'
+          - 'zod'
+        update-types:
+          - 'patch'
