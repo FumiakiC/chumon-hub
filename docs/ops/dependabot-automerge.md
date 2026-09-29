@@ -29,6 +29,8 @@
 
 minor / major では資格情報を読まない。
 
+ジョブは、PR 作成者とイベント主体がともに Dependabot の run でだけ動く。人が reopen / push した run はスキップされる（その run には Dependabot secrets が渡らないため）。
+
 マージ後の `deploy.yml` は `concurrency` で直列化している。
 
 ## 初回セットアップと事前確認
@@ -58,10 +60,16 @@ op item create --category "Secure Note" --title github-app-automerge --vault chu
 op item edit '<既定名>' --vault Personal --title chumon-hub-ci-sa
 ```
 
-5. SA トークンを Dependabot secret として登録する。
+5. SA トークンを Dependabot secret として登録する。`op read` が失敗して空値で上書きしないよう、トークンを確認してから登録する。対話シェルに貼る前提のため `exit` は使わない。
 
 ```sh
-op read 'op://Personal/chumon-hub-ci-sa/credential' | gh secret set OP_SERVICE_ACCOUNT_TOKEN --app dependabot --repo FumiakiC/chumon-hub
+SA="$(op read 'op://Personal/chumon-hub-ci-sa/credential')"
+if [ "${SA:0:4}" = "ops_" ]; then
+  printf '%s' "$SA" | gh secret set OP_SERVICE_ACCOUNT_TOKEN --app dependabot --repo FumiakiC/chumon-hub
+else
+  echo "NG: トークンを取得できないため登録しない"
+fi
+unset SA
 ```
 
 ### 事前確認
@@ -124,11 +132,19 @@ setopt interactivecomments
 | auto-merge の有効化が失敗する | リポジトリ設定の Allow auto-merge がオフ、App の権限不足 |
 | マージ後にデプロイが起動しない | 有効化主体が `github-actions[bot]` のまま（旧ワークフローで処理された PR） |
 
-旧ワークフローで処理された PR は、PR に以下をコメントして再実行する。
+旧ワークフローで処理された PR は、マージ済みかどうかで対処が異なる。
+
+- **未マージ**: auto-merge を一度無効化してから、Dependabot にリベースさせてワークフローを再実行する。再実行した run が App のトークンで auto-merge を有効化し直す。
+
+```sh
+gh pr merge <PR番号> --disable-auto --repo FumiakiC/chumon-hub
+```
 
 ```text
 @dependabot rebase
 ```
+
+- **マージ済み**: `deploy.yml` は push でのみ起動し（docs のみの変更を除く）、手動で起動する手段はない。main に次の push が入れば、その時点の main がビルドされ、未反映分もまとめて本番に出る。
 
 ### 巻き戻し
 

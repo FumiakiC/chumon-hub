@@ -10,9 +10,10 @@ permissions:
 jobs:
   dependabot:
     runs-on: ubuntu-latest
-    # Dependabot が作成した本リポジトリの PR のみ対象（公式ドキュメントの例と同じ条件）。
-    # github.actor はイベントを起こした主体であり、PR の作成者とは限らない。
-    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'FumiakiC/chumon-hub'
+    # 本リポジトリで、PR 作成者とイベント主体がともに Dependabot の run のみ対象。
+    # 人が reopen / push した run には Dependabot secrets が渡らず、1Password ステップが失敗するため除外する。
+    # 手動の re-run は元の実行と同じ主体・権限で走るため、この条件を満たす。
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]' && github.repository == 'FumiakiC/chumon-hub'
     steps:
       - name: Dependabot metadata
         id: metadata
