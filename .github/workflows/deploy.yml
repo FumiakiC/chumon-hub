@@ -10,6 +10,13 @@ on:
       - 'docs/**'
       - '**.md'
 
+# 対象ブランチを問わず、同じ :latest イメージと deployment/chumon-hub を更新するため、
+# 固定グループで全 run の push と rollout を直列化する。
+# 実行中の run は止めず、待機中の run は後から来たものに置き換わる。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 

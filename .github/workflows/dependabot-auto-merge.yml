@@ -2,15 +2,18 @@ name: Dependabot Auto Merge
 
 on: pull_request
 
+# GITHUB_TOKEN は fetch-metadata の読み取りにのみ使う。
+# マージ操作は下記の GitHub App トークンで行う。
 permissions:
-  contents: write
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   dependabot:
     runs-on: ubuntu-latest
-    # DependabotによるPRのみ実行
-    if: github.actor == 'dependabot[bot]'
+    # 本リポジトリで、PR 作成者とイベント主体がともに Dependabot の run のみ対象。
+    # 人が reopen / push した run には Dependabot secrets が渡らず、1Password ステップが失敗するため除外する。
+    # 手動の re-run は元の実行と同じ主体・権限で走るため、この条件を満たす。
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]' && github.repository == 'FumiakiC/chumon-hub'
     steps:
       - name: Dependabot metadata
         id: metadata
@@ -18,11 +21,36 @@ jobs:
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
 
+      # GITHUB_TOKEN で有効化した auto-merge のマージは後続ワークフローを起動しないため、
+      # deploy.yml の push トリガーが発火しない。GitHub App のトークンで有効化して回避する。
+      # Dependabot 起動のワークフローが参照できるのは Dependabot secrets のみなので、
+      # OP_SERVICE_ACCOUNT_TOKEN は Dependabot secret として登録する（手順は docs/ops/dependabot-automerge.md）。
+      - name: Load GitHub App credentials from 1Password
+        id: op
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
+        with:
+          # Dev Container の op と同じ版に固定する（.devcontainer/Dockerfile.dev）
+          version: '2.34.1'
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          APP_CLIENT_ID: op://chumon-hub-ci/github-app-automerge/client-id
+          APP_PRIVATE_KEY: op://chumon-hub-ci/github-app-automerge/private-key
+
+      - name: Generate GitHub App token
+        id: app-token
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ steps.op.outputs.APP_CLIENT_ID }}
+          private-key: ${{ steps.op.outputs.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Enable auto-merge for patch updates only
         # パッチアップデート(例: v1.0.1 -> v1.0.2)のみ対象にする
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
-
         run: gh pr merge --auto --squash --delete-branch "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
