@@ -10,6 +10,12 @@ on:
       - 'docs/**'
       - '**.md'
 
+# 短時間に main への push が重なっても、:latest の push と rollout を直列化する。
+# 実行中の run は止めず、待機中の run は後から来たものに置き換わる。
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
