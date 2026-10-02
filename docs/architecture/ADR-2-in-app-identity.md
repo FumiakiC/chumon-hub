@@ -20,4 +20,4 @@ DB 選定（ADR-5）の基準から、「Supabase Auth 一体」の優位性は�
 
 ## 次アクション
 
-Phase 5 着手時に、Auth0 の現行プランと Next.js SDK を一次情報で最終確認し、暫定から確定へ移す。
+Phase 4.5 で、Auth0 の現行プランと Next.js SDK を一次情報で最終確認し、暫定から確定へ移す。
