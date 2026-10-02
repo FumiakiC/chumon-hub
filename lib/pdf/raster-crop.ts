@@ -152,7 +152,7 @@ export async function rasterizeCropRegion(
   const loadingTask = getDocument({
     data,
     useSystemFonts: false,
-    standardFontDataUrl: resolvePdfjsDataUrl('standard_fonts'),
+    // 検知能力の検証用（マージしない）: standardFontDataUrl を外す
     wasmUrl: resolvePdfjsDataUrl('wasm'),
     cMapUrl: resolvePdfjsDataUrl('cmaps'),
     iccUrl: resolvePdfjsDataUrl('iccs'),
