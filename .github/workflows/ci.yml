@@ -71,6 +71,15 @@ jobs:
           })
           NODE
 
+      # 素の node のラスタ依存チェックは、Turbopack バンドル経由のクロップ経路
+      # （proxy.ts → 認証 → /api/crop-title-block → ラスタクロップ）を通らない.
+      # #346 ではバンドル経由のときだけ壊れたため、本番イメージの HTTP 経路も検査する.
+      # 本番コードに認証バイパスを入れず、偽の Access IdP と使い捨て CA を使い、
+      # 本番と同じ JWT 検証を通す.
+      # NODE_TLS_REJECT_UNAUTHORIZED=0 などで TLS 検証を無効化しない.
+      # 信頼の追加は NODE_EXTRA_CA_CERTS による使い捨て CA だけとする.
+      # GitHub secrets は使わず、Dependabot の PR でも実行する.
+      # Cloudflare Access を撤去する ADR-3 の ③ では、この認証部分を作り直す必要がある.
       - name: Prepare crop smoke materials
         timeout-minutes: 3
         run: |
@@ -197,6 +206,8 @@ jobs:
             -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
             chumon-hub:ci /smoke-scripts/crop-smoke.mjs run
 
+          # pdfjs は同梱データの解決に失敗しても警告だけで処理を続け、白い画像を返しうる.
+          # HTTP 成功だけでは見逃すため、固定文言の警告も失敗として扱う.
       - name: Check crop renderer warnings
         run: |
           logs=$(docker logs chumon-hub-smoke 2>&1)

@@ -1,3 +1,7 @@
+// CI 専用の偽 Access IdP で、本番では使わない.
+// 認証バイパスを入れず本番と同じ JWT 検証を通すため、HTTPS で JWKS を提供する.
+// TLS 検証は無効化せず、クライアントの信頼追加は NODE_EXTRA_CA_CERTS の使い捨て CA だけとする.
+// トークン・鍵・PEM などの秘密値をログに出さない.
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:https'
 

@@ -1,3 +1,7 @@
+// CI 専用のクロップスモークで、本番では使わない.
+// 偽 Access IdP を使い、本番と同じ JWT 検証と Turbopack バンドル経由のクロップを検査する.
+// TLS 検証は無効化せず、信頼の追加は NODE_EXTRA_CA_CERTS の使い捨て CA だけとする.
+// トークン・鍵・PEM などの秘密値をログに出さない.
 import {
   createPrivateKey,
   generateKeyPairSync,
