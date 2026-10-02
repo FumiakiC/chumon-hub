@@ -1,5 +1,6 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { ConfigError } from '@/lib/errors'
@@ -85,7 +86,10 @@ export function resolvePdfjsDataUrl(subdirectory: string): string {
     // 本番の k8s/deployment.yaml は workingDir も command も上書きしていないため、
     // コンテナの WORKDIR（/app）がそのまま cwd になる。マニフェストで作業ディレクトリを
     // 変更するとこの解決は無言で壊れ、起動時ではなく最初のクロップ要求で 500 になる。
-    const packageRoot = path.join(process.cwd(), 'node_modules', 'pdfjs-dist')
+    // 検知能力の検証用（マージしない）: #342 時点の解決を再現する
+    const packageRoot = path.dirname(
+      createRequire(import.meta.url).resolve('pdfjs-dist/package.json')
+    )
     const dataUrl = path.join(packageRoot, subdirectory) + path.sep
     const missingFile = files.find(
       (file) => !existsSync(path.join(dataUrl, file))
