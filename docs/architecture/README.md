@@ -27,11 +27,12 @@
 repo 外では Copilot・ボットレビュー・他の AI アシスタントから参照できず、ADR-3 が「移行順序」と「DB 選定」の二義で使われる状態が生じたため、repo へ移設した。
 これにより、[`../refactoring/REFACTORING_PLAN.md`](../refactoring/REFACTORING_PLAN.md) にある「ADR ログの repo 移設は行わない」方針は撤回する。
 
-移設時の変更は次の3点のみで、各 ADR の決定内容は移設前と変えていない。
+移設時の変更は次の4点のみで、各 ADR の決定内容は移設前と変えていない。
 
 - DB 選定を ADR-3 から ADR-5 として分離した（ADR-3 は順序だけを扱う）。
 - 箇条書きの断片を文に整え、関連文書へのリンクを追記した。
 - ADR-4 の開発用 Dockerfile のパスを実在のパス（`.devcontainer/Dockerfile.dev`）に直した。
+- ADR-3 の結合関係にあった「Cloud Run 化は Access / Tunnel の撤去とセット」を、同じ ADR の傾き（Access は ③ まで併存）と ADR-2 に合わせ、Tunnel と Access の撤去時期に分けて書いた（#359 のレビュー指摘）。
 
 ## テンプレート
 

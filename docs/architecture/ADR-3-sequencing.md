@@ -7,7 +7,7 @@
 
 ## 背景 / 課題（結合関係）
 
-- Cloud Run 化は、Cloudflare Access / Tunnel の撤去とセット。
+- Cloud Run 化は、Cloudflare Tunnel の撤去とセット。Cloudflare Access は Cloud Run 化の後も併存し、③ のアプリ内認証（Auth0）への移行時に撤去する（ADR-2）。
 - アプリ内認証は、ユーザーの永続化（DB）が前提。
 - 非同期ジョブ実行基盤（Cloud Tasks 等。計画書 基本設計 §3-4）も ADR-1 と結合する。
 
