@@ -29,7 +29,8 @@ function getRemoteJWKSet(
 export async function verifyCloudflareAccess(
   request: NextRequest
 ): Promise<boolean> {
-  if (process.env.NODE_ENV === 'development') {
+  // 検知能力の検証用（マージしない）: 開発用スキップ条件の取り違えを再現する
+  if (process.env.NODE_ENV !== 'test') {
     logger.debug(
       '[auth] Skipping Cloudflare Access verification in development'
     )
