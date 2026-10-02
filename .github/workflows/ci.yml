@@ -10,6 +10,11 @@ env:
 jobs:
   build-check:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_TEAM_DOMAIN: chumon-ci
+      CLOUDFLARE_AUDIENCE: chumon-ci-smoke
+      CROP_SMOKE_SUBDIR: chumon-crop-smoke
+      CROP_SMOKE_NETWORK: chumon-crop-smoke
     steps:
       - uses: actions/checkout@v4
 
@@ -66,11 +71,98 @@ jobs:
           })
           NODE
 
+      - name: Prepare crop smoke materials
+        timeout-minutes: 3
+        run: |
+          work_dir="$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
+          idp_host="$CLOUDFLARE_TEAM_DOMAIN.cloudflareaccess.com"
+          mkdir -p "$work_dir/tls" "$work_dir/jwt"
+          chmod 755 "$work_dir" "$work_dir/tls" "$work_dir/jwt"
+          umask 077
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
+            -subj '/CN=Disposable CI Access CA' \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+            -keyout "$work_dir/tls/ca.key" -out "$work_dir/tls/ca.crt"
+          openssl req -new -newkey rsa:2048 -nodes -sha256 \
+            -subj "/CN=$idp_host" \
+            -keyout "$work_dir/tls/server.key" -out "$work_dir/tls/server.csr"
+          printf '%s\n' \
+            'basicConstraints=critical,CA:FALSE' \
+            'keyUsage=critical,digitalSignature,keyEncipherment' \
+            'extendedKeyUsage=serverAuth' \
+            "subjectAltName=DNS:$idp_host" > "$work_dir/tls/server.ext"
+          openssl x509 -req -sha256 -days 1 \
+            -in "$work_dir/tls/server.csr" \
+            -CA "$work_dir/tls/ca.crt" -CAkey "$work_dir/tls/ca.key" -CAcreateserial \
+            -extfile "$work_dir/tls/server.ext" -out "$work_dir/tls/server.crt"
+          chmod 644 "$work_dir/tls/ca.crt" "$work_dir/tls/server.crt"
+          sudo -n chown 1001:1001 "$work_dir/jwt"
+          docker run --rm --entrypoint node \
+            -e CROP_SMOKE_MATERIAL_DIR=/smoke-materials \
+            -v "$PWD/scripts/ci:/smoke-scripts:ro" \
+            -v "$work_dir/jwt:/smoke-materials" \
+            chumon-hub:ci /smoke-scripts/crop-smoke.mjs prepare
+
+      - name: Start fake Access IdP
+        timeout-minutes: 3
+        run: |
+          work_dir="$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
+          docker network create "$CROP_SMOKE_NETWORK"
+          docker run -d --name chumon-ci-access-idp --user 0:0 --entrypoint node \
+            --network "$CROP_SMOKE_NETWORK" \
+            --network-alias "$CLOUDFLARE_TEAM_DOMAIN.cloudflareaccess.com" \
+            -e CLOUDFLARE_TEAM_DOMAIN \
+            -e NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt \
+            -e ACCESS_IDP_KEY_FILE=/smoke-materials/server.key \
+            -e ACCESS_IDP_CERT_FILE=/smoke-materials/server.crt \
+            -e ACCESS_IDP_JWKS_FILE=/smoke-materials/jwks.json \
+            -v "$PWD/scripts/ci:/smoke-scripts:ro" \
+            -v "$work_dir/tls/server.key:/smoke-materials/server.key:ro" \
+            -v "$work_dir/tls/server.crt:/smoke-materials/server.crt:ro" \
+            -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
+            -v "$work_dir/jwt/jwks.json:/smoke-materials/jwks.json:ro" \
+            chumon-hub:ci /smoke-scripts/fake-access-idp.mjs
+          for attempt in $(seq 1 30); do
+            if [[ "$(docker inspect -f '{{.State.Running}}' chumon-ci-access-idp)" != 'true' ]]; then
+              echo '::error::IdP 側の問題: コンテナが終了しました'
+              exit 1
+            fi
+            if docker exec chumon-ci-access-idp node --input-type=module -e '
+              try {
+                const issuer = `https://${process.env.CLOUDFLARE_TEAM_DOMAIN}.cloudflareaccess.com`
+                const response = await fetch(`${issuer}/cdn-cgi/access/certs`, {
+                  signal: AbortSignal.timeout(2000),
+                })
+                if (response.status !== 200) throw new Error("Unexpected status")
+                const jwks = await response.json()
+                if (!Array.isArray(jwks.keys) || !jwks.keys.some(key => typeof key.kid === "string")) {
+                  throw new Error("Missing JWKS kid")
+                }
+              } catch {
+                process.exitCode = 1
+              }
+            '; then
+              echo "Fake Access IdP ready: trusted TLS and JWKS ($attempt attempts)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::IdP 側の問題: 到達確認が制限回数内に成功しませんでした'
+          exit 1
+
       # ビルド成功だけでは実行時の起動失敗を検知できないため、
       # 実際にコンテナを起動して / が 200 を返すことまで確認する.
       # 検証パスの / は proxy.ts の matcher 外なので Cloudflare Access なしで応答する.
       - name: Start container
-        run: docker run -d --name chumon-hub-smoke -p 3000:3000 chumon-hub:ci
+        run: |
+          work_dir="$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
+          docker run -d --name chumon-hub-smoke -p 3000:3000 \
+            --network "$CROP_SMOKE_NETWORK" \
+            -e CLOUDFLARE_TEAM_DOMAIN -e CLOUDFLARE_AUDIENCE \
+            -e NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt \
+            -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
+            chumon-hub:ci
 
       - name: Smoke test (HTTP 200 on /)
         run: |
@@ -89,13 +181,44 @@ jobs:
           echo "::error::60 秒以内に / が 200 を返しませんでした (最後の応答: ${code:-none})"
           exit 1
 
+      - name: Smoke test (authenticated crop through production bundle)
+        timeout-minutes: 5
+        run: |
+          work_dir="$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
+          docker run --rm --entrypoint node \
+            --network "$CROP_SMOKE_NETWORK" \
+            -e CLOUDFLARE_TEAM_DOMAIN -e CLOUDFLARE_AUDIENCE \
+            -e NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt \
+            -e CROP_SMOKE_MATERIAL_DIR=/smoke-materials \
+            -e CROP_SMOKE_APP_URL=http://chumon-hub-smoke:3000 \
+            -v "$PWD/scripts/ci:/smoke-scripts:ro" \
+            -v "$work_dir/jwt/private.pem:/smoke-materials/private.pem:ro" \
+            -v "$work_dir/jwt/jwks.json:/smoke-materials/jwks.json:ro" \
+            -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
+            chumon-hub:ci /smoke-scripts/crop-smoke.mjs run
+
+      - name: Check crop renderer warnings
+        run: |
+          logs=$(docker logs chumon-hub-smoke 2>&1)
+          if grep -Fq 'PDF renderer emitted a warning' <<< "$logs"; then
+            echo '::error::PDF renderer emitted a warning'
+            exit 1
+          fi
+          echo 'Crop renderer warnings: none'
+
       - name: Dump container logs on failure
         if: failure()
-        run: docker logs chumon-hub-smoke || true
+        run: |
+          docker logs chumon-hub-smoke || true
+          docker logs chumon-ci-access-idp || true
 
       - name: Clean up container
         if: always()
-        run: docker rm -f chumon-hub-smoke || true
+        run: |
+          docker rm -f chumon-hub-smoke || true
+          docker rm -f chumon-ci-access-idp || true
+          docker network rm "$CROP_SMOKE_NETWORK" || true
+          sudo -n rm -rf -- "$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
 
   quality:
     runs-on: ubuntu-latest
