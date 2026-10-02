@@ -206,8 +206,8 @@ jobs:
             -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
             chumon-hub:ci /smoke-scripts/crop-smoke.mjs run
 
-          # pdfjs は同梱データの解決に失敗しても警告だけで処理を続け、白い画像を返しうる.
-          # HTTP 成功だけでは見逃すため、固定文言の警告も失敗として扱う.
+      # pdfjs は同梱データの解決に失敗しても警告だけで処理を続け、白い画像を返しうる.
+      # HTTP 成功だけでは見逃すため、固定文言の警告も失敗として扱う.
       - name: Check crop renderer warnings
         run: |
           logs=$(docker logs chumon-hub-smoke 2>&1)
