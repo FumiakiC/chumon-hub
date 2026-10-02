@@ -1,7 +1,7 @@
 # GitHub Copilot Instructions — chumon-hub
 
 > このファイルは VSCode / GitHub Copilot が自動参照する。Copilot はコード補完・編集の際に
-> 以下の規約に従うこと。リファクタリングの全体計画は `docs/refactoring/REFACTORING_PLAN.md` を参照。
+> 以下の規約に従うこと。文書ごとの「正」の所在は `docs/README.md` を参照（`docs/refactoring/` はリファクタ期の履歴で、現行の指示ではない）。
 
 ## プロダクト背景（最小限）
 
