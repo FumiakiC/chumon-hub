@@ -1,6 +1,8 @@
 import { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
 
+import { toResponseJsonSchema } from '@/lib/ai/response-json-schema'
+
 interface GenerateStructuredParams<S extends z.ZodType> {
   apiKey: string
   model: string
@@ -19,8 +21,7 @@ export async function generateStructured<S extends z.ZodType>({
   prompt,
   file,
 }: GenerateStructuredParams<S>): Promise<z.infer<S>> {
-  const responseJsonSchema = z.toJSONSchema(schema)
-  delete responseJsonSchema.$schema
+  const responseJsonSchema = toResponseJsonSchema(schema)
 
   const ai = new GoogleGenAI({ apiKey })
   const response = await ai.models.generateContent({
