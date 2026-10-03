@@ -123,7 +123,7 @@ function createPdf() {
   return Buffer.from(parts.join(''), 'ascii')
 }
 
-function createToken(privateKey, kid, issuer, audience) {
+function createToken(privateKey, kid, issuer, audience, claimMarker) {
   const issuedAt = Math.floor(Date.now() / 1000)
   const header = Buffer.from(
     JSON.stringify({ alg: 'RS256', typ: 'JWT', kid })
@@ -134,6 +134,7 @@ function createToken(privateKey, kid, issuer, audience) {
       aud: audience,
       iat: issuedAt,
       exp: issuedAt + 300,
+      email: claimMarker,
     })
   ).toString('base64url')
   const input = `${header}.${payload}`
@@ -232,6 +233,7 @@ async function run() {
   const audience = requireEnv('CLOUDFLARE_AUDIENCE')
   const directory = requireEnv('CROP_SMOKE_MATERIAL_DIR')
   const appUrl = requireEnv('CROP_SMOKE_APP_URL')
+  const claimMarker = requireEnv('CROP_SMOKE_CLAIM_MARKER')
   const issuer = `https://${team}.cloudflareaccess.com`
   const localJwks = JSON.parse(
     await readFile(join(directory, 'jwks.json'), 'utf8')
@@ -287,21 +289,27 @@ async function run() {
     401,
     appUrl,
     pdf,
-    createToken(otherKey, publishedKey.kid, issuer, audience)
+    createToken(otherKey, publishedKey.kid, issuer, audience, claimMarker)
   )
   await postPdf(
     'wrong-audience',
     401,
     appUrl,
     pdf,
-    createToken(privateKey, publishedKey.kid, issuer, `${audience}-wrong`)
+    createToken(
+      privateKey,
+      publishedKey.kid,
+      issuer,
+      `${audience}-wrong`,
+      claimMarker
+    )
   )
   const result = await postPdf(
     'valid-token',
     200,
     appUrl,
     pdf,
-    createToken(privateKey, publishedKey.kid, issuer, audience)
+    createToken(privateKey, publishedKey.kid, issuer, audience, claimMarker)
   )
   const response = parseJson('PNG response', 'JSON response', result)
   check(

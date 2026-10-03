@@ -15,6 +15,7 @@ jobs:
       CLOUDFLARE_AUDIENCE: chumon-ci-smoke
       CROP_SMOKE_SUBDIR: chumon-crop-smoke
       CROP_SMOKE_NETWORK: chumon-crop-smoke
+      CROP_SMOKE_CLAIM_MARKER: claims-leak-marker@smoke.invalid
     steps:
       - uses: actions/checkout@v4
 
@@ -197,6 +198,7 @@ jobs:
           docker run --rm --entrypoint node \
             --network "$CROP_SMOKE_NETWORK" \
             -e CLOUDFLARE_TEAM_DOMAIN -e CLOUDFLARE_AUDIENCE \
+            -e CROP_SMOKE_CLAIM_MARKER \
             -e NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt \
             -e CROP_SMOKE_MATERIAL_DIR=/smoke-materials \
             -e CROP_SMOKE_APP_URL=http://chumon-hub-smoke:3000 \
@@ -216,6 +218,17 @@ jobs:
             exit 1
           fi
           echo 'Crop renderer warnings: none'
+
+      # 認証失敗時に JWT のクレームがアプリログへ出ないことを検査する.
+      # wrong-audience はクレーム検証まで到達するため、payload の漏えいを検知できる.
+      - name: Check auth claim leakage
+        run: |
+          logs=$(docker logs chumon-hub-smoke 2>&1)
+          if grep -Fq "$CROP_SMOKE_CLAIM_MARKER" <<< "$logs"; then
+            echo '::error::JWT claims leaked into application logs'
+            exit 1
+          fi
+          echo 'Auth claim leakage: none'
 
       - name: Dump container logs on failure
         if: failure()
