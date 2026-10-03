@@ -4,12 +4,18 @@ on:
   pull_request:
     branches: ['main']
 
+# GITHUB_TOKEN の権限はリポジトリ設定の既定値に依存させず、ここで全権限なしにする。
+# 各ジョブは checkout に必要な contents: read だけをジョブ単位で付与する。
+permissions: {}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       CLOUDFLARE_TEAM_DOMAIN: chumon-ci
       CLOUDFLARE_AUDIENCE: chumon-ci-smoke
@@ -246,6 +252,8 @@ jobs:
 
   quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - name: Install pnpm

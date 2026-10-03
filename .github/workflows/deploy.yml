@@ -17,6 +17,10 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# GITHUB_TOKEN の権限はリポジトリ設定の既定値に依存させず、ここで全権限なしにする。
+# 必要なジョブだけがジョブ単位で付与する（deploy ジョブは GITHUB_TOKEN を使わないため付与しない）。
+permissions: {}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
