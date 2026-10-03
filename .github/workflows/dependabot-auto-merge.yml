@@ -21,13 +21,33 @@ jobs:
         with:
           github-token: '${{ secrets.GITHUB_TOKEN }}'
 
+      # 自動マージの対象は、patch かつ dependency-group が許可リストにある PR に限る。
+      # 許可リストは dependabot.yml のグループ名の写し。自動マージ対象のグループを追加・改名する場合は、
+      # ここも更新する（写し漏れは自動マージされない側に倒れる）。グループ除外依存の個別 PR と
+      # セキュリティ更新（Grouped security updates のグループを含む）は対象外で、手動マージになる。
+      # 後続の3ステップ（資格情報の読み込み・App トークンの発行・auto-merge の有効化）はこの結果だけを見る。
+      - name: Decide auto-merge eligibility
+        id: decide
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          DEPENDENCY_GROUP: ${{ steps.metadata.outputs.dependency-group }}
+        run: |
+          eligible=false
+          if [ "$UPDATE_TYPE" = 'version-update:semver-patch' ]; then
+            case "$DEPENDENCY_GROUP" in
+              npm-patch | nextjs | react) eligible=true ;;
+            esac
+          fi
+          echo "update-type='$UPDATE_TYPE' dependency-group='$DEPENDENCY_GROUP' eligible=$eligible"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+
       # GITHUB_TOKEN で有効化した auto-merge のマージは後続ワークフローを起動しないため、
       # deploy.yml の push トリガーが発火しない。GitHub App のトークンで有効化して回避する。
       # Dependabot 起動のワークフローが参照できるのは Dependabot secrets のみなので、
       # OP_SERVICE_ACCOUNT_TOKEN は Dependabot secret として登録する（手順は docs/ops/dependabot-automerge.md）。
       - name: Load GitHub App credentials from 1Password
         id: op
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        if: steps.decide.outputs.eligible == 'true'
         uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           # Dev Container の op と同じ版に固定する（.devcontainer/Dockerfile.dev）
@@ -39,7 +59,7 @@ jobs:
 
       - name: Generate GitHub App token
         id: app-token
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        if: steps.decide.outputs.eligible == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ steps.op.outputs.APP_CLIENT_ID }}
@@ -47,9 +67,8 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Enable auto-merge for patch updates only
-        # パッチアップデート(例: v1.0.1 -> v1.0.2)のみ対象にする
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+      - name: Enable auto-merge
+        if: steps.decide.outputs.eligible == 'true'
         run: gh pr merge --auto --squash --delete-branch "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

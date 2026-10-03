@@ -15,6 +15,8 @@ updates:
     # major はどのグループにも入れず、従来どおり 1 依存 = 1 PR で個別に扱う。
     # dependabot-auto-merge.yml は PR 内で最大の semver 変更で判定するため、
     # patch と minor を別グループに分けて「patch のみ自動マージ」を保つ。
+    # さらに、自動マージはグループ名の許可リスト（npm-patch / nextjs / react）にある PR に限る。
+    # 自動マージ対象のグループを追加・改名する場合は、dependabot-auto-merge.yml の許可リストも更新すること。
     groups:
       nextjs:
         applies-to: version-updates
@@ -35,7 +37,8 @@ updates:
           - 'minor'
           - 'patch'
       # npm-minor と npm-patch の exclude-patterns は同一に保つこと。
-      # 除外した依存はグループに入らず、個別 PR として届く。
+      # 除外した依存はグループに入らず、個別 PR として届く（patch も自動マージしない）。
+      # マージ前の確認は docs/ops/dependabot-automerge.md を参照。
       npm-minor:
         applies-to: version-updates
         patterns:
