@@ -302,7 +302,15 @@ Web UI では、PR のマージボックスで **Disable auto-merge** を押す�
 @dependabot rebase
 ```
 
-- **マージ済み**: `deploy.yml` は push でのみ起動し（docs のみの変更を除く）、手動で起動する手段はない。main に次の push が入れば、その時点の main がビルドされ、未反映分もまとめて本番に出る。
+- **マージ済み**: `deploy.yml` を `workflow_dispatch` で起動する（ブランチは `main` を選ぶ。`main` 以外から起動した run はビルドとデプロイをスキップし、本番の待機中の run にも影響しない）。run は起動した SHA ではなく checkout の時点の `main` をビルドするため、未反映分もまとめて本番に出る。main に次の push（docs のみの変更を除く）が入った場合も同じく反映される。
+
+```sh
+gh workflow run deploy.yml --ref main --repo FumiakiC/chumon-hub
+```
+
+Web UI では、**Actions** → **Build and Deploy** → **Run workflow** で、ブランチに `main` を選んで実行する。
+
+再デプロイは `workflow_dispatch` で行い、run の **Re-run** は使わない。re-run は元の run と同じ SHA とワークフロー定義で走るため、`workflow_dispatch` の導入（`ci/deploy-latest-main`）より前の run を re-run すると、古いコードが `:latest` になりうる。導入後の run でも、`deploy` だけが再実行される場合（`deploy` だけが失敗した run で失敗したジョブを再実行した場合を含む）はビルドが走らず、その時点の `:latest` で再起動するだけで、元の run のイメージを再デプロイする保証はない。
 
 ### 巻き戻し
 
