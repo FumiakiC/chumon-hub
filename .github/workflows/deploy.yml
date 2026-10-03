@@ -2,19 +2,24 @@ name: Build and Deploy
 
 on:
   push:
-    branches: ['main', 'chore/docker-setup']
+    branches: ['main']
     # ドキュメントのみの変更ではイメージ再ビルド・再デプロイを行わない。
     # ベースイメージ (node:26-alpine) が可変タグのため、ソースが同一でも
     # 再ビルドすると別物のイメージになりうる。不要な再デプロイは避ける。
     paths-ignore:
       - 'docs/**'
       - '**.md'
+  # 手動の再デプロイの入口。main 以外のブランチから起動した run は、本番のグループに入れず
+  # （concurrency を参照）、build-push の条件でスキップする。
+  workflow_dispatch:
 
-# 対象ブランチを問わず、同じ :latest イメージと deployment/chumon-hub を更新するため、
+# main の push と手動起動の全 run が同じ :latest イメージと deployment/chumon-hub を更新するため、
 # 固定グループで全 run の push と rollout を直列化する。
-# 実行中の run は止めず、待機中の run は後から来たものに置き換わる。
+# 実行中の run は止めず、待機中の run は後から来たものに置き換わる。グループ内の実行順は保証されない。
+# main 以外から手動起動した run は、run ごとの別グループに入れる。同じグループに入れると、
+# ジョブ条件でスキップされる run が main の待機中の run を置き換え、その変更が未反映のまま残るため。
 concurrency:
-  group: deploy-production
+  group: ${{ github.ref == 'refs/heads/main' && 'deploy-production' || format('deploy-skipped-{0}', github.run_id) }}
   cancel-in-progress: false
 
 # GITHUB_TOKEN の権限はリポジトリ設定の既定値に依存させず、ここで全権限なしにする。
@@ -26,12 +31,23 @@ env:
 
 jobs:
   build-push:
+    # 手動起動を main に限る（push は on.push.branches で main に限定済み）。
+    # スキップされると、needs で依存する deploy もスキップされる。
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      # 起動した SHA（github.sha）ではなく、checkout の時点の main をビルドする。
+      # 待機中に置き換えられた run や re-run が、古いコードを :latest にしないため。
+      # build-push-action は context: . のときだけ checkout した作業ツリーをビルドする
+      # （context を省くと Git context になり、github.sha をビルドする）。
+      - name: Checkout main
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
 
       - name: Set up Image Name
         id: meta
@@ -50,6 +66,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -58,6 +75,26 @@ jobs:
           # これを使うには setup-buildx-action が必須でした
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Record build summary
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGER_SHA: ${{ github.sha }}
+          BUILT_SHA: ${{ steps.checkout.outputs.commit }}
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo '## Build and push'
+            echo ''
+            echo '| 項目 | 値 |'
+            echo '|---|---|'
+            echo "| 起動イベント | \`${TRIGGER_EVENT}\` |"
+            echo "| 起動した SHA | \`${TRIGGER_SHA}\` |"
+            echo "| ビルドした SHA（checkout で解決した main） | \`${BUILT_SHA}\` |"
+            echo "| push したイメージ | \`${IMAGE_NAME}:latest\` |"
+            echo "| digest | \`${IMAGE_DIGEST}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: build-push
