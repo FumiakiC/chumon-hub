@@ -5,7 +5,7 @@ const nextConfig = {
   serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
   outputFileTracingIncludes: {
     '/api/crop-title-block': [
-      './node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/standard_fonts/**/*',
+      // 検知能力の検証用（マージしない）: standard_fonts をトレース対象から外す
       './node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/wasm/**/*',
       './node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/cmaps/**/*',
       './node_modules/.pnpm/pdfjs-dist@*/node_modules/pdfjs-dist/iccs/**/*',
