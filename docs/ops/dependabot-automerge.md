@@ -230,10 +230,10 @@ gh pr list --repo FumiakiC/chumon-hub --app dependabot --state open --limit 200 
 Web UI では、**Pull requests** タブで `is:pr is:open author:app/dependabot` を検索し、全ページの PR を開いて、マージボックスに **Disable auto-merge** が表示されるかで見分ける。
 
 3. 洗い出した PR ごとに、新しい条件の対象かどうかを判定する。判定は「patch であること」と「許可リストのグループであること」の両方で行う。`nextjs` / `react` のグループは minor も含むため、グループ名だけでは判定できない。題名（`the npm-patch group` / `the nextjs group` / `the react group` を含むか）は、候補を絞る目安にだけ使う。
-   - **新定義の判定ログがある場合**: PR の現在の head に対する Dependabot Auto Merge の run に `Decide auto-merge eligibility` ステップがあれば、そのログの `eligible` に従う。`eligible=false` なら auto-merge を解除する。
+   - **新定義の判定ログがある場合**: PR の現在の head に対する Dependabot Auto Merge の run で `Decide auto-merge eligibility` ステップが実行されていれば、そのログの `eligible` に従う。`eligible=false` なら auto-merge を解除する。
    - **判定ログが無い場合**: auto-merge を解除してから、手動で確かめる。PR の Dependabot のコミットのメッセージで、`updated-dependencies` の各依存の `update-type` がすべて `version-update:semver-patch` で、かつ `dependency-group` が許可リストにあれば対象である。対象と確かめた PR は、4. で auto-merge を有効化し直させる。
 
-判定ログの確認（gh）。run が複数あれば最新のものを見る。run が無い場合と、最後のコマンドで何も出ない場合（旧定義の run）は、判定ログが無い。
+判定ログの確認（gh）。run が複数あれば最新のものを見る。run が無い場合と、最後のコマンドで何も出ない場合（旧定義の run か、`Dependabot metadata` ステップが失敗した run）は、判定ログが無い。
 
 ```sh
 gh pr view <PR番号> --repo FumiakiC/chumon-hub --json headRefName,headRefOid
@@ -285,7 +285,8 @@ gh pr merge <PR番号> --disable-auto --repo FumiakiC/chumon-hub
 | トークン発行が失敗する | Client ID と鍵の不一致、App が未インストール、PEM の改行消失 |
 | auto-merge の有効化が失敗する | リポジトリ設定の Allow auto-merge がオフ、App の権限不足 |
 | マージ後にデプロイが起動しない | 有効化主体が `github-actions[bot]` のまま（旧ワークフローで処理された PR） |
-| patch なのに auto-merge が有効化されない | 自動マージの対象外（グループ除外依存の更新・セキュリティ更新）。判定ステップのログの `update-type` / `dependency-group` で確かめる。自動マージ対象のグループを追加・改名し、許可リストの更新が漏れた場合もこうなる。`fetch-metadata` が Dependabot のコミットを検証できなかった場合は両方が空になる（`Dependabot metadata` ステップのログに警告が出る） |
+| patch なのに auto-merge が有効化されない | 自動マージの対象外（グループ除外依存の更新・セキュリティ更新）。判定ステップのログの `update-type` / `dependency-group` で確かめる。自動マージ対象のグループを追加・改名し、許可リストの更新が漏れた場合もこうなる。 |
+| `Dependabot metadata` ステップが失敗し、後続のステップが実行されない | `fetch-metadata` が PR を Dependabot のものと確認できなかった（コミットの作成者や署名の検証に失敗した）か、コミットのメッセージに更新のメタデータが無い。判定ステップも実行されないため、判定ログは出ない。原因は `Dependabot metadata` ステップのログで確かめる。auto-merge は有効化されない |
 
 旧ワークフローで処理された PR は、マージ済みかどうかで対処が異なる。
 
