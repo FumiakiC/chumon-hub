@@ -21,6 +21,7 @@
 - 開発は **VS Code Dev Container** 内で行う（node 26 + pnpm はコンテナ同梱、ホストに node/pnpm は無い）。`pnpm` 等のコマンドは Dev Container のターミナルで実行する。
 - 開発サーバは `pnpm dev`（= op run で秘匿注入 → next dev）。op を使わない場合は `pnpm dev:local`（この場合 `.env.local` には op:// 参照ではなく実際の値を手動で記述する）。
 - 秘匿情報は 1Password (op) で実行時注入し、ハードコードしない（`.env.local` は op:// 参照、コミットしない。op 非使用時のみローカルでプレーンテキストの実値を記述）。
+- **main へ直接 push しない**（main への変更は作業ブランチから PR で行う）。pre-push フック（`.githooks/pre-push`）が push を拒否したら、`--no-verify`・フックの無効化・設定の変更などで迂回せず、作業を止めて状況を報告する。
 
 ## パッケージ管理
 
