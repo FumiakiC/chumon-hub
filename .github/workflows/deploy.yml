@@ -26,6 +26,9 @@ concurrency:
 # 必要なジョブだけがジョブ単位で付与する（deploy ジョブは GITHUB_TOKEN を使わないため付与しない）。
 permissions: {}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-push:
     # 手動起動を main に限る（push は on.push.branches で main に限定済み）。
@@ -42,7 +45,7 @@ jobs:
       # （context を省くと Git context になり、github.sha をビルドする）。
       - name: Checkout main
         id: checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           ref: refs/heads/main
 
@@ -53,10 +56,10 @@ jobs:
       # ★★★ ここを追加しました ★★★
       # これによりキャッシュ機能(type=gha)が使えるドライバーがセットアップされます
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -64,10 +67,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v7
-        # build record（ビルドの入力・出力・統計・ログ）は artifact に保存しない。ジョブサマリは残す。
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true

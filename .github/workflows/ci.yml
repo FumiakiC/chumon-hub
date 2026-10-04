@@ -8,6 +8,9 @@ on:
 # 各ジョブは checkout に必要な contents: read だけをジョブ単位で付与する。
 permissions: {}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-check:
     runs-on: ubuntu-latest
@@ -20,18 +23,15 @@ jobs:
       CROP_SMOKE_NETWORK: chumon-crop-smoke
       CROP_SMOKE_CLAIM_MARKER: claims-leak-marker@smoke.invalid
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       # ビルドのみ行い、Pushはしない.
       # load: true でビルド結果をローカル docker に取り込み、後続のスモークで起動する.
       - name: Build check
-        uses: docker/build-push-action@v7
-        # build record（ビルドの入力・出力・統計・ログ）は artifact に保存しない. ジョブサマリは残す.
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: false
@@ -255,9 +255,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v5
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v4
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
