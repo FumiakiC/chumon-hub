@@ -12,7 +12,8 @@
   "forwardPorts": [3000],
 
   // 依存はコンテナ作成時に frozen-lockfile で導入（再現性）
-  "postCreateCommand": "pnpm install --frozen-lockfile",
+  // main へのコード変更の直接 push を防ぐフックを、依存のインストールより先に有効化する。
+  "postCreateCommand": "git config --local core.hooksPath .githooks && pnpm install --frozen-lockfile",
 
   // ===== 秘匿情報の扱い（ハードコード厳禁） =====
   // ここに API キー等の実値は一切書かない。

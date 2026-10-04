@@ -276,3 +276,6 @@ jobs:
       - name: Test
         if: ${{ !cancelled() }}
         run: pnpm test
+      - name: Test pre-push main guard
+        if: ${{ !cancelled() }}
+        run: bash scripts/githooks/test-pre-push.sh
