@@ -19,7 +19,7 @@
 | ADR | [`architecture/`](architecture/README.md) | アーキテクチャ決定の記録。一覧と運用ルールは同ディレクトリの README |
 | 運用手順 | [`ops/k3s-node-config.md`](ops/k3s-node-config.md) | k3s ノードのリソース予約と適用手順 |
 | 運用手順 | [`ops/dependabot-automerge.md`](ops/dependabot-automerge.md) | Dependabot auto-merge の構成（GitHub App トークン・自動マージの対象）、グループ除外依存のマージ前の確認、条件の切り替え、ローテーション、切り分け |
-| 運用手順 | [`SETUP_DEVCONTAINER.md`](SETUP_DEVCONTAINER.md) | Dev Container と 1Password の初回セットアップ |
+| 運用手順 | [`SETUP_DEVCONTAINER.md`](SETUP_DEVCONTAINER.md) | Dev Container と 1Password の初回セットアップ、main への直接 push を防ぐ pre-push フック |
 | インシデント | [`incidents/2026-08-20-next-16.3.1-standalone.md`](incidents/2026-08-20-next-16.3.1-standalone.md) | Next.js 16.3.1 の standalone 起動不全による本番デプロイ失敗 |
 | インシデント | [`incidents/2026-09-19-crop-concurrency-node-exhaustion.md`](incidents/2026-09-19-crop-concurrency-node-exhaustion.md) | クロップの同時実行によるノード資源枯渇。§5 に未対応の欠陥が残る |
 | 評価 | [`eval/GOLDEN_SET.md`](eval/GOLDEN_SET.md) | golden set の置き場所とラベル形式（実データは private repo） |

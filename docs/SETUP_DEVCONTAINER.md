@@ -102,6 +102,44 @@ macOS では bind-mount の I/O が遅く、ワークスペース配下の `node
 
 bind-mount 版（`chumon` でローカルフォルダを開く）も引き続き有効です。速度が気にならなければそちらで構いません。
 
+## 6. main への直接 push の防止（pre-push フック）
+
+main へのコード変更は PR で行い、CI（quality / build-check）を通してからマージします。`ci.yml` は pull_request でしか起動しないため、main へ直接 push したコード変更は CI を通らずに本番デプロイ（`deploy.yml`）を起動します。これを防ぐため、`.githooks/pre-push` が main への push を次のとおり判定します。
+
+- 許可：main に新しく載るコミットが、すべて `docs/` 配下だけを変更する fast-forward 更新（計画書など docs だけの変更は、引き続き main へ直接 push できる）
+- 拒否：`docs/` の外を変更するコミットを1つでも含む push（コミット単位で判定するため、変更とその revert の組も拒否）、マージコミット、non-fast-forward 更新（force push）、main の削除・新規作成、リモートの main の先端がローカルに無い場合（先に `git fetch` する）
+
+このフックはローカルの誤操作を防ぐためのもので、権限制御ではありません。フックを設定していない clone、Web 上の編集、API からの push には効きません。また、フックはチェックアウト中の作業ツリーにある `.githooks/pre-push` が使われるため、それを含まないブランチ（フックの導入前に main から分けたブランチなど）では働きません。そうしたブランチは最新の main に rebase してから push します。許可する範囲の `docs/` は `deploy.yml` の `paths-ignore` に含まれるため、docs だけの push は通常デプロイを起動しません（1,000 を超えるコミットの push など、GitHub がパスで絞り込めない場合は起動します）。
+
+### 6.1 有効化
+
+Dev Container の作成時・再作成時に、`postCreateCommand` がこのリポジトリのローカル設定 `core.hooksPath` を `.githooks` にします。既存のコンテナ、bind-mount 版のローカル clone、その他の clone では、次の確認をしてから手動で1回設定します（`core.hooksPath` を設定すると、それまでのフックの置き場所にあるフックは使われなくなるため）。
+
+```bash
+echo '[1] core.hooksPath'; git config --show-origin --get-all core.hooksPath || echo '(未設定)'
+d=$(git rev-parse --git-path hooks); echo "[2] フックの置き場所: $d"
+if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1 ! -name '*.sample'; else echo '(ディレクトリなし)'; fi
+```
+
+- [1] が `(未設定)` で、[2] の下に何も出ない（または `(ディレクトリなし)`）なら、`git config --local core.hooksPath .githooks` を実行する。
+- 既存の設定やフックがある場合は、その内容を確認し、`.githooks` へ移すか廃止するかを決めてから設定する。
+
+設定後は、最新の `origin/main` を起点に `docs/` の外を変更したブランチで `git push --dry-run origin HEAD:main` を実行し、`[pre-push-main-guard]` で始まる行とともに拒否されることを確かめます（`--dry-run` なので何も送信しません）。
+
+### 6.2 拒否されたとき
+
+`[pre-push-main-guard]` で始まる行に、拒否の理由、該当するコミット（短縮 SHA と件名）、`docs/` の外のパスが出ます。main へのコード変更は作業ブランチに push して PR を出してください。想定外の拒否であれば、push をやり直す前に原因を確認します。
+
+### 6.3 例外の運用ルール
+
+- フックを迂回して main へ直接 push するのは、owner が明示的に判断した例外に限る。そのときの手段は `git push --no-verify` に限り、設定の変更やフックの削除・無効化では迂回しない。
+- 誤って main に入ったコード変更の取り消しも、原則は revert の PR で行う。PR を待てない場合に限り、owner の判断で上記の手段を使う。迂回した push は CI を通らずにデプロイを起動しうる。
+- AI エージェント（Copilot 等）は独断で迂回しない。拒否されたら作業を止めて状況を報告する（`.github/copilot-instructions.md` に記載）。
+
+### 6.4 フックを変更するとき
+
+回帰テスト `bash scripts/githooks/test-pre-push.sh` を実行します（CI の quality ジョブでも実行されます）。`deploy.yml` の `paths-ignore` を変える場合は、`docs/` がその範囲に含まれる関係を保ちます。
+
 ## トラブルシュート早見表
 
 | 症状 | 原因 | 対処 |
@@ -112,5 +150,7 @@ bind-mount 版（`chumon` でローカルフォルダを開く）も引き続き
 | 値が `op://...` のまま | `.env.local` がプレースホルダ／`dev:local` を op:// 参照で実行 | op:// 参照に修正、または dev:local 用に実値を記述 |
 | 認証を求められる/SA が使われない | `OP_CONNECT_HOST`/`OP_CONNECT_TOKEN` が SA トークンより優先 | Connect 系の環境変数を解除 |
 | コマンドが vault 指定を要求 | SA 呼び出しでは多くのコマンドで `--vault` 必須 | `--vault chumon-hub-dev` を付ける |
+| push が `[pre-push-main-guard]` で拒否される | main へ docs/ の外の変更・マージ・force push 等を push しようとした | 作業ブランチに push して PR を出す（§6.2） |
+| main へ docs/ の外の変更を push しても拒否されない | `core.hooksPath` が未設定（既存のコンテナ・別の clone）、またはチェックアウト中のブランチに `.githooks/pre-push` が無い | §6.1 の確認と設定を行う。ブランチが古ければ最新の main に rebase する |
 
 最初に確認すべきは **`op whoami`**。通れば認証は解決、あとは Vault 権限と op:// の綴りだけの問題に切り分けられます。
