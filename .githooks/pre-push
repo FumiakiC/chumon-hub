@@ -1,0 +1,142 @@
+#!/bin/sh
+# Prevent accidental direct pushes of code changes to main; allow docs/ only.
+# docs/ must remain within .github/workflows/deploy.yml's paths-ignore scope.
+# This local guard prevents mistakes; it is not an authorization mechanism.
+
+set -f
+refused=0
+checked_main=0
+commit_count=0
+
+message() {
+  while IFS= read -r message_line; do
+    printf '[pre-push-main-guard] %s\n' "$message_line" >&2
+  done <<EOF
+$1
+EOF
+}
+
+reject() {
+  refused=1
+  message "$1"
+}
+
+is_zero() {
+  case "$1" in
+    ''|*[!0]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+is_commit() {
+  case "$1" in
+    ''|*[!0123456789abcdefABCDEF]*) return 1 ;;
+  esac
+  object_type=$(git cat-file -t "$1" 2>/dev/null) || return 1
+  [ "$object_type" = commit ]
+}
+
+report_commit() {
+  if commit_label=$(git show -s --format='%h %s' "$1" 2>/dev/null); then
+    message "Commit: $commit_label"
+  else
+    reject "Could not read commit details for $1."
+  fi
+}
+
+check_main() {
+  checked_main=1
+  if is_zero "$local_oid"; then
+    reject 'Deleting main is not allowed.'
+    return
+  fi
+  if is_zero "$remote_oid"; then
+    reject 'Creating main is not allowed.'
+    return
+  fi
+  if ! is_commit "$local_oid" || ! is_commit "$remote_oid"; then
+    reject 'Both endpoints must be commits available in the local repository.'
+    return
+  fi
+
+  git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null
+  ancestor_status=$?
+  case "$ancestor_status" in
+    0) ;;
+    1)
+      reject 'Non-fast-forward updates to main are not allowed.'
+      return
+      ;;
+    *)
+      reject 'Could not verify the ancestry of main.'
+      return
+      ;;
+  esac
+
+  if ! commits=$(git rev-list "$remote_oid..$local_oid" 2>/dev/null); then
+    reject 'Could not read the incoming commits.'
+    return
+  fi
+  if ! merges=$(git rev-list --min-parents=2 "$remote_oid..$local_oid" 2>/dev/null); then
+    reject 'Could not check the incoming commits for merges.'
+    return
+  fi
+  if [ -n "$merges" ]; then
+    reject 'Merge commits cannot be pushed directly to main.'
+    for commit in $merges; do
+      report_commit "$commit"
+    done
+    return
+  fi
+
+  for commit in $commits; do
+    commit_count=$((commit_count + 1))
+    paths=$(git diff-tree --exit-code --no-commit-id --name-only \
+      -r --root --no-renames --no-ext-diff --no-textconv "$commit" \
+      -- . ':(top,exclude)docs/**' 2>/dev/null)
+    diff_status=$?
+    case "$diff_status" in
+      0) ;;
+      1)
+        reject 'Changes outside docs/ cannot be pushed directly to main.'
+        report_commit "$commit"
+        if [ -z "$paths" ]; then
+          reject 'Could not obtain the changed paths.'
+          continue
+        fi
+        path_count=0
+        while IFS= read -r changed_path; do
+          message "Path: $changed_path"
+          path_count=$((path_count + 1))
+          [ "$path_count" -lt 5 ] || break
+        done <<EOF
+$paths
+EOF
+        ;;
+      *)
+        reject 'Could not inspect the changes in an incoming commit.'
+        report_commit "$commit"
+        ;;
+    esac
+  done
+}
+
+while IFS=' 	' read -r local_ref local_oid remote_ref remote_oid extra ||
+  [ -n "$local_ref$local_oid$remote_ref$remote_oid$extra" ]; do
+  if [ -z "$local_ref" ] || [ -z "$local_oid" ] ||
+    [ -z "$remote_ref" ] || [ -z "$remote_oid" ] || [ -n "$extra" ]; then
+    reject 'Malformed pre-push input: expected four fields.'
+    continue
+  fi
+  [ "$remote_ref" = refs/heads/main ] || continue
+  check_main
+done
+
+if [ "$refused" -ne 0 ]; then
+  message 'main へのコード変更は PR で行ってください。想定外の拒否なら作業を止めて状況を報告してください。'
+  exit 1
+fi
+if [ "$checked_main" -ne 0 ]; then
+  message "Allowed docs-only main update; checked $commit_count commit(s)."
+fi
+exit 0
