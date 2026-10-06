@@ -113,7 +113,7 @@ main へのコード変更は PR で行い、CI（quality / build-check）を通
 
 ### 6.1 有効化
 
-Dev Container の作成時・再作成時に、`postCreateCommand` がこのリポジトリのローカル設定 `core.hooksPath` を `.githooks` にします。既存のコンテナ、bind-mount 版のローカル clone、その他の clone では、次の確認をしてから手動で1回設定します（`core.hooksPath` を設定すると、それまでのフックの置き場所にあるフックは使われなくなるため）。
+Dev Container の作成時・再作成時に、`postCreateCommand` がこのリポジトリのローカル設定 `core.hooksPath` を `.githooks` にします。このとき既存の設定やフックは確認せず、そのまま上書きします。このリポジトリではフックの置き場所を `.githooks` に統一しており、設定が食い違うときに有効化を見送ると、main のガードが外れたことに気づけないためです。`core.hooksPath` を設定すると、それまでのフックの置き場所にあるフックは使われなくなります。そのため、既存の clone で初めて有効化するとき（既存のコンテナを再作成する前、または bind-mount 版のローカル clone やその他の clone で手動で設定する前）は、次の確認をします。
 
 ```bash
 echo '[1] core.hooksPath'; git config --show-origin --get-all core.hooksPath || echo '(未設定)'
@@ -121,8 +121,8 @@ d=$(git rev-parse --git-path hooks); echo "[2] フックの置き場所: $d"
 if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1 ! -name '*.sample'; else echo '(ディレクトリなし)'; fi
 ```
 
-- [1] が `(未設定)` で、[2] の下に何も出ない（または `(ディレクトリなし)`）なら、`git config --local core.hooksPath .githooks` を実行する。
-- 既存の設定やフックがある場合は、その内容を確認し、`.githooks` へ移すか廃止するかを決めてから設定する。
+- [1] が `(未設定)` で、[2] の下に何も出ない（または `(ディレクトリなし)`）なら、`git config --local core.hooksPath .githooks` を実行する（コンテナを再作成すれば自動で設定される）。
+- 既存の設定やフックがある場合は、その内容を確認し、`.githooks` へ移すか廃止するかを決めてから設定する（コンテナの再作成も、この判断の後に行う）。
 
 設定後は、最新の `origin/main` を起点に `docs/` の外を変更したブランチで `git push --dry-run origin HEAD:main` を実行し、`[pre-push-main-guard]` で始まる行とともに拒否されることを確かめます（`--dry-run` なので何も送信しません）。
 
