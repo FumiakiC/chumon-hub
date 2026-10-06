@@ -92,7 +92,8 @@ check_main() {
   for commit in $commits; do
     commit_count=$((commit_count + 1))
     paths=$(git diff-tree --exit-code --no-commit-id --name-only \
-      -r --root --no-renames --no-ext-diff --no-textconv "$commit" \
+      -r --root --no-renames --no-ext-diff --no-textconv \
+      --ignore-submodules=none "$commit" \
       -- . ':(top,exclude)docs/**' 2>/dev/null)
     diff_status=$?
     case "$diff_status" in

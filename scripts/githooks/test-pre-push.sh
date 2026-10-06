@@ -340,6 +340,25 @@ case_body() {
     29)
       [[ "$hook_index" == "100755 "*$'\t.githooks/pre-push' ]]
       ;;
+    30)
+      local initial_gitlink next_gitlink
+      cat > .gitmodules <<'EOF'
+[submodule "lib"]
+  path = vendor/lib
+  url = ../lib.git
+  ignore = all
+EOF
+      initial_gitlink=$(printf '%040d' 1)
+      git update-index --add --cacheinfo "160000,$initial_gitlink,vendor/lib"
+      commit_all 'Add ignored submodule gitlink'
+      push_expect bypass "$(git rev-parse HEAD)" --no-verify origin main
+
+      next_gitlink=$(printf '%040d' 2)
+      git update-index --add --cacheinfo "160000,$next_gitlink,vendor/lib"
+      git commit -m 'Advance ignored submodule gitlink'
+      push_expect deny '' origin main
+      grep -Fq 'Path: vendor/lib' "$case_dir/push.err"
+      ;;
   esac
 }
 
@@ -373,6 +392,7 @@ names=(
   'direct invocation with missing local commit'
   'direct invocation with malformed input'
   'indexed hook mode is 100755'
+  'submodule gitlink outside docs/ with ignore = all'
 )
 
 passed=0
