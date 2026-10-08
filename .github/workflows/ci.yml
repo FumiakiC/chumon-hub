@@ -10,7 +10,8 @@ permissions: {}
 
 jobs:
   build-check:
-    runs-on: ubuntu-latest
+    # ubuntu-latest による OS 世代の自動切り替えを避けるため版を明示する（同じ版のイメージは週次で更新される）。
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     env:
@@ -251,7 +252,7 @@ jobs:
           sudo -n rm -rf -- "$RUNNER_TEMP/$CROP_SMOKE_SUBDIR"
 
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:

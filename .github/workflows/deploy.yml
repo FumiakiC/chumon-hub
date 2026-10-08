@@ -31,7 +31,8 @@ jobs:
     # 手動起動を main に限る（push は on.push.branches で main に限定済み）。
     # スキップされると、needs で依存する deploy もスキップされる。
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    # ubuntu-latest による OS 世代の自動切り替えを避けるため版を明示する（同じ版のイメージは週次で更新される）。
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -98,7 +99,7 @@ jobs:
 
   deploy:
     needs: build-push
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Restart K8s Pod
         uses: appleboy/ssh-action@v1.0.3

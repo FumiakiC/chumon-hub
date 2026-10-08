@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   dependabot:
-    runs-on: ubuntu-latest
+    # ubuntu-latest による OS 世代の自動切り替えを避けるため版を明示する（同じ版のイメージは週次で更新される）。
+    runs-on: ubuntu-26.04
     # 本リポジトリで、PR 作成者とイベント主体がともに Dependabot の run のみ対象。
     # 人が reopen / push した run には Dependabot secrets が渡らず、1Password ステップが失敗するため除外する。
     # 手動の re-run は元の実行と同じ主体・権限で走るため、この条件を満たす。
