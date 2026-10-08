@@ -35,8 +35,6 @@ id_rsa.pub
 # 同期ツールやエディタが勝手に作る「.env」で始まるゴミファイル対策
 .env*
 
-# 【例外】Next.jsの型定義ファイルだけは許可（これは環境変数ではないため）
-!next-env.d.ts
 # 【例外】チーム共有用のサンプルファイルがある場合は許可（必要なければ削除OK）
 !.env.example
 
@@ -74,3 +72,5 @@ Desktop.ini
 
 # --- TypeScript ---
 *.tsbuildinfo
+# Next.js が next dev / next build / next typegen のたびに生成する（追跡しない）
+next-env.d.ts
