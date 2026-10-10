@@ -118,7 +118,7 @@ kubectl get pods -l app=chumon-hub -o wide
 
 **現行の [deploy.yml](../../.github/workflows/deploy.yml) は `kubectl rollout restart` と状態確認だけを行い、マニフェストを apply しない。この `kubectl apply` は手動でしか行われない。** ノード設定の配置・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
 
-**この非自動化の帰結として、repo のマニフェストと本番の実体は乖離しうる。** 2026-09-19 時点で `env` の 2 項目（Cloudflare の team domain / audience）が repo では `secretKeyRef`、本番では平文の `value` になっており、`apply` が型不整合で拒否された。**repo のマニフェストをレビューしても本番を検証したことにはならない**という問題であり、`fix/manifest-drift` として起票済み。適用前には `kubectl get deploy chumon-hub -o yaml` と repo の差分を確認すること。
+**この非自動化の帰結として、repo のマニフェストと本番の実体は乖離しうる。** 2026-09-19 時点で `env` の 2 項目（Cloudflare の team domain / audience）が repo では `secretKeyRef`、本番では平文の `value` になっており、`apply` が型不整合で拒否された。**repo のマニフェストをレビューしても本番を検証したことにはならない。** 2026-10-10 に `fix/manifest-drift` ① として照合と是正を行い、差分が無いことを確かめた（[k3s-live-state.md](k3s-live-state.md)）。適用前には、同文書の手順で本番と repo を照合すること。`kubectl get deploy chumon-hub -o yaml` の全文は平文の秘匿値を含みうるため、差分の確認には使わない。
 
 `progressDeadlineSeconds: 300` は進捗停止の失敗判定であり、自動ロールバックではない。CI の `rollout status` は 180 秒で先に打ち切られる。ここでは Deployment の判定も観測できるよう、手動確認を 360 秒としている。なお `maxSurge: 0` のため、この apply は旧 Pod を停止してから新 Pod を起動する。数十秒の断が出る。
 
