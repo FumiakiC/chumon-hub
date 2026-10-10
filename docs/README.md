@@ -18,6 +18,7 @@
 | 正（現行） | [`roadmap/PHASE4_PLUS_ROADMAP.md`](roadmap/PHASE4_PLUS_ROADMAP.md) | Phase 4+ の要件定義・基本設計・決定事項と未決事項・エポック表・申し送り |
 | ADR | [`architecture/`](architecture/README.md) | アーキテクチャ決定の記録。一覧と運用ルールは同ディレクトリの README |
 | 運用手順 | [`ops/k3s-node-config.md`](ops/k3s-node-config.md) | k3s ノードのリソース予約と適用手順 |
+| 運用手順 | [`ops/k3s-live-state.md`](ops/k3s-live-state.md) | k3s 本番と repo のマニフェストの照合手順（`ops/tools/` のスクリプト）、2026-10-10 の照合と是正の結果、Secret の構成と経緯 |
 | 運用手順 | [`ops/dependabot-automerge.md`](ops/dependabot-automerge.md) | Dependabot auto-merge の構成（GitHub App トークン・自動マージの対象）、グループ除外依存のマージ前の確認、条件の切り替え、ローテーション、切り分け |
 | 運用手順 | [`SETUP_DEVCONTAINER.md`](SETUP_DEVCONTAINER.md) | Dev Container と 1Password の初回セットアップ、main への直接 push を防ぐ pre-push フック |
 | インシデント | [`incidents/2026-08-20-next-16.3.1-standalone.md`](incidents/2026-08-20-next-16.3.1-standalone.md) | Next.js 16.3.1 の standalone 起動不全による本番デプロイ失敗 |
