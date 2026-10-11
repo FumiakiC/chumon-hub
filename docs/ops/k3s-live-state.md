@@ -27,27 +27,38 @@ repo の `k8s/` と本番（k3s）の実体が一致しているかを、秘匿�
 - 想定外の値は数えずに止まる。想定外の変更は、件数と spec / metadata のどちらの配下かだけを出す。
 - 書き込みは JSON Patch で、確認時の uid・`resourceVersion`・last-applied 注釈を `test` 操作の条件にする。
 - 切り戻し情報（uid と書き込み前後の last-applied 注釈。repo の公開済みの内容と一致することを確認したもの）を、スクリプトと同じ場所の `svc-portname-work/`（0700、ファイルは 0600）に保存する。取得したオブジェクトそのものは保存しない。
-- 終了コード 5〜7（書き込み後の確認失敗・結果不明・拒否）のときは、再試行や切り戻しをせず、読み取りだけの `--status` で状態を確かめる。
+- 終了コード 5〜7（書き込み後の確認失敗・結果不明・拒否）のときは、再試行や切り戻しをせず、読み取りだけの `--status` で状態を確かめる。書き込みを始めた後の中断も 5 か 6 にする。
+
+`tools/` のスクリプトは、本番ホストで `sudo` を付け、本番の kubeconfig の権限で実行するコードである。変更は必ず PR とレビューを通す（pre-push フックは `docs/` だけの直接 push を main に許すが、`tools/` はその運用の対象にしない）。
+
+2026-10-10 に本番で実行した版の SHA-256 は、`collect_live_state.py` が `4bd3808ff3824a5c785f699b40f9da366711e41ac618b1547bc8c3ace982aa01`、`apply_service_portname.py` が `649c229c014409bfd43ac6c2445d1f0d998d37d5466df5350a45d6f1410c0cd9`。repo の版には、その後のレビューによる修正（表示するイメージの限定、書き込み直後の中断の扱い）が入っている。
 
 ## 照合の手順
 
 本番ホストで実行する。k3s 同梱の `kubectl` は既定で `/etc/rancher/k3s/k3s.yaml`（root だけが読める）を使うため、`sudo` を付ける。context は `default`（2026-10-10 時点）。
 
 ```sh
-SHA=<比較元にする main の完全な 40 桁のコミット SHA>
-# 毎回、新しい空のディレクトリに取得する。取得が途中で失敗すると .part のまま残り、実行用の名前のファイルは作られない
+# 道具（スクリプト）は、main にある（＝レビューを経てマージされた）コミットから取得する
+TOOL_SHA=$(git ls-remote https://github.com/FumiakiC/chumon-hub refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+# 比較元。通常は TOOL_SHA と同じ。修正 PR をマージ前に確かめるときだけ、PR の head の完全な SHA に置き換える
+MANIFEST_SHA=$TOOL_SHA
 D=$(mktemp -d)
-curl -fsSL "https://raw.githubusercontent.com/FumiakiC/chumon-hub/$SHA/docs/ops/tools/collect_live_state.py" -o "$D/collect_live_state.py.part" \
-  && mv "$D/collect_live_state.py.part" "$D/collect_live_state.py" && echo "取得: 成功" || echo "取得: 失敗（ここで止める）"
-# 段階1（読み取りだけ）
-sudo python3 -I "$D/collect_live_state.py" --context default --sha "$SHA" > ~/drift-stage1.txt 2>&1; echo "exit=$?" >> ~/drift-stage1.txt
-# 段階2（段階1で比較対象の未確認・平文が 0 のときだけ動く）
-sudo python3 -I "$D/collect_live_state.py" --context default --sha "$SHA" --diff > ~/drift-stage2.txt 2>&1; echo "exit=$?" >> ~/drift-stage2.txt
+if [[ "$TOOL_SHA" =~ ^[0-9a-f]{40}$ && "$MANIFEST_SHA" =~ ^[0-9a-f]{40}$ ]] \
+  && curl -fsSL "https://raw.githubusercontent.com/FumiakiC/chumon-hub/$TOOL_SHA/docs/ops/tools/collect_live_state.py" -o "$D/collect_live_state.py.part" \
+  && mv "$D/collect_live_state.py.part" "$D/collect_live_state.py"; then
+  echo "取得: 成功（道具 $TOOL_SHA / 比較元 $MANIFEST_SHA）"
+  sudo python3 -I "$D/collect_live_state.py" --context default --sha "$MANIFEST_SHA" --diff > ~/drift.txt 2>&1; echo "exit=$?" >> ~/drift.txt
+else
+  echo "取得: 失敗。照合は実行していない" >&2
+fi
 rm -r "$D"
 ```
 
-- 取得に失敗したときは、そこで止める。新しいディレクトリには実行用の名前のファイルが無いので、続けて実行しても古い版は動かない（`python3` がファイルを開けずに終了する）。ホストに残った旧版を実行しないため、固定のパスに取得して上書きする形にはしない。
+- **道具は、PR の head からは取得しない。** PR の内容は未レビューのコードであり、それを `sudo` と本番の kubeconfig の権限で実行することになるため。PR の head は、比較元（`MANIFEST_SHA`）としてだけ使う。
+- 取得に失敗したとき（SHA の形式不正を含む）は、照合を実行しない。毎回新しい空のディレクトリに取得し、成功したときだけ実行用の名前に変えるので、ホストに残った旧版が動くことも無い。対話シェルに貼り付けて使うことを想定し、失敗時に `exit` は使わない（SSH のセッションが閉じるため）。
+- `--diff` を付けると、段階1の結果を出力したうえで、比較対象の未確認・平文が 0 のときだけ段階2に進む。
 - `| tee` で受けると終了コードが失われるため、上の形でファイルに書き、終了コードを追記する。
+- `git` が無い場合は、GitHub の Web 画面で main の最新コミットの完全な SHA を確かめて `TOOL_SHA` に入れる。
 
 | 終了コード | 意味 |
 |---|---|

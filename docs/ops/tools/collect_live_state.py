@@ -455,7 +455,8 @@ def section_pods(ctx, ns):
     """復旧用 digest を確保できたか（Pod が1つ以上あり、すべての imageID が digest 形式）を返す。"""
     print("### 稼働中のイメージ digest（マニフェスト変更を本番に入れる前の復旧点）")
     doc = parse_json("pods", kubectl(ctx, "pods", "get", "pod", "-n", ns, "-l", "app=chumon-hub", "-o", "json"))
-    pat = re.compile(r"^[A-Za-z0-9./:_\-]{1,200}@sha256:[0-9a-f]{64}$")
+    # 想定のイメージだけを表示する（docker-pullable:// は Docker ランタイムが付ける接頭辞）。それ以外は伏せて「未確保」に数える
+    pat = re.compile(r"^(?:docker-pullable://)?ghcr\.io/fumiakic/chumon-hub@sha256:[0-9a-f]{64}$")
     n_ok, n_bad = 0, 0
     for o in doc.get("items", []):
         name = o["metadata"].get("name", "")

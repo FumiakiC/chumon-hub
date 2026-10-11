@@ -404,6 +404,19 @@ def after_write(ctx, before, want_name, want_ann, done_msg):
     print(done_msg)
 
 
+def write_then_verify(ctx, ops, label, before, want_name, want_ann, done_msg):
+    """書き込みから確認までを1つにまとめ、その間のどこで中断しても「書き込み前」と誤って報告しないようにする。"""
+    written = False
+    try:
+        write_patch(ctx, ops, label)
+        written = True
+        after_write(ctx, before, want_name, want_ann, done_msg)
+    except KeyboardInterrupt:
+        if written:
+            raise Stop(5, "%s: 書き込みは成功したが、その後の確認の前に中断した。--status で現在の状態を確かめる" % label)
+        raise Stop(6, "%s: 書き込みの開始後に中断した。反映されたかどうかは不明。--status で現在の状態を確かめる" % label)
+
+
 # ---------- 状態確認（読み取りだけ） ----------
 
 def load_rollback():
@@ -481,9 +494,8 @@ def do_apply(ctx, sha):
     info = precheck(ctx, sha)
     save_rollback(info)
     print("# 書き込む（確認時の状態と一致するときだけサーバーが反映する）")
-    write_patch(ctx, info["ops"], "書き込み")
-    after_write(ctx, info["live"], PORT_NAME, info["new_ann"],
-                "# 適用完了。Access 経由のログインと画面の確認を行い、collect_live_state.py --diff で再照合する")
+    write_then_verify(ctx, info["ops"], "書き込み", info["live"], PORT_NAME, info["new_ann"],
+                      "# 適用完了。Access 経由のログインと画面の確認を行い、collect_live_state.py --diff で再照合する")
 
 
 def do_rollback(ctx, sha):
@@ -520,8 +532,7 @@ def do_rollback(ctx, sha):
         raise Stop(4, "切り戻しパッチの dry-run が想定と違う。何も変えない")
     print("## 切り戻しパッチの dry-run: 変わるのはポート名（http → なし）と注釈だけ")
     print("# 切り戻す（適用直後の状態と一致するときだけサーバーが反映する）")
-    write_patch(ctx, ops, "切り戻し")
-    after_write(ctx, live, None, prev_ann, "# 切り戻し完了")
+    write_then_verify(ctx, ops, "切り戻し", live, None, prev_ann, "# 切り戻し完了")
 
 
 def main():
