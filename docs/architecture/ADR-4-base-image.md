@@ -44,6 +44,8 @@ B を採る場合は distroless / bookworm 化、C を採る場合は `.devconta
 
 トリガ 3 の評価記録: 2026-09 の `@napi-rs/canvas` 追加時は、`@napi-rs/canvas-linux-x64-musl` が公式に提供されているため非該当と判断した（計画書 基本設計 §3「Phase 4a 詳細計画」14. の訂正 2026-09-19）。
 
+トリガ 1 の記録（2026-10-11）: [ADR-1](ADR-1-runtime.md) で Cloud Run の採用を決めた。収束方向は、計画書 基本設計 §4「移行エポック詳細計画」で、STG の実測の前に決める（イメージを後から変えると、測った容量と初回応答を測り直すことになるため）。下記の候補では (B) glibc が第一候補。現状維持以外を選ぶ場合は、運用ルールに従って新しい ADR で本 ADR を置換する。
+
 ## 収束先の候補（決定ではない。トリガ時に評価する）
 
 Cloud Run なら **(B) glibc（bookworm-slim / distroless-nodejs）が第一候補**（cold start の差は小さく、DNS・tier・parity で glibc が有利）。

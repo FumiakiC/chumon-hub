@@ -6,7 +6,7 @@ repo の `k8s/` と本番（k3s）の実体が一致しているかを、秘匿�
 
 [`deploy.yml`](../../.github/workflows/deploy.yml) はマニフェストを apply しない（[k3s-node-config.md](k3s-node-config.md)）。手動の `kubectl` 操作で本番を変えると、repo と本番は乖離する。**repo のマニフェストをレビューしても、本番を検証したことにはならない。**
 
-本書は計画書のエポック表 1b の `fix/manifest-drift` の ①（repo と本番を揃え、手動で行った Secret 化を記録する）にあたる。② CI での差分検出と ③ `deploy.yml` での自動 apply は、計画書「決定事項と未決事項」の「マニフェスト適用の自動化と Secret 管理」のとおり、ADR-1 の決定より先に着手しない。k3s を撤去するときに、本書と `tools/` を削除する。
+本書は計画書のエポック表 1b の `fix/manifest-drift` の ①（repo と本番を揃え、手動で行った Secret 化を記録する）にあたる。② CI での差分検出と ③ `deploy.yml` での自動 apply は行わない。ADR-1 で Cloud Run の採用を決めた（2026-10-11）ため、k3s の撤去とともに終了する（計画書「決定事項と未決事項」の「マニフェスト適用の自動化と Secret 管理」）。k3s を撤去するときに、本書と `tools/` を削除する。
 
 ## 道具
 
