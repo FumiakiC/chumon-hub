@@ -66,7 +66,7 @@
 
 ### 3.3 本番への昇格
 
-- 本番へは、STG で確かめたのと同じ digest を昇格させる（`gcloud run deploy --image IMAGE@sha256:…`）。昇格のために再ビルドしない。
+- 本番へは、STG で確かめたのと同じ digest を昇格させる（`gcloud run deploy SERVICE --image=REGISTRY/IMAGE@sha256:DIGEST --region=REGION --project=PROJECT`）。昇格のために再ビルドしない。サービス名・リージョン・プロジェクトは明示する。非対話の job では、サービス名やリージョンを省くと入力を求められずに失敗しうる。
 - 昇格の job は GitHub Environments の `production` を参照し、required reviewers の承認を経て動く。承認者は owner 1人。
   - required reviewers は、GitHub Free・Pro・Team では public の repo でだけ使える。repo を private にするなら、この前提が崩れる。
   - prevent self-review は有効にしない。有効にすると、デプロイを起動した人はそのデプロイを承認できず、承認者が owner 1人では昇格できなくなる。
@@ -89,8 +89,8 @@
 
 本番を Cloud Run に切り替えた後の、Cloud Run の中での切り戻しを扱う。切り替えまで（k3s との並行稼働中）の切り戻しは、計画書 基本設計 §4「移行エポック詳細計画」の「切り戻し」。
 
-- 基本は、保持してある前の本番の revision へトラフィックを戻す（`gcloud run services update-traffic SERVICE --to-revisions REVISION=100`）。revision は作成後に変更できず、イメージと、環境変数・メモリの上限・同時実行数などの設定を一組で持つ。タグを指定してデプロイしても、revision はデプロイの時点で解決した digest を使い続ける。
-- ただし、前の revision が残っている保証は無い。トラフィックを受けていない revision は、いずれ Cloud Run が削除する（期間は公式に記載が無い。サービスあたりの revision が 1,000 を超えた場合も、古いものから削除される）。
+- 基本は、保持してある前の本番の revision へトラフィックを戻す（`gcloud run services update-traffic SERVICE --to-revisions=REVISION=100 --region=REGION --project=PROJECT`）。revision は作成後に変更できず、イメージと、環境変数・メモリの上限・同時実行数などの設定を一組で持つ。タグを指定してデプロイしても、revision はデプロイの時点で解決した digest を使い続ける。
+- ただし、前の revision が残っている保証は無い。サービスあたりの revision が 1,000 を超えると、古いものから自動で削除される。トラフィックを受けられない revision は、最新のものを除いて手動でも削除できる（Manage revisions）。Cloud Run resource model にも、使われていない revision の削除への言及があるが、1,000 件の上限との関係や、追加の削除条件・時期は明記されていない。
 - そのため、digest での再デプロイでも戻せるようにしておく。本番に出した digest・設定・Secret のバージョンを一組で保持し、その digest のイメージをレジストリから消さない（revision を削除してもイメージは消えないが、レジストリの側の削除は別に起きうる）。Secret を `latest` で参照すると、戻した revision でも、インスタンスの起動時にその時点の最新の値を読むため、バージョンを固定する（[ADR-1](../architecture/ADR-1-runtime.md) の「秘匿」）。
 - IAM・ingress など、サービス側の設定は revision に含まれないため、トラフィックを戻しても戻らない。別に戻す（構成のコード管理。計画書の「移行エポック詳細計画」の切り替えの条件 9）。
 - DB の導入後は、前のアプリが今のスキーマで動くことも、切り戻しの条件になる（Phase 4.5 の成果物 4「移行・ロールバック方針」）。
@@ -130,7 +130,8 @@ hotfix 用のブランチは作らない。`fix/` のブランチから同じ流
 - GitHub Docs: [Control deployments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)（承認待ちの job の 30 日、`concurrency`）
 - GitHub Docs: [OpenID Connect reference](https://docs.github.com/en/actions/reference/security/oidc)（`sub` と `environment`、`sub` の形式の変更）
 - Google Cloud: [Rollbacks, gradual rollouts, and traffic migration](https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration)（トラフィックを前の revision へ戻す）
-- Google Cloud: [Cloud Run resource model](https://docs.cloud.google.com/run/docs/resource-model)（revision の不変性、使われない revision の削除）
-- Google Cloud: [Manage revisions](https://docs.cloud.google.com/run/docs/managing/revisions)（サービスあたり 1,000 の上限）
+- Google Cloud: [Cloud Run resource model](https://docs.cloud.google.com/run/docs/resource-model)（revision の不変性、使われていない revision の削除への言及。1,000 件の上限との関係と、追加の削除条件・時期は明記されていない）
+- Google Cloud: [Manage revisions](https://docs.cloud.google.com/run/docs/managing/revisions)（サービスあたり 1,000 の上限と自動の削除、手動の削除と削除できない条件）
 - Google Cloud: [Deploying container images](https://docs.cloud.google.com/run/docs/deploying)（タグの digest への解決、使えるレジストリ）
 - Google Cloud: [Restrict network ingress](https://docs.cloud.google.com/run/docs/securing/ingress)（ingress はサービスの設定）
+- Google Cloud SDK 570.0.0 の `gcloud run deploy --help` / `gcloud run services update-traffic --help`（`SERVICE` は引数か対話の入力で与える）。資格情報の無い環境での実行で、非対話のとき、`SERVICE` を省いた `gcloud run deploy` と、リージョンの設定（`run/region`）が無い状態で `--region` を省いた `update-traffic` が失敗することを確認した（2026-10-12）
