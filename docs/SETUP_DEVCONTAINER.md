@@ -104,6 +104,8 @@ bind-mount 版（`chumon` でローカルフォルダを開く）も引き続き
 
 ## 6. main への直接 push の防止（pre-push フック）
 
+ブランチの規則（main へ直接 push してよい範囲とその例外、フックを迂回するときの運用）の正は [`ops/branch-and-deploy.md`](ops/branch-and-deploy.md) です。本節はフックの仕組みを扱います。
+
 main へのコード変更は PR で行い、CI（quality / build-check）を通してからマージします。`ci.yml` は pull_request でしか起動しないため、main へ直接 push したコード変更は CI を通らずに本番デプロイ（`deploy.yml`）を起動します。これを防ぐため、`.githooks/pre-push` が main への push を次のとおり判定します。
 
 - 許可：main に新しく載るコミットが、すべて `docs/` 配下だけを変更する fast-forward 更新（計画書など docs だけの変更は、引き続き main へ直接 push できる）
@@ -132,9 +134,7 @@ if [ -d "$d" ]; then find "$d" -mindepth 1 -maxdepth 1 ! -name '*.sample'; else 
 
 ### 6.3 例外の運用ルール
 
-- フックを迂回して main へ直接 push するのは、owner が明示的に判断した例外に限る。そのときの手段は `git push --no-verify` に限り、設定の変更やフックの削除・無効化では迂回しない。
-- 誤って main に入ったコード変更の取り消しも、原則は revert の PR で行う。PR を待てない場合に限り、owner の判断で上記の手段を使う。迂回した push は CI を通らずにデプロイを起動しうる。
-- AI エージェント（Copilot 等）は独断で迂回しない。拒否されたら作業を止めて状況を報告する（`.github/copilot-instructions.md` に記載）。
+フックを迂回するときの運用ルールは、[`ops/branch-and-deploy.md`](ops/branch-and-deploy.md) §1.2 に移しました（2026-10-12）。
 
 ### 6.4 フックを変更するとき
 

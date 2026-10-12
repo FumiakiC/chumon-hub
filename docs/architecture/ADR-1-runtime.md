@@ -105,7 +105,7 @@ DB・ジョブ基盤（Phase 5）を載せる段階では、この 2GB が先に
 - [ADR-3](ADR-3-sequencing.md) の ① にあたる。Cloudflare Tunnel は k3s とともに撤去し、Cloudflare Access は ADR-3 の ③（アプリ内認証への移行）まで残す（[ADR-2](ADR-2-in-app-identity.md)）。
 - [ADR-4](ADR-4-base-image.md) の再検討トリガ 1 が発火した。本番のベースイメージの収束方向は、移行エポックで STG の試行の前に決める。
 - 計画書「決定事項と未決事項」の「マニフェスト適用の自動化と Secret 管理」は行わず、k3s の撤去とともに終了する。
-- デプロイ経路（`deploy.yml`）は、STG で確かめたのと同じイメージの digest を本番へ昇格させる方式に変える。ブランチ戦略・デプロイの流れ・本番の権限の分離は ops 文書で定める（docs PR 2）。
+- デプロイ経路（`deploy.yml`）は、STG で確かめたのと同じイメージの digest を本番へ昇格させる方式に変える。ブランチ戦略・デプロイの流れ・本番の権限の分離は [`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md) で定める。
 - 非同期ジョブ基盤（計画書 基本設計 §3-4）と可観測性ベースラインは、Cloud Run を前提に Phase 4.5 の ADR で決める。
 
 ## 次アクション / 再検討トリガ
