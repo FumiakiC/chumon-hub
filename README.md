@@ -151,7 +151,7 @@ kubectl apply -f k8s/service.yaml
 4. **Public Hostname の設定**:
    Cloudflare Dashboard 上で、公開ドメイン（例: chumon.example.com）と内部サービスを紐付けます。
    - Service: HTTP
-   - URL: `chumon-hub-service:3000`
+   - URL: `chumon-hub-service:80`
 
 ### 2. Cloudflare Access の設定（認証の強制）
 
