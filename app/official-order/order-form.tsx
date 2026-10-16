@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 import { OrderFormItems } from './order-form-items'
@@ -61,7 +61,7 @@ export function OrderForm({ form, isCopied, setIsCopied }: OrderFormProps) {
                   setTimeout(() => setIsCopied(false), 2000)
                 })
                 .catch((err) => {
-                  logger.error('Failed to copy:', err)
+                  logger.error('Failed to copy', toErrorLogFields(err))
                 })
             }}
             variant="outline"

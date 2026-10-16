@@ -2,7 +2,7 @@
  * 型付きエラーとエラーコード（サーバ／クライアント共通の単一の真実源）。
  *
  * - サーバは応答本文に「安全な汎用メッセージ」＋機械可読な `code` のみを返し、
- *   内部詳細（環境変数名・スタック等）は `console.error` に留めてクライアントへ出さない。
+ *   内部詳細（環境変数名・スタック等）はクライアントへ出さず、ログにも例外オブジェクトを渡さない（`toErrorLogFields` で値域の限られた項目だけを残す）。
  * - クライアントは `code` で分岐して日本語UXを組み立てる（lib/errorUtils.ts）。
  */
 
@@ -32,8 +32,8 @@ export function isAppErrorCode(value: unknown): value is AppErrorCode {
 }
 
 /**
- * コードを持つ型付きエラーの基底。`message` はサーバ内部ログ用途であり、
- * クライアント応答本文にそのまま載せない。
+ * コードを持つ型付きエラーの基底。`message` は内部の説明であり、
+ * クライアント応答本文にもログにも載せない（ログには `toErrorLogFields` の項目だけを残す）。
  */
 export class AppError extends Error {
   readonly code: AppErrorCode

@@ -1,11 +1,10 @@
-import { GoogleGenAI } from '@google/genai'
-
 import { generateStructured } from '@/lib/ai/generate'
 import { GEMINI_MODELS } from '@/lib/ai/models'
+import { deleteRemoteFile } from '@/lib/ai/pipeline'
 import { orderSchema } from '@/lib/ai/schemas'
 import { decryptFileToken } from '@/lib/crypto'
 import { ConfigError, errorResponse } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 export const maxDuration = 60
 
@@ -78,20 +77,14 @@ Return only valid JSON matching the schema.`,
 
     return Response.json(result)
   } catch (error) {
-    logger.error('Extraction error:', error)
+    logger.error('Extraction error', toErrorLogFields(error))
     return errorResponse(error, { code: 'ERR_EXTRACT', status: 500 })
   } finally {
     // Always delete the file from Google AI File Manager
     if (fileManagerName) {
-      try {
-        const apiKey = process.env.GOOGLE_API_KEY
-        if (apiKey) {
-          const ai = new GoogleGenAI({ apiKey })
-          await ai.files.delete({ name: fileManagerName })
-          logger.debug('extract-order: deleted file from Google AI')
-        }
-      } catch (err) {
-        logger.error('extract-order: failed to delete file from Google AI', err)
+      const apiKey = process.env.GOOGLE_API_KEY
+      if (apiKey) {
+        await deleteRemoteFile(apiKey, fileManagerName)
       }
     }
   }

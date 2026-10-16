@@ -17,7 +17,7 @@ import {
   tooManyRequestsResponse,
   validationErrorResponse,
 } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 import { rasterizeCropRegion } from '@/lib/pdf/raster-crop'
 
 type CroppedFile = CropTitleBlockResponse['croppedFiles'][number]
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
             })
           } catch (fileError) {
             if (fileError instanceof ConfigError) throw fileError
-            logger.error('Error processing file:', fileError)
+            logger.error('Error processing file', toErrorLogFields(fileError))
             // 個別のファイルエラーは警告として処理し、処理を続行
             croppedFileResults.push(null)
           }
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           croppedFiles,
         })
       } catch (error) {
-        logger.error('Error in crop-title-block API:', error)
+        logger.error('Error in crop-title-block API', toErrorLogFields(error))
         return errorResponse(error, { code: 'ERR_REQUEST_FAILED', status: 500 })
       }
     },

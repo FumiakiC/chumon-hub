@@ -38,7 +38,7 @@ function fallbackCodeForStatus(status: number): AppErrorCode {
 /**
  * HTTP エラー応答をコード付きの AppError に変換する。
  * 応答本文の `code` を最優先し、無ければステータス由来の既定コードを使う。
- * message はログ用途であり、画面表示は呼び出し側が resolveError(code) で組み立てる。
+ * message は内部の説明であり、ログにも出さない（ログには toErrorLogFields の項目だけを残す）。画面表示は呼び出し側が resolveError(code) で組み立てる。
  */
 async function toAppError(response: Response): Promise<AppError> {
   let code = fallbackCodeForStatus(response.status)

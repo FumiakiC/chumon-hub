@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction, useCallback, useRef, useState } from 'react'
 
 import { extractDrawingData } from '@/lib/api/drawing-api'
 import { AppError } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 import type { CroppedFile, OrderItem } from '../../schema'
 import type { OrderAction } from './use-order-items'
@@ -148,7 +148,10 @@ export function useDrawingAnalysis(
                 },
               })
             } catch (error) {
-              logger.error('Analysis failed for cropped file:', error)
+              logger.error(
+                'Analysis failed for cropped file',
+                toErrorLogFields(error)
+              )
               const errorMessage =
                 error instanceof Error
                   ? error.message
