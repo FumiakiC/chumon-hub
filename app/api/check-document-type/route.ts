@@ -14,7 +14,7 @@ import {
   errorResponse,
   validationErrorResponse,
 } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 export const maxDuration = 60
 
@@ -116,7 +116,7 @@ reason フィールドには判定理由を日本語で簡潔に記載してく�
 
     return Response.json(responseBody)
   } catch (error) {
-    logger.error('Check document error:', error)
+    logger.error('Check document error', toErrorLogFields(error))
     return errorResponse(error, { code: 'ERR_CLASSIFY', status: 500 })
   }
 }

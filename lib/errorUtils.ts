@@ -54,7 +54,7 @@ const ERROR_BY_CODE: Record<AppErrorCode, { ja: string; action: string }> = {
 /**
  * エラーを画面表示用に解決する。機械可読コードで分岐し（文字列 includes マッチは廃止）、
  * コードが無い場合は固定の汎用メッセージ（ERR_UNKNOWN）を返す。内部詳細（元メッセージ）は
- * 返さない。必要なら呼び出し側が元の error を直接ログすること。
+ * 返さない。ログに残す場合は `toErrorLogFields` の結果を渡すこと。
  */
 export function resolveError(error: unknown): {
   message: string

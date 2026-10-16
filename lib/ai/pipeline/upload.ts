@@ -6,7 +6,7 @@ import os from 'os'
 import path from 'path'
 
 import type { UploadedFile } from '@/lib/ai/pipeline/types'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 /** アップロード受け口で許可する MIME（マジックバイト検証で使用）。 */
 export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
@@ -176,19 +176,6 @@ export interface WithUploadedFileOptions {
 }
 
 /**
- * エラーから HTTP ステータスだけを取り出す（`as any` を使わない）。
- * `@google/genai` の `ApiError` は `status: number` を持つが、`message` は API の
- * エラー応答本文そのもの（JSON 文字列）であり、リソース名などを含みうる。
- */
-function getHttpStatus(error: unknown): number | undefined {
-  if (typeof error === 'object' && error !== null && 'status' in error) {
-    const { status } = error
-    if (typeof status === 'number') return status
-  }
-  return undefined
-}
-
-/**
  * Google File API 上のファイルを削除する。冪等（既に存在しない場合も throw しない）。
  *
  * 削除失敗で呼び出し元のリクエストを失敗させないが、握り潰すと「検知できない orphan」
@@ -204,11 +191,11 @@ export async function deleteRemoteFile(
     const ai = new GoogleGenAI({ apiKey })
     await ai.files.delete({ name })
   } catch (error) {
-    const status = getHttpStatus(error)
-    const kind = error instanceof Error ? error.name : typeof error
-    logger.warn(
-      `Failed to delete remote file (orphan may remain). kind=${kind} status=${status ?? 'n/a'}`
-    )
+    const { name, status } = toErrorLogFields(error)
+    logger.warn('Failed to delete remote file (orphan may remain)', {
+      name,
+      status,
+    })
   }
 }
 

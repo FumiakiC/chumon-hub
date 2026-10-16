@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CROP_CONCURRENCY, cropTitleBlock } from '@/lib/api/drawing-api'
 import { type TaskQueue, createTaskQueue } from '@/lib/concurrency/task-queue'
 import { resolveError } from '@/lib/errorUtils'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 import {
   type CroppedFile,
@@ -128,7 +128,7 @@ export function useProvisionalOrder() {
       )
     } catch (error) {
       clearInterval(progressInterval)
-      logger.error('Crop error:', error)
+      logger.error('Crop error', toErrorLogFields(error))
       // 失敗を成功と同じ状態に落とすと、413/415/500 が「クロップ済」に見えてしまう。
       // 失敗は失敗として保持し、画面と件数の双方に反映させる。
       const { message, action } = resolveError(error)
@@ -304,7 +304,7 @@ export function useProvisionalOrder() {
         JSON.stringify({ ...orderHeader, items }, null, 2)
       )
     } catch (e) {
-      logger.error(e)
+      logger.error('Failed to copy to clipboard', toErrorLogFields(e))
     }
   }, [orderItems, orderHeader])
 

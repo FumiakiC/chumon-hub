@@ -6,7 +6,7 @@ import type { OrderExtractionResult } from '@/lib/ai/contracts'
 import { checkDocumentTypeResponseSchema, orderSchema } from '@/lib/ai/schemas'
 import { resolveError } from '@/lib/errorUtils'
 import { AppError, type AppErrorCode, isAppErrorCode } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 import type { LogEntry } from '@/types/logEntry'
 
@@ -297,7 +297,7 @@ export function useOrderProcessing() {
       setProcessingStatus('complete')
       addLog('データ抽出完了。JSONパース成功。', 'success')
     } catch (err) {
-      logger.error('Extraction error:', err)
+      logger.error('Extraction error', toErrorLogFields(err))
       if (err instanceof DOMException && err.name === 'AbortError') {
         addLog('ユーザーの操作により処理を停止しました', 'info')
         setProcessingStatus('cancelled')

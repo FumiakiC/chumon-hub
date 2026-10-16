@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 
 import Link from 'next/link'
 
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 type VideoErrorPageProps = {
@@ -39,7 +39,9 @@ export function VideoErrorPage({
       videoRef.current.muted = true
       videoRef.current
         .play()
-        .catch((error) => logger.warn('Video autoplay failed:', error))
+        .catch((error) =>
+          logger.warn('Video autoplay failed', toErrorLogFields(error))
+        )
     }
   }, [])
 

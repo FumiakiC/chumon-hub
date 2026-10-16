@@ -58,6 +58,7 @@
 
 - `[v0]` 接頭辞を新規に追加しない。ログは `console.*` を新規に使わず `lib/logger.ts` を使う。
 - **秘匿情報をログに出さない**: API キー、`API_SECRET`、暗号化トークン、Gemini の `fileUri` / `file.name`、アップロードファイル名など。
+- **例外オブジェクトをログに渡さない**: 例外をログに残すときは、`toErrorLogFields(error)`（認証の検証失敗では既存の `toAuthErrorLogFields(error)`）の結果を `logger` の第 2 引数に渡す。`error.message` や `error.stack` を文言にも第 2 引数にも入れない（SDK の例外は API の応答本文を、`JSON.parse` の例外は入力の一部を含む）。
 - 秘匿値の受け渡しは AES-256-GCM トークン（`lib/crypto.ts`）。TTL とフォーマット検証を壊さない。
 
 ## フォーマット（`.prettierrc` 準拠）

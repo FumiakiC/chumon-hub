@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 
 import { ConfigError } from '@/lib/errors'
-import { logger } from '@/lib/logger'
+import { logger, toErrorLogFields } from '@/lib/logger'
 
 let cachedSecret: string | null = null
 let cachedEncryptionKey: Buffer | null = null
@@ -97,7 +97,7 @@ export function decryptFileToken(token: string): FileTokenData | null {
 
     return data
   } catch (error) {
-    logger.error('Failed to decrypt file reference:', error)
+    logger.error('Failed to decrypt file reference', toErrorLogFields(error))
     return null
   }
 }
