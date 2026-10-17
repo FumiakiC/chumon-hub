@@ -10,8 +10,9 @@
 | [ADR-1](ADR-1-runtime.md) | 実行基盤を k3s（AWS Lightsail）から Cloud Run へ移す | 決定 2026-10-11 |
 | [ADR-2](ADR-2-in-app-identity.md) | 認証認可を Cloudflare Access からアプリ内 CIAM へ | 決定（暫定）2026-07-25 |
 | [ADR-3](ADR-3-sequencing.md) | インフラ・認証・DB の移行順序 | 検討中 |
-| [ADR-4](ADR-4-base-image.md) | 本番コンテナのベースイメージ（glibc/Debian vs musl/Alpine） | 決定 2026-07-04 |
+| [ADR-4](ADR-4-base-image.md) | 本番コンテナのベースイメージ（glibc/Debian vs musl/Alpine） | 置換 2026-10-17（ADR-6） |
 | [ADR-5](ADR-5-database.md) | DB 選定 | 検討中 |
+| [ADR-6](ADR-6-base-image-glibc.md) | 本番と開発のコンテナを glibc（Debian trixie-slim）に揃える | 決定 2026-10-17 |
 
 ## 運用ルール
 

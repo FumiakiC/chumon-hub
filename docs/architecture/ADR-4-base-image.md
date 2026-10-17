@@ -1,6 +1,6 @@
 # ADR-4: 本番コンテナのベースイメージ（glibc/Debian vs musl/Alpine）
 
-- 状態: 決定 2026-07-04
+- 状態: 置換 2026-10-17（[ADR-6](ADR-6-base-image-glibc.md) で置換。決定 2026-07-04）
 - 関連: [ADR-1](ADR-1-runtime.md)（最有力の再検討トリガ）／本番 `Dockerfile`／開発 `.devcontainer/Dockerfile.dev`／[`../SETUP_DEVCONTAINER.md`](../SETUP_DEVCONTAINER.md)
 
 ## 背景 / 課題
@@ -45,6 +45,8 @@ B を採る場合は distroless / bookworm 化、C を採る場合は `.devconta
 トリガ 3 の評価記録: 2026-09 の `@napi-rs/canvas` 追加時は、`@napi-rs/canvas-linux-x64-musl` が公式に提供されているため非該当と判断した（計画書 基本設計 §3「Phase 4a 詳細計画」14. の訂正 2026-09-19）。
 
 トリガ 1 の記録（2026-10-11）: [ADR-1](ADR-1-runtime.md) で Cloud Run の採用を決めた。収束方向は、計画書 基本設計 §4「移行エポック詳細計画」で、STG の試行の前に決める（イメージを後から変えると、測った容量と初回応答を測り直すことになるため）。下記の候補では (B) glibc が第一候補。現状維持以外を選ぶ場合は、運用ルールに従って新しい ADR で本 ADR を置換する。
+
+置換の記録（2026-10-17）: トリガ 1 に加え、トリガ 4 も発火した（Node.js v26.11.0 で、Linux x64 の musl が Experimental から Tier 2 になった）。これを受けて、[ADR-6](ADR-6-base-image-glibc.md) で (B) glibc に揃えることを決め、本 ADR を置換した。上の「受容するリスク」の 1 点目は、v26.11.0 以降は当てはまらない。
 
 ## 収束先の候補（決定ではない。トリガ時に評価する）
 
