@@ -1,7 +1,7 @@
 # ADR-1: 実行基盤を k3s（AWS Lightsail）から Cloud Run へ移す
 
 - 状態: 決定 2026-10-11（Cloud Run の採用と、Phase 4b の前に移行する時期を決めた。本番の切り替えの承認は含まない）
-- 関連: [ADR-3](ADR-3-sequencing.md)（移行順序）／[ADR-4](ADR-4-base-image.md)（本 ADR の決定で再検討トリガ 1 が発火した）／[ADR-5](ADR-5-database.md)（DB の接続形態）／計画書 基本設計 §4「移行エポック詳細計画」（移行の順序と切り替えの条件）／計画書「決定事項と未決事項」の「実行基盤（Cloud Run 化）」「STG 環境」「本番の秘匿（管理上の正と実行時の供給元）」「ノードのリソース保護」「非同期ジョブ実行」「マニフェスト適用の自動化と Secret 管理」／[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md) §5 の欠陥 #5
+- 関連: [ADR-3](ADR-3-sequencing.md)（移行順序）／[ADR-4](ADR-4-base-image.md)（本 ADR の決定で再検討トリガ 1 が発火した。[ADR-6](ADR-6-base-image-glibc.md) で置換）／[ADR-5](ADR-5-database.md)（DB の接続形態）／計画書 基本設計 §4「移行エポック詳細計画」（移行の順序と切り替えの条件）／計画書「決定事項と未決事項」の「実行基盤（Cloud Run 化）」「STG 環境」「本番の秘匿（管理上の正と実行時の供給元）」「ノードのリソース保護」「非同期ジョブ実行」「マニフェスト適用の自動化と Secret 管理」／[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md) §5 の欠陥 #5
 
 ## 背景 / 課題
 
@@ -103,7 +103,7 @@ DB・ジョブ基盤（Phase 5）を載せる段階では、この 2GB が先に
 ## 影響範囲 / 依存
 
 - [ADR-3](ADR-3-sequencing.md) の ① にあたる。Cloudflare Tunnel は k3s とともに撤去し、Cloudflare Access は ADR-3 の ③（アプリ内認証への移行）まで残す（[ADR-2](ADR-2-in-app-identity.md)）。
-- [ADR-4](ADR-4-base-image.md) の再検討トリガ 1 が発火した。本番のベースイメージの収束方向は、移行エポックで STG の試行の前に決める。
+- [ADR-4](ADR-4-base-image.md) の再検討トリガ 1 が発火した。本番のベースイメージの収束方向は、移行エポックで STG の試行の前に決める。2026-10-17 に [ADR-6](ADR-6-base-image-glibc.md) で決め、ADR-4 を置換した（実装と検証は別の PR で、STG の試行の前に終える）。
 - 計画書「決定事項と未決事項」の「マニフェスト適用の自動化と Secret 管理」は行わず、k3s の撤去とともに終了する。
 - デプロイ経路（`deploy.yml`）は、STG で確かめたのと同じイメージの digest を本番へ昇格させる方式に変える。ブランチ戦略・デプロイの流れ・本番の権限の分離は [`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md) で定める。
 - 非同期ジョブ基盤（計画書 基本設計 §3-4）と可観測性ベースラインは、Cloud Run を前提に Phase 4.5 の ADR で決める。
