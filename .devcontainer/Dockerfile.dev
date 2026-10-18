@@ -1,12 +1,13 @@
 # chumon-hub 開発用コンテナ（Dev Container 専用）
-# ※ これは「開発用」イメージ。本番イメージはリポジトリ直下の Dockerfile（別物・standalone/非root/alpine）。
+# ※ これは「開発用」イメージ。本番イメージはリポジトリ直下の Dockerfile（別物・standalone/非root）。
+#    ベースは本番と同じ node:26-trixie-slim（ADR-6）。digest も本番と揃える（Dependabot の更新 PR で揃えて取り込む）。
 #    ファイル名を Dockerfile.dev とすることで、本番 Dockerfile との取り違えを防ぐ。
 # 目的:
 #   - ホストに node/pnpm を置かず、VSCode Dev Container 内で完結して開発する
 #   - 秘匿情報はハードコードせず、1Password CLI (op) で実行時に注入する
 
-# digest 再取得例: docker buildx imagetools inspect node:26-bookworm-slim --format '{{json .Manifest.Digest}}'
-FROM node:26-bookworm-slim@sha256:b16ca7b4dcfb20184e1c70f9ee30c6a75ed1da669cfafd6d2add4761b123d79f
+# digest 再取得例: docker buildx imagetools inspect node:26-trixie-slim --format '{{json .Manifest.Digest}}'
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4
 
 # プロジェクト方針に合わせ pnpm を直接インストール（corepack は使わない）。再現性のためバージョン固定。
 RUN npm install -g pnpm@10.33.0

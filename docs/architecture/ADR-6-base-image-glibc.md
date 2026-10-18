@@ -1,6 +1,6 @@
 # ADR-6: 本番と開発のコンテナを glibc（Debian trixie-slim）に揃える
 
-- 状態: 決定 2026-10-17（揃える方向と、ベースイメージを digest で固定する方針を決めた。実装と検証は別の PR で行う）
+- 状態: 決定 2026-10-17（揃える方向と、ベースイメージを digest で固定する方針を決めた。実装と検証は別の PR で行う）。2026-10-18 に次アクションの条件 2 を訂正（実行ユーザーの主グループ）
 - 関連: [ADR-4](ADR-4-base-image.md)（本 ADR で置換）／[ADR-1](ADR-1-runtime.md)（ADR-4 の再検討トリガ 1 の発火元）／計画書 基本設計 §4「移行エポック詳細計画」の順序 1／本番 `Dockerfile`／開発 `.devcontainer/Dockerfile.dev`／`.github/dependabot.yml`／`.github/workflows/dependabot-auto-merge.yml`／`.github/workflows/deploy.yml`／[`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md)／[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md)
 
 ## 背景 / 課題
@@ -71,7 +71,7 @@
 **マージの前**（現行の `deploy.yml` では、main へのマージで k3s の本番へ自動でデプロイされるため、本番へ出る前に満たす）:
 
 1. CI の品質ゲート・Docker のビルド・本番イメージ内のラスタ依存のチェック・起動スモーク・クロップのスモークが通る。
-2. 完成した runner のイメージで、`@napi-rs/canvas` の読み込み、PDF のクロップ、非 root のユーザーによる一時ディレクトリへの書き込みができる。非 root の実行ユーザーの uid / gid（1001）は変えない。
+2. 完成した runner のイメージで、`@napi-rs/canvas` の読み込み、PDF のクロップ、非 root のユーザーによる一時ディレクトリへの書き込みができる。非 root の実行ユーザーの uid（1001）は維持し、主グループは nodejs（gid 1001）に統一する。旧イメージの実測の gid と変更の理由は、実装の PR に記録する（2026-10-18 訂正。BusyBox の `adduser --system` はグループの指定が無いと主グループを nogroup にするため、旧イメージの gid は 1001 ではない可能性が高い）。
 3. Dependabot が、`/` と `/.devcontainer` の両方のベースイメージの更新を検知する。
 4. `dependabot-auto-merge.yml` の許可リストを変えていない。
 5. Dev Container を作り直し、品質ゲートとスモークテストが通る。

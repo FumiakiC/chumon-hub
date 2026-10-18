@@ -1,6 +1,10 @@
+# ベースイメージは ADR-6 により node:26-trixie-slim（glibc）を digest で固定する。
+# 3 ステージとも同じ digest にすること。更新は Dependabot の PR で取り込む（自動マージしない）。
+# Dependabot は FROM 行だけを読み ARG を解決しないため、ベースは FROM に直接書く。
+# digest 再取得例: docker buildx imagetools inspect node:26-trixie-slim --format '{{json .Manifest.Digest}}'
+
 # ステージ 1: 依存関係のインストール (Deps)
-FROM node:26-alpine AS deps
-RUN apk add --no-cache libc6-compat
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS deps
 WORKDIR /app
 
 # パッケージ定義ファイルをコピー
@@ -15,7 +19,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN npm install -g pnpm@10.33.0 && pnpm i --frozen-lockfile
 
 # ステージ 2: ビルダー (Builder)
-FROM node:26-alpine AS builder
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -30,7 +34,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install -g pnpm@10.33.0 && pnpm run build
 
 # ステージ 3: ランナー (Runner)
-FROM node:26-alpine AS runner
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runner
 WORKDIR /app
 
 # 修正: ENV key=value 形式に変更
@@ -38,8 +42,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # セキュリティのため非ルートユーザーを作成
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# uid 1001 を維持し、主グループは nodejs（gid 1001）にする（ADR-6 条件 2）。
+# ホームは alpine の adduser --system と同じく作成する。
+RUN groupadd --system --gid 1001 nodejs \
+ && useradd --system --uid 1001 --gid nodejs --create-home --home-dir /home/nextjs \
+      --shell /usr/sbin/nologin nextjs
 
 # 公開用ファイルとスタンドアロンビルドのコピー
 COPY --from=builder /app/public ./public
