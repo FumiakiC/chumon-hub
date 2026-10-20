@@ -1,0 +1,377 @@
+# Temporary measurement only: remove this workflow and scripts/ci/tmp-memory
+# before merging this PR. No production deployment or image push.
+name: Temporary base image memory comparison
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+env:
+  OLD_IMAGE: ghcr.io/fumiakic/chumon-hub@sha256:62110fdcb824aa2d53cbf24322a10fa1974a17ce3df8c25067b02699b96bd115
+  OLD_SOURCE_SHA: e0d6a9f533c0e207d6da8c93f14edb961b1347b9
+  PEAK_LIMIT_MIB: 435
+  RELATIVE_LIMIT: 1.15
+  RUNS: 3
+  ROUNDS: 10
+  CONCURRENCY: 2
+
+jobs:
+  compare:
+    if: github.head_ref == 'chore/base-image-trixie'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      NEW_IMAGE: chumon-hub:tmp-memory
+      CLOUDFLARE_TEAM_DOMAIN: chumon-ci
+      CLOUDFLARE_AUDIENCE: chumon-ci-smoke
+      DOCKER_BUILD_SUMMARY: 'false'
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+    steps:
+      - name: Initialize evidence outside the worktree
+        run: |
+          base="$RUNNER_TEMP/chumon-tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export MEMORY_ROOT="$base/results"
+          mkdir -p "$MEMORY_ROOT"
+          {
+            echo "MEMORY_ROOT=$MEMORY_ROOT"
+            echo "MEMORY_MATERIALS=$base/materials"
+            echo "MEMORY_PREFIX=tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            echo "MEMORY_NETWORK=tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          } >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs'
+          const env = process.env
+          writeFileSync(`${env.MEMORY_ROOT}/metadata.json`, JSON.stringify({
+            startedAtMs: Date.now(),
+            expectedHeadSha: env.EXPECTED_HEAD_SHA,
+            headSha: null,
+            oldSourceSha: env.OLD_SOURCE_SHA,
+            oldImage: env.OLD_IMAGE,
+            newImage: env.NEW_IMAGE,
+            constants: {
+              peakLimitMiB: Number(env.PEAK_LIMIT_MIB),
+              relativeLimit: Number(env.RELATIVE_LIMIT),
+              runs: Number(env.RUNS),
+              rounds: Number(env.ROUNDS),
+              concurrency: Number(env.CONCURRENCY),
+            },
+            gates: { sha: false, diff: false, digest: false },
+            difference: null,
+            environment: {},
+            infrastructure: [],
+            preparationComplete: false,
+            measurementsComplete: false,
+          }, null, 2) + '\n')
+          NODE
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify checked out SHA and changed-file allowlist
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          metadata.headSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+          metadata.gates.sha = metadata.headSha === process.env.EXPECTED_HEAD_SHA
+          metadata.difference = execFileSync('git', [
+            'diff', '--name-only', '-z', process.env.OLD_SOURCE_SHA, metadata.headSha,
+          ], { encoding: 'utf8' }).split('\0').filter(Boolean)
+          metadata.gates.diff = metadata.difference.every(path =>
+            /^(Dockerfile$|\.devcontainer\/|\.github\/|scripts\/ci\/|docs\/)/.test(path))
+          const clean = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+            encoding: 'utf8',
+          }) === ''
+          if (!metadata.gates.sha) metadata.infrastructure.push('CHECKOUT_SHA_MISMATCH')
+          if (!metadata.gates.diff) metadata.infrastructure.push('DIFF_ALLOWLIST_VIOLATION')
+          if (!clean) metadata.infrastructure.push('BUILD_WORKTREE_NOT_CLEAN')
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          if (!metadata.gates.sha || !metadata.gates.diff || !clean) process.exitCode = 1
+          NODE
+
+      - name: Log in to GHCR (read-only token)
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull and verify the old image digest
+        run: |
+          docker pull --platform linux/amd64 "$OLD_IMAGE"
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          const digests = JSON.parse(execFileSync('docker', [
+            'image', 'inspect', '--format', '{{json .RepoDigests}}', process.env.OLD_IMAGE,
+          ], { encoding: 'utf8' }))
+          metadata.oldRepoDigests = digests
+          metadata.gates.digest = Array.isArray(digests) && digests.includes(process.env.OLD_IMAGE)
+          if (!metadata.gates.digest) metadata.infrastructure.push('OLD_DIGEST_MISMATCH')
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          if (!metadata.gates.digest) process.exitCode = 1
+          NODE
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build exactly the checked worktree
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ env.NEW_IMAGE }}
+
+      - name: Verify the build did not change its inputs
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Record host and image environments
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          function capture(command, args) {
+            const result = spawnSync(command, args, { encoding: 'utf8', timeout: 30000 })
+            if (result.status !== 0) metadata.infrastructure.push('ENVIRONMENT_COMMAND_FAILED')
+            return (result.stdout || '') + (result.stderr || '')
+          }
+          metadata.environment.kernel = capture('uname', ['-r']).trim()
+          metadata.environment.cgroupFilesystem = capture('stat', ['-fc', '%T', '/sys/fs/cgroup']).trim()
+          metadata.environment.dockerVersion = capture('docker', ['version'])
+          for (const [name, image] of [['old', process.env.OLD_IMAGE], ['new', process.env.NEW_IMAGE]]) {
+            metadata.environment[name] = {
+              id: capture('docker', ['image', 'inspect', '--format', '{{.Id}}', image]).trim(),
+              user: capture('docker', [
+                'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-user-${name}`,
+                '--entrypoint', 'sh', image,
+                '-c', 'id; echo "$HOME"; ls -ld "$HOME"',
+              ]),
+            }
+          }
+          if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
+            metadata.infrastructure.push('CGROUP_V2_REQUIRED')
+          }
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          if (metadata.infrastructure.length) process.exitCode = 1
+          NODE
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate deterministic synthetic PDFs
+        run: pnpm exec tsx scripts/ci/tmp-memory/fixtures.ts "$MEMORY_ROOT/fixtures"
+
+      - name: Prepare crop smoke materials
+        timeout-minutes: 3
+        run: |
+          work_dir="$MEMORY_MATERIALS"
+          idp_host="$CLOUDFLARE_TEAM_DOMAIN.cloudflareaccess.com"
+          mkdir -p "$work_dir/tls" "$work_dir/jwt"
+          chmod 755 "$work_dir" "$work_dir/tls" "$work_dir/jwt"
+          umask 077
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1 \
+            -subj '/CN=Disposable CI Access CA' \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+            -keyout "$work_dir/tls/ca.key" -out "$work_dir/tls/ca.crt"
+          openssl req -new -newkey rsa:2048 -nodes -sha256 \
+            -subj "/CN=$idp_host" \
+            -keyout "$work_dir/tls/server.key" -out "$work_dir/tls/server.csr"
+          printf '%s\n' \
+            'basicConstraints=critical,CA:FALSE' \
+            'keyUsage=critical,digitalSignature,keyEncipherment' \
+            'extendedKeyUsage=serverAuth' \
+            "subjectAltName=DNS:$idp_host" > "$work_dir/tls/server.ext"
+          openssl x509 -req -sha256 -days 1 \
+            -in "$work_dir/tls/server.csr" \
+            -CA "$work_dir/tls/ca.crt" -CAkey "$work_dir/tls/ca.key" -CAcreateserial \
+            -extfile "$work_dir/tls/server.ext" -out "$work_dir/tls/server.crt"
+          chmod 644 "$work_dir/tls/ca.crt" "$work_dir/tls/server.crt"
+          sudo -n chown 1001:1001 "$work_dir/jwt"
+          docker run --rm --name "$MEMORY_PREFIX-prepare" --entrypoint node \
+            -e CROP_SMOKE_MATERIAL_DIR=/smoke-materials \
+            -v "$PWD/scripts/ci:/smoke-scripts:ro" \
+            -v "$work_dir/jwt:/smoke-materials" \
+            "$NEW_IMAGE" /smoke-scripts/crop-smoke.mjs prepare
+
+      - name: Start fake Access IdP
+        timeout-minutes: 3
+        run: |
+          work_dir="$MEMORY_MATERIALS"
+          docker network create "$MEMORY_NETWORK"
+          docker run -d --name "$MEMORY_PREFIX-idp" --user 0:0 --entrypoint node \
+            --network "$MEMORY_NETWORK" \
+            --network-alias "$CLOUDFLARE_TEAM_DOMAIN.cloudflareaccess.com" \
+            -e CLOUDFLARE_TEAM_DOMAIN \
+            -e NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt \
+            -e ACCESS_IDP_KEY_FILE=/smoke-materials/server.key \
+            -e ACCESS_IDP_CERT_FILE=/smoke-materials/server.crt \
+            -e ACCESS_IDP_JWKS_FILE=/smoke-materials/jwks.json \
+            -v "$PWD/scripts/ci:/smoke-scripts:ro" \
+            -v "$work_dir/tls/server.key:/smoke-materials/server.key:ro" \
+            -v "$work_dir/tls/server.crt:/smoke-materials/server.crt:ro" \
+            -v "$work_dir/tls/ca.crt:/smoke-materials/ca.crt:ro" \
+            -v "$work_dir/jwt/jwks.json:/smoke-materials/jwks.json:ro" \
+            "$NEW_IMAGE" /smoke-scripts/fake-access-idp.mjs
+          for attempt in $(seq 1 30); do
+            test "$(docker inspect -f '{{.State.Running}}' "$MEMORY_PREFIX-idp")" = true
+            if docker exec "$MEMORY_PREFIX-idp" node --input-type=module -e '
+              try {
+                const issuer = `https://${process.env.CLOUDFLARE_TEAM_DOMAIN}.cloudflareaccess.com`
+                const response = await fetch(`${issuer}/cdn-cgi/access/certs`, {
+                  signal: AbortSignal.timeout(2000),
+                })
+                if (response.status !== 200) throw new Error("Unexpected status")
+                const jwks = await response.json()
+                if (!Array.isArray(jwks.keys) || !jwks.keys.some(key => typeof key.kid === "string")) {
+                  throw new Error("Missing JWKS kid")
+                }
+              } catch {
+                process.exitCode = 1
+              }
+            '; then
+              node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          metadata.preparationComplete = true
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          NODE
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Fake Access IdP did not become ready'
+          exit 1
+
+      - name: Measure isolated containers (host cgroup peak)
+        run: |
+          sudo -n env \
+            MEMORY_ROOT="$MEMORY_ROOT" MEMORY_MATERIALS="$MEMORY_MATERIALS" \
+            MEMORY_PREFIX="$MEMORY_PREFIX" MEMORY_NETWORK="$MEMORY_NETWORK" \
+            NEW_IMAGE="$NEW_IMAGE" OLD_IMAGE="$OLD_IMAGE" RUNS="$RUNS" \
+            CONCURRENCY="$CONCURRENCY" ROUNDS="$ROUNDS" \
+            CLOUDFLARE_TEAM_DOMAIN="$CLOUDFLARE_TEAM_DOMAIN" \
+            CLOUDFLARE_AUDIENCE="$CLOUDFLARE_AUDIENCE" \
+            "$(command -v node)" scripts/ci/tmp-memory/load.mjs measure
+
+      - name: Preserve any remaining container evidence before aggregation
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { mkdirSync, writeFileSync } from 'node:fs'
+          const directory = `${process.env.MEMORY_ROOT}/remaining-containers`
+          mkdirSync(directory, { recursive: true })
+          for (const suffix of ['target', 'load', 'idp', 'prepare', 'user-old', 'user-new']) {
+            const name = `${process.env.MEMORY_PREFIX}-${suffix}`
+            const info = spawnSync('docker', ['inspect', name], { encoding: 'utf8', timeout: 20000 })
+            if (info.status !== 0) continue
+            const inspected = JSON.parse(info.stdout)[0]
+            writeFileSync(`${directory}/${suffix}-state.json`, JSON.stringify({
+              State: inspected.State, RestartCount: inspected.RestartCount,
+            }, null, 2) + '\n')
+            const logs = spawnSync('docker', ['logs', name], { encoding: 'utf8', timeout: 20000 })
+            writeFileSync(`${directory}/${suffix}.log`, (logs.stdout || '') + (logs.stderr || ''))
+            if (logs.status !== 0) throw new Error('Container evidence capture failed')
+          }
+          NODE
+
+      - name: Aggregate and decide
+        if: always()
+        run: |
+          if [ -f scripts/ci/tmp-memory/summarize.mjs ]; then
+            status=0
+            node scripts/ci/tmp-memory/summarize.mjs "$MEMORY_ROOT" || status=$?
+            printf '%s\n' "$status" > "$MEMORY_ROOT/aggregate-exit-code.txt"
+          else
+            node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs'
+          const root = process.env.MEMORY_ROOT
+          const result = { verdict: '中断', label: '中断', exitCode: 2,
+            incompleteRecords: ['checkout: summarizer unavailable'] }
+          writeFileSync(`${root}/result.json`, JSON.stringify(result) + '\n')
+          const lines = ['# 総合判定: 中断', '', '## fixture ごとの新旧最大値', '',
+            '| Fixture | 旧 最大 MiB | 新 最大 MiB |', '|---|---:|---:|',
+            ...['F0', 'F1', 'F2', 'F3'].map(f => `| ${f} | — | — |`), '',
+            '## 24 回の詳細', '', '| Image | Fixture | Run | 状態 |', '|---|---|---:|---|']
+          for (const image of ['old', 'new']) for (const fixture of ['F0', 'F1', 'F2', 'F3'])
+            for (let run = 1; run <= 3; run++) lines.push(`| ${image} | ${fixture} | ${run} | missing |`)
+          lines.push('', '## 環境・SHA・差分・実行ユーザー', '',
+            `Expected head SHA: ${process.env.EXPECTED_HEAD_SHA}`, '',
+            'checkout failed; environment unavailable', '',
+            '## 不完全な記録の識別子', '', '- checkout: summarizer unavailable', '')
+          writeFileSync(`${root}/summary.md`, lines.join('\n'))
+          NODE
+          fi
+
+      - name: Write the complete job summary once
+        if: always()
+        run: cat "$MEMORY_ROOT/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve results, per-measurement evidence, and fixtures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmp-base-image-memory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/chumon-tmp-memory-${{ github.run_id }}-${{ github.run_attempt }}/results/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Fail unless the overall verdict is pass
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const result = JSON.parse(readFileSync(`${process.env.MEMORY_ROOT}/result.json`, 'utf8'))
+          if (result.verdict !== '合格' || result.exitCode !== 0) process.exitCode = 1
+          NODE
+
+      - name: Clean up only this job's temporary resources
+        if: always()
+        run: |
+          for suffix in load target idp prepare user-old user-new; do
+            name="tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$suffix"
+            if docker container inspect "$name" >/dev/null 2>&1; then
+              docker rm -f "$name"
+            fi
+          done
+          network="tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if docker network inspect "$network" >/dev/null 2>&1; then
+            docker network rm "$network"
+          fi
+          sudo -n env RUNNER_TEMP="$RUNNER_TEMP" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" "$(command -v node)" --input-type=module <<'NODE'
+          import { rmSync } from 'node:fs'
+          import { join } from 'node:path'
+          const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = process.env
+          if (!RUNNER_TEMP?.startsWith('/') || !/^\d+$/.test(GITHUB_RUN_ID) ||
+              !/^\d+$/.test(GITHUB_RUN_ATTEMPT)) throw new Error('Invalid cleanup scope')
+          const base = join(RUNNER_TEMP, `chumon-tmp-memory-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}`)
+          rmSync(join(base, 'materials'), { recursive: true, force: true })
+          rmSync(join(base, 'results'), { recursive: true, force: true })
+          NODE
