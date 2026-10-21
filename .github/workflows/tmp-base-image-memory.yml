@@ -148,10 +148,33 @@ jobs:
           import { readFileSync, writeFileSync } from 'node:fs'
           const path = `${process.env.MEMORY_ROOT}/metadata.json`
           const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          metadata.diagnostics ??= []
           function capture(command, args) {
             const result = spawnSync(command, args, { encoding: 'utf8', timeout: 30000 })
             if (result.status !== 0) metadata.infrastructure.push('ENVIRONMENT_COMMAND_FAILED')
             return (result.stdout || '') + (result.stderr || '')
+          }
+          function runtime(name, image) {
+            try {
+              const result = spawnSync('docker', [
+                'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-runtime-${name}`,
+                '--entrypoint', 'node', image, '-e',
+                'process.stdout.write(JSON.stringify({ versions: process.versions, glibcVersionRuntime: process.report.getReport().header.glibcVersionRuntime ?? null }))',
+              ], { encoding: 'utf8', timeout: 30000 })
+              if (result.status !== 0) throw new Error('RUNTIME_UNAVAILABLE')
+              const value = JSON.parse(result.stdout)
+              if (!value || !value.versions || typeof value.versions !== 'object' ||
+                  Array.isArray(value.versions) ||
+                  Object.values(value.versions).some(version => typeof version !== 'string') ||
+                  ['node', 'v8', 'uv'].some(key => !value.versions[key]) ||
+                  !(value.glibcVersionRuntime === null || typeof value.glibcVersionRuntime === 'string')) {
+                throw new Error('RUNTIME_UNAVAILABLE')
+              }
+              return value
+            } catch {
+              metadata.diagnostics.push(`RUNTIME_VERSIONS_UNAVAILABLE:${name}`)
+              return null
+            }
           }
           metadata.environment.kernel = capture('uname', ['-r']).trim()
           metadata.environment.cgroupFilesystem = capture('stat', ['-fc', '%T', '/sys/fs/cgroup']).trim()
@@ -164,6 +187,7 @@ jobs:
                 '--entrypoint', 'sh', image,
                 '-c', 'id; echo "$HOME"; ls -ld "$HOME"',
               ]),
+              runtime: runtime(name, image),
             }
           }
           if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
@@ -354,7 +378,7 @@ jobs:
       - name: Clean up only this job's temporary resources
         if: always()
         run: |
-          for suffix in load target idp prepare user-old user-new; do
+          for suffix in load target idp prepare user-old user-new runtime-old runtime-new; do
             name="tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$suffix"
             if docker container inspect "$name" >/dev/null 2>&1; then
               docker rm -f "$name"

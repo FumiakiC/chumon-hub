@@ -1,7 +1,7 @@
 // Temporary PR-only harness; remove before merging this PR.
 import { spawnSync } from 'node:child_process'
 import { createHash, createPrivateKey, sign } from 'node:crypto'
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -277,7 +277,7 @@ function infrastructure(code) {
   throw new HarnessError(code)
 }
 
-async function peakFor(state) {
+async function cgroupFor(state) {
   const pid = state.Pid
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     infrastructure('INVALID_TARGET_PID')
@@ -290,13 +290,161 @@ async function peakFor(state) {
   if (!path || !path.startsWith('/') || path.split('/').includes('..')) {
     infrastructure('CGROUP_V2_PATH_MISSING')
   }
-  const value = (
-    await readFile(join('/sys/fs/cgroup', path, 'memory.peak'), 'utf8')
-  ).trim()
+  return join('/sys/fs/cgroup', path)
+}
+
+async function peakFor(state) {
+  const path = await cgroupFor(state)
+  const value = (await readFile(join(path, 'memory.peak'), 'utf8')).trim()
   if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value))) {
     infrastructure('INVALID_MEMORY_PEAK')
   }
   return Number(value)
+}
+
+const memoryStatKeys = [
+  'anon',
+  'file',
+  'kernel',
+  'shmem',
+  'sock',
+  'slab',
+  'file_mapped',
+]
+const memoryEventKeys = ['low', 'high', 'max', 'oom', 'oom_kill']
+
+function diagnosticNumber(text) {
+  if (!/^[0-9]+$/.test(text) || !Number.isSafeInteger(Number(text))) {
+    throw new HarnessError('READ_FAILED')
+  }
+  return Number(text)
+}
+
+function diagnosticFields(text, keys) {
+  const fields = new Map(
+    text
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/))
+  )
+  return Object.fromEntries(
+    keys.map((key) => [
+      key,
+      fields.has(key) ? diagnosticNumber(fields.get(key)) : null,
+    ])
+  )
+}
+
+function memoryObserver(directory, record, started, initialState) {
+  let path = null
+  let phase = 'startup'
+  let timer = null
+  let pending = null
+  let stopped = false
+  function issue(scope, reason) {
+    const code = `${scope}:${reason}`
+    if (!record.diagnostics.includes(code)) record.diagnostics.push(code)
+  }
+  async function locate(state) {
+    if (path) return
+    try {
+      path = await cgroupFor(state)
+    } catch {
+      throw new HarnessError('CGROUP_PATH_UNAVAILABLE')
+    }
+  }
+  async function attempt(scope, state, action) {
+    try {
+      await locate(state)
+      await action()
+      return true
+    } catch (error) {
+      let reason = error instanceof HarnessError ? error.code : 'READ_FAILED'
+      if (path) {
+        try {
+          await stat(path)
+        } catch (missing) {
+          if (missing?.code === 'ENOENT') reason = 'TARGET_EXITED'
+        }
+      }
+      issue(scope, reason)
+      return false
+    }
+  }
+  async function sample(scope, state, samplePhase) {
+    return attempt(scope, state, async () => {
+      const elapsedMs = Date.now() - started
+      const memoryCurrent = diagnosticNumber(
+        (await readFile(join(path, 'memory.current'), 'utf8')).trim()
+      )
+      const fields = diagnosticFields(
+        await readFile(join(path, 'memory.stat'), 'utf8'),
+        memoryStatKeys
+      )
+      try {
+        await appendFile(
+          join(directory, 'memory-samples.jsonl'),
+          `${JSON.stringify({ elapsedMs, phase: samplePhase, memoryCurrent, stat: fields })}\n`
+        )
+      } catch {
+        throw new HarnessError('WRITE_FAILED')
+      }
+    })
+  }
+  function tick() {
+    if (stopped || pending) return
+    pending = sample('SAMPLING', initialState, phase)
+      .then((ok) => {
+        if (!ok) {
+          stopped = true
+          clearInterval(timer)
+        }
+      })
+      .finally(() => {
+        pending = null
+      })
+  }
+  timer = setInterval(tick, 1000)
+  tick()
+  return {
+    load() {
+      phase = 'load'
+    },
+    exited() {
+      issue('SAMPLING', 'TARGET_EXITED')
+      stopped = true
+      clearInterval(timer)
+    },
+    async stop() {
+      stopped = true
+      clearInterval(timer)
+      await pending
+    },
+    async final(state) {
+      if (state?.Running !== true) {
+        const reason =
+          state?.Running === false ? 'TARGET_EXITED' : 'CGROUP_PATH_UNAVAILABLE'
+        issue('FINAL_SAMPLE', reason)
+        issue('MEMORY_EVENTS', reason)
+        return
+      }
+      await sample('FINAL_SAMPLE', state, 'final')
+      await attempt('MEMORY_EVENTS', state, async () => {
+        const events = diagnosticFields(
+          await readFile(join(path, 'memory.events'), 'utf8'),
+          memoryEventKeys
+        )
+        if (Object.values(events).some((value) => value === null)) {
+          throw new HarnessError('READ_FAILED')
+        }
+        try {
+          await json(join(directory, 'memory-events.json'), events)
+        } catch {
+          throw new HarnessError('WRITE_FAILED')
+        }
+      })
+    },
+  }
 }
 
 async function measureOne(context, run, fixture, image) {
@@ -320,10 +468,12 @@ async function measureOne(context, run, fixture, image) {
     warning: null,
     durationMs: 0,
     infrastructure: null,
+    diagnostics: [],
   }
   let loaderStarted = false
   let peakError = null
   let primaryError = null
+  let observer = null
   function verifyInfrastructure() {
     if (Date.now() >= deadline) infrastructure('MEASUREMENT_TIMEOUT')
     const provider = inspect(idp)
@@ -353,14 +503,19 @@ async function measureOne(context, run, fixture, image) {
       `${materials}/tls/ca.crt:/smoke-materials/ca.crt:ro`,
       image === 'old' ? required('OLD_IMAGE') : newImage,
     ])
+    const targetStarted = Date.now()
     const info = inspect(target)
+    observer = memoryObserver(directory, record, targetStarted, info?.State)
     const binding = info?.NetworkSettings?.Ports?.['3000/tcp']?.[0]?.HostPort
     if (!binding) infrastructure('TARGET_PORT_MISSING')
     let ready = false
     const readyDeadline = Date.now() + 60_000
     while (Date.now() < readyDeadline) {
       verifyInfrastructure()
-      if (!inspect(target)?.State.Running) break
+      if (!inspect(target)?.State.Running) {
+        observer.exited()
+        break
+      }
       try {
         const response = await fetch(`http://127.0.0.1:${binding}/`, {
           signal: AbortSignal.timeout(
@@ -399,6 +554,7 @@ async function measureOne(context, run, fixture, image) {
         failures: requests.length,
       })
     } else {
+      observer.load()
       docker([
         'run',
         '-d',
@@ -462,6 +618,7 @@ async function measureOne(context, run, fixture, image) {
         const currentTarget = inspect(target)
         if (!currentTarget) infrastructure('TARGET_CONTAINER_MISSING')
         if (!currentTarget.State.Running && !terminationSignaled) {
+          observer.exited()
           docker(['kill', '--signal=SIGTERM', loader])
           terminationSignaled = true
         }
@@ -507,6 +664,7 @@ async function measureOne(context, run, fixture, image) {
     primaryError =
       error instanceof HarnessError ? error.code : 'MEASUREMENT_IO_FAILED'
   } finally {
+    await observer?.stop()
     measurementDeadline = null
     if (
       primaryError === 'MEASUREMENT_TIMEOUT' &&
@@ -549,6 +707,7 @@ async function measureOne(context, run, fixture, image) {
       join(directory, 'load-state.json'),
       loaderStarted ? (inspect(loader)?.State ?? null) : null
     )
+    await observer?.final(record.state)
     if (record.state?.Running === false) {
       record.peakMissingReason = 'TARGET_EXITED_BEFORE_READ'
     } else if (record.state?.Running === true) {

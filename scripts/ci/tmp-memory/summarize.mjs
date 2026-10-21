@@ -42,6 +42,190 @@ function abnormal(record) {
   )
 }
 
+const diagnosticStatKeys = [
+  'anon',
+  'file',
+  'kernel',
+  'shmem',
+  'sock',
+  'slab',
+  'file_mapped',
+]
+const diagnosticEventKeys = ['low', 'high', 'max', 'oom', 'oom_kill']
+
+async function diagnosticsFor(root, metadata, measurements) {
+  const issues = []
+  const issue = (id, reason) => issues.push(`${id}: ${reason}`)
+  function recordedIssues(id, values) {
+    if (!Array.isArray(values)) {
+      issue(id, 'DIAGNOSTICS_MISSING_OR_INVALID')
+      return
+    }
+    for (const value of values) {
+      issue(
+        id,
+        typeof value === 'string' && /^[A-Z_]+(?::[A-Z_a-z]+)?$/.test(value)
+          ? value
+          : 'INVALID_DIAGNOSTIC_CODE'
+      )
+    }
+  }
+  async function read(file, id) {
+    try {
+      return await readFile(file, 'utf8')
+    } catch {
+      issue(id, 'FILE_UNAVAILABLE')
+      return null
+    }
+  }
+  recordedIssues('metadata', metadata?.diagnostics)
+  const runtimes = images.map((image) => {
+    const runtime = metadata?.environment?.[image]?.runtime
+    const versions = runtime?.versions
+    if (
+      !object(runtime) ||
+      !object(versions) ||
+      Object.values(versions).some((value) => typeof value !== 'string') ||
+      ['node', 'v8', 'uv'].some(
+        (key) => typeof versions[key] !== 'string' || !versions[key]
+      ) ||
+      !(
+        runtime.glibcVersionRuntime === null ||
+        typeof runtime.glibcVersionRuntime === 'string'
+      )
+    ) {
+      issue(image, 'RUNTIME_MISSING_OR_INVALID')
+      return { image, runtime: null }
+    }
+    return { image, runtime }
+  })
+  const rows = []
+  for (const image of images) {
+    for (const fixture of fixtures) {
+      for (let run = 1; run <= 3; run += 1) {
+        const id = `${image}-${fixture}-${run}`
+        const record = measurements.find((entry) => entry.id === id)
+        recordedIssues(id, record?.diagnostics)
+        const directory = join(root, 'runs', record?.directory ?? id)
+        const text = await read(
+          join(directory, 'memory-samples.jsonl'),
+          `${id}/samples`
+        )
+        const samples = []
+        let previous = null
+        if (text !== null) {
+          const lines = text.split('\n')
+          if (lines.at(-1) === '') lines.pop()
+          for (const [index, line] of lines.entries()) {
+            let sample
+            try {
+              sample = JSON.parse(line)
+            } catch {
+              issue(`${id}/sample[${index}]`, 'INVALID_JSON')
+              continue
+            }
+            if (
+              !object(sample) ||
+              !finiteNonnegative(sample.elapsedMs) ||
+              !['startup', 'load', 'final'].includes(sample.phase) ||
+              !integer(sample.memoryCurrent) ||
+              !object(sample.stat) ||
+              diagnosticStatKeys.some(
+                (key) =>
+                  !(sample.stat[key] === null || integer(sample.stat[key]))
+              )
+            ) {
+              issue(`${id}/sample[${index}]`, 'INVALID_SAMPLE')
+              continue
+            }
+            if (previous !== null && sample.elapsedMs < previous) {
+              issue(`${id}/sample[${index}]`, 'SAMPLE_TIME_OUT_OF_ORDER')
+            }
+            previous = sample.elapsedMs
+            samples.push(sample)
+          }
+        }
+        if (!samples.length) issue(id, 'NO_SAMPLES')
+        if (samples.filter((sample) => sample.phase === 'final').length !== 1) {
+          issue(id, 'FINAL_SAMPLE_MISSING_OR_DUPLICATE')
+        } else if (samples.at(-1)?.phase !== 'final') {
+          issue(id, 'FINAL_SAMPLE_NOT_LAST')
+        }
+        const eventsText = await read(
+          join(directory, 'memory-events.json'),
+          `${id}/events`
+        )
+        let events = null
+        if (eventsText !== null) {
+          try {
+            const value = JSON.parse(eventsText)
+            if (
+              object(value) &&
+              diagnosticEventKeys.every((key) => integer(value[key]))
+            )
+              events = value
+            else issue(`${id}/events`, 'INVALID_EVENTS')
+          } catch {
+            issue(`${id}/events`, 'INVALID_JSON')
+          }
+        }
+        let maximum = null
+        let maxIntervalMs = null
+        for (const [index, sample] of samples.entries()) {
+          if (maximum === null || sample.memoryCurrent > maximum.memoryCurrent)
+            maximum = sample
+          if (index > 0) {
+            const gap = sample.elapsedMs - samples[index - 1].elapsedMs
+            if (gap >= 0) maxIntervalMs = Math.max(maxIntervalMs ?? 0, gap)
+          }
+        }
+        rows.push({
+          image,
+          fixture,
+          run,
+          sampleCount: samples.length,
+          maxIntervalMs,
+          maximum,
+          events,
+        })
+      }
+    }
+  }
+  return { issues, runtimes, rows }
+}
+
+function diagnosticMarkdown(diagnostics) {
+  const number = (value) => (integer(value) ? String(value) : '—')
+  return [
+    '',
+    '## 診断（判定には使わない）',
+    '',
+    '| Image | Node | V8 | uv | glibcVersionRuntime |',
+    '|---|---|---|---|---|',
+    ...diagnostics.runtimes.map(
+      ({ image, runtime }) =>
+        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} |`
+    ),
+    '',
+    '### memory.current が最大だったサンプルの内訳。各項目の個別の最大値ではない。1 秒ごとの採取のため、ピークの瞬間を外しうる。ピークの総量は memory.peak',
+    '',
+    'メモリの値はバイト、経過時間・最大間隔はミリ秒。',
+    '',
+    '| Image | Fixture | Run | elapsedMs | phase | memoryCurrent | anon | file | kernel | shmem | slab | events.max | events.oom | events.oom_kill | サンプル数 | 最大間隔 ms |',
+    '|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
+    ...diagnostics.rows.map(
+      ({ image, fixture, run, maximum, events, sampleCount, maxIntervalMs }) =>
+        `| ${image} | ${fixture} | ${run} | ${number(maximum?.elapsedMs)} | ${maximum?.phase ?? '—'} | ${number(maximum?.memoryCurrent)} | ${number(maximum?.stat.anon)} | ${number(maximum?.stat.file)} | ${number(maximum?.stat.kernel)} | ${number(maximum?.stat.shmem)} | ${number(maximum?.stat.slab)} | ${number(events?.max)} | ${number(events?.oom)} | ${number(events?.oom_kill)} | ${sampleCount} | ${number(maxIntervalMs)} |`
+    ),
+    '',
+    '### 診断データの不備',
+    '',
+    ...(diagnostics.issues.length
+      ? diagnostics.issues.map((value) => `- ${display(value)}`)
+      : ['なし']),
+  ]
+}
+
 async function summarize(root) {
   const issues = []
   const oldFailures = []
@@ -439,6 +623,7 @@ async function summarize(root) {
       ? `${verdict}（旧イメージが基準を満たさない）`
       : verdict
   const exitCode = verdict === '合格' ? 0 : verdict === '不合格' ? 1 : 2
+  const diagnostics = await diagnosticsFor(root, metadata, measurements)
   const peak = (bytes) =>
     positiveInteger(bytes) ? (bytes / mib).toFixed(3) : '—'
   const time = (value) => (finiteNonnegative(value) ? value.toFixed(1) : '—')
@@ -489,6 +674,7 @@ async function summarize(root) {
     }
   }
   markdown.push(
+    ...diagnosticMarkdown(diagnostics),
     '',
     '## 環境・SHA・差分・実行ユーザー',
     '',
@@ -524,6 +710,11 @@ async function summarize(root) {
     oldFailures,
     criteriaFailures,
     incompleteRecords: issues,
+    diagnosticIssues: diagnostics.issues,
+    diagnostics: {
+      runtimes: diagnostics.runtimes,
+      measurements: diagnostics.rows,
+    },
     metadata,
     maxima,
     measurements,
@@ -550,6 +741,7 @@ try {
     exitCode: 2,
     oldFailures: [],
     criteriaFailures: [],
+    diagnosticIssues: [],
     incompleteRecords: ['summarize: unexpected I/O or aggregation failure'],
   }
   process.stderr.write('SUMMARY_FAILED\n')
