@@ -787,7 +787,10 @@ async function measure() {
   const { chmod, chown } = await import('node:fs/promises')
   const finishBy = metadata.startedAtMs + 115 * 60_000
   try {
-    if (process.env.NEW_TARGET_GLIBC_TUNABLES !== 'glibc.malloc.arena_max=2') {
+    if (
+      process.env.NEW_TARGET_GLIBC_TUNABLES !==
+      'glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072'
+    ) {
       infrastructure('INVALID_NEW_TARGET_GLIBC_TUNABLES')
     }
     context.newTargetGlibcTunables = process.env.NEW_TARGET_GLIBC_TUNABLES

@@ -53,7 +53,8 @@ const diagnosticStatKeys = [
 ]
 const diagnosticEventKeys = ['low', 'high', 'max', 'oom', 'oom_kill']
 const expectedDiagnosticSettings = {
-  newTargetGlibcTunables: 'glibc.malloc.arena_max=2',
+  newTargetGlibcTunables:
+    'glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072',
 }
 
 async function diagnosticsFor(root, metadata, measurements) {
@@ -86,6 +87,9 @@ async function diagnosticsFor(root, metadata, measurements) {
     newTargetGlibcTunables:
       metadata?.diagnosticSettings?.newTargetGlibcTunables ?? null,
     arenaMax: metadata?.environment?.new?.arenaMax ?? null,
+    mmapThreshold: metadata?.environment?.new?.mmapThreshold ?? null,
+    cpuModel: metadata?.environment?.cpuModel ?? null,
+    nproc: metadata?.environment?.nproc ?? null,
     matchingMeasurements: { old: 0, new: 0 },
   }
   if (
@@ -96,6 +100,16 @@ async function diagnosticsFor(root, metadata, measurements) {
   }
   if (settings.arenaMax !== '0x2') {
     issue('new', 'ARENA_MAX_MISSING_OR_MISMATCHED')
+  }
+  if (settings.mmapThreshold !== '0x20000') {
+    issue('new', 'MMAP_THRESHOLD_MISSING_OR_MISMATCHED')
+  }
+  if (
+    typeof settings.cpuModel !== 'string' ||
+    !settings.cpuModel.trim() ||
+    !positiveInteger(settings.nproc)
+  ) {
+    issue('metadata', 'HOST_CPU_MISSING_OR_INVALID')
   }
   const manifestText = await read(
     join(root, 'fixtures', 'manifest.json'),
@@ -273,6 +287,10 @@ function diagnosticMarkdown(diagnostics) {
     `新targetの GLIBC_TUNABLES: ${display(diagnostics.settings.newTargetGlibcTunables ?? '—')}`,
     '',
     `新イメージの glibc.malloc.arena_max: ${display(diagnostics.settings.arenaMax ?? '—')}`,
+    '',
+    `新イメージの glibc.malloc.mmap_threshold: ${display(diagnostics.settings.mmapThreshold ?? '—')}`,
+    '',
+    `ランナーの CPU: ${display(diagnostics.settings.cpuModel ?? '—')}・nproc: ${number(diagnostics.settings.nproc)}`,
     '',
     `対象設定の一致: 旧 ${diagnostics.settings.matchingMeasurements.old}/12・新 ${diagnostics.settings.matchingMeasurements.new}/12`,
     '',

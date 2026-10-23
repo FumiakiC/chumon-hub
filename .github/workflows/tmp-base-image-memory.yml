@@ -16,7 +16,7 @@ env:
   RUNS: 3
   ROUNDS: 10
   CONCURRENCY: 2
-  NEW_TARGET_GLIBC_TUNABLES: glibc.malloc.arena_max=2
+  NEW_TARGET_GLIBC_TUNABLES: glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072
 
 jobs:
   compare:
@@ -180,7 +180,8 @@ jobs:
               return null
             }
           }
-          function arenaMax() {
+          function tunables() {
+            const values = { arenaMax: null, mmapThreshold: null }
             try {
               const result = spawnSync('docker', [
                 'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-tunables-new`,
@@ -189,16 +190,50 @@ jobs:
                 process.env.NEW_IMAGE, '--list-tunables',
               ], { encoding: 'utf8', timeout: 30000 })
               if (result.status !== 0) throw new Error('TUNABLES_UNAVAILABLE')
-              const lines = result.stdout.split('\n').filter(line => line.startsWith('glibc.malloc.arena_max:'))
-              const value = lines.length === 1 ? lines[0].split(/\s+/)[1] : null
-              if (typeof value !== 'string' || !/^0x[0-9a-f]+$/.test(value)) {
-                throw new Error('TUNABLES_UNAVAILABLE')
+              for (const [key, name] of [
+                ['arenaMax', 'glibc.malloc.arena_max'],
+                ['mmapThreshold', 'glibc.malloc.mmap_threshold'],
+              ]) {
+                const lines = result.stdout.split('\n').filter(line => line.startsWith(`${name}:`))
+                const value = lines.length === 1 ? lines[0].split(/\s+/)[1] : null
+                if (typeof value === 'string' && /^0x[0-9a-f]+$/.test(value)) {
+                  values[key] = value
+                }
               }
-              return value
             } catch {
-              metadata.diagnostics.push('TUNABLES_UNAVAILABLE:new')
-              return null
+              // A failed command has no trustworthy values.
             }
+            if (Object.values(values).some(value => value === null)) {
+              metadata.diagnostics.push('TUNABLES_UNAVAILABLE:new')
+            }
+            return values
+          }
+          function hostCpu() {
+            let cpuModel = null
+            let nproc = null
+            try {
+              const line = readFileSync('/proc/cpuinfo', 'utf8').split('\n')
+                .find(line => /^model name\s*:/.test(line))
+              const value = line?.slice(line.indexOf(':') + 1).trim()
+              if (value) cpuModel = value
+            } catch {
+              // Keep the independently collected processor count.
+            }
+            try {
+              const result = spawnSync('nproc', [], { encoding: 'utf8', timeout: 30000 })
+              const value = result.stdout?.trim()
+              const count = Number(value)
+              if (result.status === 0 && /^[0-9]+$/.test(value ?? '') &&
+                  Number.isSafeInteger(count) && count > 0) {
+                nproc = count
+              }
+            } catch {
+              // Keep the independently collected model name.
+            }
+            if (cpuModel === null || nproc === null) {
+              metadata.diagnostics.push('HOST_CPU_UNAVAILABLE')
+            }
+            return { cpuModel, nproc }
           }
           metadata.environment.kernel = capture('uname', ['-r']).trim()
           metadata.environment.cgroupFilesystem = capture('stat', ['-fc', '%T', '/sys/fs/cgroup']).trim()
@@ -214,7 +249,8 @@ jobs:
               runtime: runtime(name, image),
             }
           }
-          metadata.environment.new.arenaMax = arenaMax()
+          Object.assign(metadata.environment.new, tunables())
+          Object.assign(metadata.environment, hostCpu())
           if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
             metadata.infrastructure.push('CGROUP_V2_REQUIRED')
           }
