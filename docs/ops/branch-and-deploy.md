@@ -57,7 +57,7 @@
 ### 3.1 ビルド
 
 - main へのマージで、イメージを 1 回だけビルドする。STG と本番は、そのイメージを digest で参照する。
-- commit SHA と image digest は別の識別子である。現行はベースイメージを可変のタグで参照しているため、同じコミットから作っても別のイメージになりうる（`deploy.yml` の `paths-ignore` のコメント）。何を確かめて何を本番に出したかを後から辿れるように、「commit SHA → image digest → STG の revision → スモークの結果」を対応づけて記録する。
+- commit SHA と image digest は別の識別子である。ベースイメージは digest で固定している（[ADR-6](../architecture/ADR-6-base-image-glibc.md)）が、同じコミットから作っても、ビルドの時刻やビルド中にネットワークから取得するものの違いで、別のイメージになる（`deploy.yml` の `paths-ignore` のコメント）。何を確かめて何を本番に出したかを後から辿れるように、「commit SHA → image digest → STG の revision → スモークの結果」を対応づけて記録する。
 
 ### 3.2 STG
 

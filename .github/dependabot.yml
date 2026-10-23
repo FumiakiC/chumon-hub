@@ -64,3 +64,20 @@ updates:
           - 'zod'
         update-types:
           - 'patch'
+
+  # ベースイメージ（本番 Dockerfile と Dev Container）。ADR-6 で digest に固定している。
+  # docker の更新は dependabot-auto-merge.yml の許可リストに入らないため自動マージされず、
+  # マージすると本番にデプロイされる。許可リストを docker に広げないこと（ADR-6）。
+  # Dependabot は FROM 行だけを読み、ARG を解決しない。COPY --from（Dev Container の
+  # 1password/op）は追跡しない。
+  - package-ecosystem: 'docker'
+    directories:
+      - '/'
+      - '/.devcontainer'
+    schedule:
+      interval: 'weekly'
+    groups:
+      # 本番と Dev Container の同じベースイメージの更新を 1 つの PR にまとめる（開発と本番の
+      # parity を保つため）。docker で効かない場合は、ディレクトリごとの PR に分かれる。
+      docker-base-image:
+        group-by: dependency-name
