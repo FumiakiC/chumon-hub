@@ -16,6 +16,7 @@ env:
   RUNS: 3
   ROUNDS: 10
   CONCURRENCY: 2
+  NEW_TARGET_GLIBC_TUNABLES: glibc.malloc.arena_max=2
 
 jobs:
   compare:
@@ -54,6 +55,9 @@ jobs:
             oldSourceSha: env.OLD_SOURCE_SHA,
             oldImage: env.OLD_IMAGE,
             newImage: env.NEW_IMAGE,
+            diagnosticSettings: {
+              newTargetGlibcTunables: env.NEW_TARGET_GLIBC_TUNABLES ?? null,
+            },
             constants: {
               peakLimitMiB: Number(env.PEAK_LIMIT_MIB),
               relativeLimit: Number(env.RELATIVE_LIMIT),
@@ -176,6 +180,26 @@ jobs:
               return null
             }
           }
+          function arenaMax() {
+            try {
+              const result = spawnSync('docker', [
+                'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-tunables-new`,
+                '-e', `GLIBC_TUNABLES=${process.env.NEW_TARGET_GLIBC_TUNABLES}`,
+                '--entrypoint', '/lib64/ld-linux-x86-64.so.2',
+                process.env.NEW_IMAGE, '--list-tunables',
+              ], { encoding: 'utf8', timeout: 30000 })
+              if (result.status !== 0) throw new Error('TUNABLES_UNAVAILABLE')
+              const lines = result.stdout.split('\n').filter(line => line.startsWith('glibc.malloc.arena_max:'))
+              const value = lines.length === 1 ? lines[0].split(/\s+/)[1] : null
+              if (typeof value !== 'string' || !/^0x[0-9a-f]+$/.test(value)) {
+                throw new Error('TUNABLES_UNAVAILABLE')
+              }
+              return value
+            } catch {
+              metadata.diagnostics.push('TUNABLES_UNAVAILABLE:new')
+              return null
+            }
+          }
           metadata.environment.kernel = capture('uname', ['-r']).trim()
           metadata.environment.cgroupFilesystem = capture('stat', ['-fc', '%T', '/sys/fs/cgroup']).trim()
           metadata.environment.dockerVersion = capture('docker', ['version'])
@@ -190,6 +214,7 @@ jobs:
               runtime: runtime(name, image),
             }
           }
+          metadata.environment.new.arenaMax = arenaMax()
           if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
             metadata.infrastructure.push('CGROUP_V2_REQUIRED')
           }
@@ -299,6 +324,7 @@ jobs:
             MEMORY_PREFIX="$MEMORY_PREFIX" MEMORY_NETWORK="$MEMORY_NETWORK" \
             NEW_IMAGE="$NEW_IMAGE" OLD_IMAGE="$OLD_IMAGE" RUNS="$RUNS" \
             CONCURRENCY="$CONCURRENCY" ROUNDS="$ROUNDS" \
+            NEW_TARGET_GLIBC_TUNABLES="$NEW_TARGET_GLIBC_TUNABLES" \
             CLOUDFLARE_TEAM_DOMAIN="$CLOUDFLARE_TEAM_DOMAIN" \
             CLOUDFLARE_AUDIENCE="$CLOUDFLARE_AUDIENCE" \
             "$(command -v node)" scripts/ci/tmp-memory/load.mjs measure
@@ -378,7 +404,7 @@ jobs:
       - name: Clean up only this job's temporary resources
         if: always()
         run: |
-          for suffix in load target idp prepare user-old user-new runtime-old runtime-new; do
+          for suffix in load target idp prepare user-old user-new runtime-old runtime-new tunables-new; do
             name="tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$suffix"
             if docker container inspect "$name" >/dev/null 2>&1; then
               docker rm -f "$name"

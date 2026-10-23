@@ -52,6 +52,9 @@ const diagnosticStatKeys = [
   'file_mapped',
 ]
 const diagnosticEventKeys = ['low', 'high', 'max', 'oom', 'oom_kill']
+const expectedDiagnosticSettings = {
+  newTargetGlibcTunables: 'glibc.malloc.arena_max=2',
+}
 
 async function diagnosticsFor(root, metadata, measurements) {
   const issues = []
@@ -79,6 +82,51 @@ async function diagnosticsFor(root, metadata, measurements) {
     }
   }
   recordedIssues('metadata', metadata?.diagnostics)
+  const settings = {
+    newTargetGlibcTunables:
+      metadata?.diagnosticSettings?.newTargetGlibcTunables ?? null,
+    arenaMax: metadata?.environment?.new?.arenaMax ?? null,
+    matchingMeasurements: { old: 0, new: 0 },
+  }
+  if (
+    settings.newTargetGlibcTunables !==
+    expectedDiagnosticSettings.newTargetGlibcTunables
+  ) {
+    issue('metadata', 'DIAGNOSTIC_SETTINGS_MISSING_OR_MISMATCHED')
+  }
+  if (settings.arenaMax !== '0x2') {
+    issue('new', 'ARENA_MAX_MISSING_OR_MISMATCHED')
+  }
+  const manifestText = await read(
+    join(root, 'fixtures', 'manifest.json'),
+    'fixtures/manifest'
+  )
+  let manifest = []
+  if (manifestText !== null) {
+    try {
+      const value = JSON.parse(manifestText)
+      if (Array.isArray(value)) manifest = value
+      else issue('fixtures/manifest', 'INVALID_MANIFEST')
+    } catch {
+      issue('fixtures/manifest', 'INVALID_JSON')
+    }
+  }
+  const fixtureValues = fixtures.map((fixture) => {
+    const entries = manifest.filter(
+      (entry) => object(entry) && entry.fixture === fixture
+    )
+    const entry = entries.length === 1 ? entries[0] : null
+    const sha256 =
+      typeof entry?.sha256 === 'string' &&
+      /^[a-fA-F0-9]{64}$/.test(entry.sha256)
+        ? entry.sha256
+        : null
+    const bytes = integer(entry?.bytes) ? entry.bytes : null
+    if (sha256 === null || bytes === null) {
+      issue(fixture, 'MANIFEST_ENTRY_MISSING_OR_INVALID')
+    }
+    return { fixture, sha256, bytes }
+  })
   const runtimes = images.map((image) => {
     const runtime = metadata?.environment?.[image]?.runtime
     const versions = runtime?.versions
@@ -95,9 +143,17 @@ async function diagnosticsFor(root, metadata, measurements) {
       )
     ) {
       issue(image, 'RUNTIME_MISSING_OR_INVALID')
-      return { image, runtime: null }
+      return {
+        image,
+        runtime: null,
+        imageId: metadata?.environment?.[image]?.id ?? null,
+      }
     }
-    return { image, runtime }
+    return {
+      image,
+      runtime,
+      imageId: metadata?.environment?.[image]?.id ?? null,
+    }
   })
   const rows = []
   for (const image of images) {
@@ -106,6 +162,17 @@ async function diagnosticsFor(root, metadata, measurements) {
         const id = `${image}-${fixture}-${run}`
         const record = measurements.find((entry) => entry.id === id)
         recordedIssues(id, record?.diagnostics)
+        const targetGlibcTunables = record?.targetGlibcTunables
+        if (
+          targetGlibcTunables ===
+          (image === 'new'
+            ? expectedDiagnosticSettings.newTargetGlibcTunables
+            : null)
+        ) {
+          settings.matchingMeasurements[image] += 1
+        } else {
+          issue(id, 'TARGET_SETTING_MISSING_OR_MISMATCHED')
+        }
         const directory = join(root, 'runs', record?.directory ?? id)
         const text = await read(
           join(directory, 'memory-samples.jsonl'),
@@ -187,11 +254,12 @@ async function diagnosticsFor(root, metadata, measurements) {
           maxIntervalMs,
           maximum,
           events,
+          targetGlibcTunables: targetGlibcTunables ?? null,
         })
       }
     }
   }
-  return { issues, runtimes, rows }
+  return { issues, runtimes, rows, settings, fixtures: fixtureValues }
 }
 
 function diagnosticMarkdown(diagnostics) {
@@ -200,22 +268,48 @@ function diagnosticMarkdown(diagnostics) {
     '',
     '## 診断（判定には使わない）',
     '',
-    '| Image | Node | V8 | uv | glibcVersionRuntime |',
-    '|---|---|---|---|---|',
+    '### 診断の設定',
+    '',
+    `新targetの GLIBC_TUNABLES: ${display(diagnostics.settings.newTargetGlibcTunables ?? '—')}`,
+    '',
+    `新イメージの glibc.malloc.arena_max: ${display(diagnostics.settings.arenaMax ?? '—')}`,
+    '',
+    `対象設定の一致: 旧 ${diagnostics.settings.matchingMeasurements.old}/12・新 ${diagnostics.settings.matchingMeasurements.new}/12`,
+    '',
+    '| Image | Node | V8 | uv | glibcVersionRuntime | イメージ ID |',
+    '|---|---|---|---|---|---|',
     ...diagnostics.runtimes.map(
-      ({ image, runtime }) =>
-        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} |`
+      ({ image, runtime, imageId }) =>
+        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} | ${display(imageId ?? '—')} |`
+    ),
+    '',
+    '### fixture',
+    '',
+    '| Fixture | sha256 | bytes |',
+    '|---|---|---:|',
+    ...diagnostics.fixtures.map(
+      (entry) =>
+        `| ${entry.fixture} | ${entry.sha256 ?? '—'} | ${number(entry.bytes)} |`
     ),
     '',
     '### memory.current が最大だったサンプルの内訳。各項目の個別の最大値ではない。1 秒ごとの採取のため、ピークの瞬間を外しうる。ピークの総量は memory.peak',
     '',
     'メモリの値はバイト、経過時間・最大間隔はミリ秒。',
     '',
-    '| Image | Fixture | Run | elapsedMs | phase | memoryCurrent | anon | file | kernel | shmem | slab | events.max | events.oom | events.oom_kill | サンプル数 | 最大間隔 ms |',
-    '|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
+    '| Image | Fixture | Run | elapsedMs | phase | memoryCurrent | anon | file | kernel | shmem | slab | events.max | events.oom | events.oom_kill | サンプル数 | 最大間隔 ms | GLIBC_TUNABLES |',
+    '|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|',
     ...diagnostics.rows.map(
-      ({ image, fixture, run, maximum, events, sampleCount, maxIntervalMs }) =>
-        `| ${image} | ${fixture} | ${run} | ${number(maximum?.elapsedMs)} | ${maximum?.phase ?? '—'} | ${number(maximum?.memoryCurrent)} | ${number(maximum?.stat.anon)} | ${number(maximum?.stat.file)} | ${number(maximum?.stat.kernel)} | ${number(maximum?.stat.shmem)} | ${number(maximum?.stat.slab)} | ${number(events?.max)} | ${number(events?.oom)} | ${number(events?.oom_kill)} | ${sampleCount} | ${number(maxIntervalMs)} |`
+      ({
+        image,
+        fixture,
+        run,
+        maximum,
+        events,
+        sampleCount,
+        maxIntervalMs,
+        targetGlibcTunables,
+      }) =>
+        `| ${image} | ${fixture} | ${run} | ${number(maximum?.elapsedMs)} | ${maximum?.phase ?? '—'} | ${number(maximum?.memoryCurrent)} | ${number(maximum?.stat.anon)} | ${number(maximum?.stat.file)} | ${number(maximum?.stat.kernel)} | ${number(maximum?.stat.shmem)} | ${number(maximum?.stat.slab)} | ${number(events?.max)} | ${number(events?.oom)} | ${number(events?.oom_kill)} | ${sampleCount} | ${number(maxIntervalMs)} | ${display(targetGlibcTunables ?? '—')} |`
     ),
     '',
     '### 診断データの不備',
@@ -714,6 +808,8 @@ async function summarize(root) {
     diagnostics: {
       runtimes: diagnostics.runtimes,
       measurements: diagnostics.rows,
+      settings: diagnostics.settings,
+      fixtures: diagnostics.fixtures,
     },
     metadata,
     maxima,
