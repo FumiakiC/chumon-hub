@@ -170,8 +170,8 @@ jobs:
             return (result.stdout || '') + (result.stderr || '')
           }
           function runtime(name, image) {
-            try {
-              const script = `
+            const script = `
+              try {
                 const { createHash } = require('node:crypto')
                 const { createRequire } = require('node:module')
                 const { readFileSync, realpathSync } = require('node:fs')
@@ -217,7 +217,7 @@ jobs:
                 const muslCandidates = [...new Set(sharedObjects
                   .filter(file => /(?:^|\\/)(?:ld-musl-[^/]+|libc\\.musl-[^/]+)\\.so\\.1$/.test(file))
                   .map(realpath))]
-                if (muslCandidates.length !== 1) throw new Error('MUSL_LOADER_AMBIGUOUS')
+                if (muslCandidates.length !== 1) throw 'MUSL_LOADER_AMBIGUOUS'
                 const muslPath = muslCandidates[0]
                 const muslVersionResult = spawnSync(muslPath, ['--version'], { encoding: 'utf8' })
                 const muslVersionLine = [muslVersionResult.stdout || '', muslVersionResult.stderr || '']
@@ -225,7 +225,7 @@ jobs:
                   .split(/\\r?\\n/)
                   .map(line => line.trim())
                   .find(line => /\\bVersion\\s+\\d+\\.\\d+\\.\\d+\\b/.test(line))
-                if (!muslVersionLine) throw new Error('MUSL_VERSION_UNAVAILABLE')
+                if (!muslVersionLine) throw 'MUSL_VERSION_UNAVAILABLE'
 
                 const requireFromApp = createRequire('/app/package.json')
                 const canvasEntry = requireFromApp.resolve('@napi-rs/canvas')
@@ -236,7 +236,7 @@ jobs:
                   .filter(file => file.endsWith('.node'))
                   .map(realpath)
                   .filter(file => canvasPlatformPackageAt(file) !== null))]
-                if (canvasCandidates.length !== 1) throw new Error('CANVAS_NATIVE_BINARY_AMBIGUOUS')
+                if (canvasCandidates.length !== 1) throw 'CANVAS_NATIVE_BINARY_AMBIGUOUS'
                 const canvasNativePath = canvasCandidates[0]
                 const canvasPlatformPackage = canvasPlatformPackageAt(canvasNativePath)
                 process.stdout.write(JSON.stringify({
@@ -258,43 +258,88 @@ jobs:
                     },
                   },
                 }))
-              `
-              const result = spawnSync('docker', [
+              } catch (error) {
+                const known = new Set([
+                  'MUSL_LOADER_AMBIGUOUS',
+                  'MUSL_VERSION_UNAVAILABLE',
+                  'CANVAS_NATIVE_BINARY_AMBIGUOUS',
+                  'PACKAGE_METADATA_UNAVAILABLE',
+                ])
+                const code = typeof error === 'string' ? error : error?.message
+                const reason = known.has(code) ? code : 'UNEXPECTED'
+                process.stdout.write(JSON.stringify({ error: reason }))
+              }
+            `
+            let result
+            try {
+              result = spawnSync('docker', [
                 'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-runtime-${name}`,
                 '--entrypoint', 'node', image, '-e',
                 script,
               ], { encoding: 'utf8', timeout: 30000 })
-              if (result.status !== 0) throw new Error('RUNTIME_UNAVAILABLE')
-              const value = JSON.parse(result.stdout)
-              if (!value || !value.versions || typeof value.versions !== 'object' ||
-                  Array.isArray(value.versions) ||
-                  !Object.keys(value.versions).length ||
-                  Object.values(value.versions).some(version => typeof version !== 'string' || !version) ||
-                  ['node', 'v8', 'uv'].some(key => !value.versions[key]) ||
-                  !value.musl || typeof value.musl.path !== 'string' ||
-                  !value.musl.path.startsWith('/') ||
-                  typeof value.musl.version !== 'string' ||
-                  !/\bVersion\s+\d+\.\d+\.\d+\b/.test(value.musl.version) ||
-                  !/^[a-f0-9]{64}$/.test(value.musl.sha256 || '') ||
-                  !value.canvas || typeof value.canvas.packageVersion !== 'string' ||
-                  !value.canvas.packageVersion ||
-                  !value.canvas.nativeBinary ||
-                  typeof value.canvas.nativeBinary.path !== 'string' ||
-                  !value.canvas.nativeBinary.path.startsWith('/') ||
-                  !/^[a-f0-9]{64}$/.test(value.canvas.nativeBinary.sha256 || '') ||
-                  !value.canvas.platformPackage ||
-                  typeof value.canvas.platformPackage.name !== 'string' ||
-                  !value.canvas.platformPackage.name.startsWith('@napi-rs/canvas-') ||
-                  typeof value.canvas.platformPackage.version !== 'string' ||
-                  !value.canvas.platformPackage.version) {
-                throw new Error('RUNTIME_UNAVAILABLE')
-              }
-              return value
             } catch {
-              metadata.diagnostics.push(`MAJOR_RUNTIME_UNAVAILABLE:${name}`)
-              metadata.infrastructure.push(`MAJOR_RUNTIME_UNAVAILABLE:${name}`)
+              recordRuntimeFailure(name, 'CONTAINER_FAILED')
               return null
             }
+            if (result.error || result.status !== 0) {
+              recordRuntimeFailure(name, 'CONTAINER_FAILED')
+              return null
+            }
+            let value
+            try {
+              value = JSON.parse(result.stdout)
+            } catch {
+              recordRuntimeFailure(name, 'CONTAINER_FAILED')
+              return null
+            }
+            if (value && typeof value === 'object' && !Array.isArray(value) &&
+                typeof value.error === 'string') {
+              const knownReasons = new Set([
+                'MUSL_LOADER_AMBIGUOUS',
+                'MUSL_VERSION_UNAVAILABLE',
+                'CANVAS_NATIVE_BINARY_AMBIGUOUS',
+                'PACKAGE_METADATA_UNAVAILABLE',
+                'UNEXPECTED',
+              ])
+              recordRuntimeFailure(
+                name,
+                knownReasons.has(value.error) ? value.error : 'INVALID_SHAPE'
+              )
+              return null
+            }
+            const validShape = value && typeof value === 'object' &&
+              !Array.isArray(value) &&
+              value.versions && typeof value.versions === 'object' &&
+              !Array.isArray(value.versions) &&
+              Object.keys(value.versions).length > 0 &&
+              Object.values(value.versions).every(version => typeof version === 'string') &&
+              ['node', 'v8', 'uv'].every(key => typeof value.versions[key] === 'string' && value.versions[key]) &&
+              value.musl && typeof value.musl.path === 'string' &&
+              value.musl.path.startsWith('/') &&
+              typeof value.musl.version === 'string' &&
+              /\bVersion\s+\d+\.\d+\.\d+\b/.test(value.musl.version) &&
+              /^[a-f0-9]{64}$/.test(value.musl.sha256 || '') &&
+              value.canvas && typeof value.canvas.packageVersion === 'string' &&
+              value.canvas.packageVersion &&
+              value.canvas.nativeBinary &&
+              typeof value.canvas.nativeBinary.path === 'string' &&
+              value.canvas.nativeBinary.path.startsWith('/') &&
+              /^[a-f0-9]{64}$/.test(value.canvas.nativeBinary.sha256 || '') &&
+              value.canvas.platformPackage &&
+              typeof value.canvas.platformPackage.name === 'string' &&
+              value.canvas.platformPackage.name.startsWith('@napi-rs/canvas-') &&
+              typeof value.canvas.platformPackage.version === 'string' &&
+              value.canvas.platformPackage.version
+            if (!validShape) {
+              recordRuntimeFailure(name, 'INVALID_SHAPE')
+              return null
+            }
+            return value
+          }
+          function recordRuntimeFailure(name, reason) {
+            const failure = `MAJOR_RUNTIME_UNAVAILABLE:${name}:${reason}`
+            metadata.diagnostics.push(failure)
+            metadata.infrastructure.push(failure)
           }
           metadata.environment.kernel = capture('uname', ['-r']).trim()
           metadata.environment.cgroupFilesystem = capture('stat', ['-fc', '%T', '/sys/fs/cgroup']).trim()

@@ -38,7 +38,7 @@ function validRuntime(runtime) {
     object(runtime.versions) &&
     Object.keys(runtime.versions).length > 0 &&
     Object.values(runtime.versions).every(
-      (value) => typeof value === 'string' && value.length > 0
+      (value) => typeof value === 'string'
     ) &&
     ['node', 'v8', 'uv'].every(
       (key) =>
