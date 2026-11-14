@@ -123,6 +123,8 @@ repo の `k8s/service.yaml` には 2026-01-12（`ac7b50c`）に `name: http` が
 | 2026-09-19 13:47 | Deployment の Cloudflare の2値を `secretKeyRef` に patch した | 管理情報 |
 | 2026-09-19 13:49 | main の `deployment.yaml` を apply した（#347） | 管理情報、[k3s-node-config.md](k3s-node-config.md) |
 | 2026-10-10 22:40 | Service に `ports[0].name: http` を反映した | 本書の「Service のポート名の是正」 |
+| 2026-11-14 | 照合した（比較元 `be3206c`）。比較対象の3オブジェクトで未確認 0・平文 0・相違 0、段階2も差分なし。この後の手動のデプロイの前の確認 | 照合の出力 |
+| 2026-11-15 00:10 頃 | `ghcr-secret` を作り直した（トークンが 2026-11-10 に期限切れになっていたため）。`kubectl create secret docker-registry … --dry-run=client -o yaml` の出力を `kubectl replace` に渡し、続けて ImagePullBackOff の Pod を削除して作り直させた。新しいトークンは classic の Personal access token で、期限は 2027-02-13。この操作の後の照合は未実施 | 操作者の記録、[インシデントレポート](../incidents/2026-11-14-ghcr-pull-secret-expiry.md) |
 
 未確認: 2026-09-19 より前に、`API_SECRET` がアプリにどう渡っていたか。アプリは `API_SECRET` が無いとトークンの暗号化で失敗する作り（`lib/crypto.ts`）。現在は Secret 経由で渡っていることを確認済み。
 
