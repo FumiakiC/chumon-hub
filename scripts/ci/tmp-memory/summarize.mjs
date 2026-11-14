@@ -352,9 +352,9 @@ async function summarize(root) {
       invalid('metadata', 'checkout SHA missing or mismatched')
     }
     if (
-      metadata.oldSourceSha !== 'e0d6a9f533c0e207d6da8c93f14edb961b1347b9' ||
+      metadata.oldSourceSha !== 'be3206c35b172fe7b7a44ae7d371d003bbd3273d' ||
       metadata.oldImage !==
-        'ghcr.io/fumiakic/chumon-hub@sha256:62110fdcb824aa2d53cbf24322a10fa1974a17ce3df8c25067b02699b96bd115'
+        'ghcr.io/fumiakic/chumon-hub@sha256:18f8e460cdea3c4cdb89a4f3838f8b8817f95067266117f09ed7b2d1e61f2bd5'
     ) {
       invalid('metadata', 'old source/image mismatch')
     }
