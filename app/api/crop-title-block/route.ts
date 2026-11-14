@@ -6,11 +6,8 @@ import {
   readFormData,
   validateUploadFile,
 } from '@/lib/ai/pipeline'
-import {
-  createInFlightLimiter,
-  resolveInFlightLimit,
-  withInFlight,
-} from '@/lib/concurrency/in-flight-limiter'
+import { resolveInFlightLimit } from '@/lib/concurrency/in-flight-limiter'
+import { createSerializedInFlight } from '@/lib/concurrency/serialized-in-flight'
 import {
   ConfigError,
   errorResponse,
@@ -22,31 +19,32 @@ import { rasterizeCropRegion } from '@/lib/pdf/raster-crop'
 
 type CroppedFile = CropTitleBlockResponse['croppedFiles'][number]
 
-// プロセス内・replicas: 1 前提の暫定上限。恒久対策は Phase 5 のジョブ基盤。
+// A1全面ラスタの同時処理でメモリピークが運用上の余裕を超えるため、プロセス内で直列化する。
+// 待ち時間は保証せず、期限による打ち切りも行わない。上限は replicas: 1 前提の暫定値。恒久対策は Phase 5 のジョブ基盤。
 const cropMaxInFlight = resolveInFlightLimit(process.env.CROP_MAX_IN_FLIGHT, 2)
-const cropLimiter = createInFlightLimiter(cropMaxInFlight)
+const runCropRequest = createSerializedInFlight(cropMaxInFlight)
 
 if (cropMaxInFlight === 0) {
   logger.warn(
-    'Crop in-flight limit is disabled; concurrent requests are unlimited'
+    'Crop request limit is disabled; requests are serialized with unlimited waiting'
   )
 }
 
 export async function POST(request: NextRequest) {
-  return withInFlight<Response>(cropLimiter, {
+  // proxy のボディバッファ上限による切り詰めを、パース前に明示的な 413 へ落とす。
+  const sizeCheck = checkRequestBodySize(request)
+  if (!sizeCheck.ok) {
+    logger.warn('Request rejected by the early body size guard')
+    return validationErrorResponse(sizeCheck.status)
+  }
+
+  return runCropRequest<Response>({
     onLimitExceeded: () => {
       logger.warn('Crop request rejected by the in-flight limit')
       return tooManyRequestsResponse(3)
     },
     onAcquired: async () => {
       try {
-        // proxy のボディバッファ上限による切り詰めを、パース前に明示的な 413 へ落とす。
-        const sizeCheck = checkRequestBodySize(request)
-        if (!sizeCheck.ok) {
-          logger.warn('Request rejected by the early body size guard')
-          return validationErrorResponse(sizeCheck.status)
-        }
-
         // FormDataを取得（パース失敗は壊れた入力なので 400。500 に落とさない）
         const parsed = await readFormData(request)
         if (!parsed.ok) {
