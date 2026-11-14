@@ -19,7 +19,7 @@ env:
 
 jobs:
   compare:
-    if: github.head_ref == 'chore/base-image-trixie'
+    if: github.head_ref == 'fix/crop-serialize-requests'
     runs-on: ubuntu-26.04
     timeout-minutes: 120
     permissions:
@@ -61,7 +61,12 @@ jobs:
               rounds: Number(env.ROUNDS),
               concurrency: Number(env.CONCURRENCY),
             },
-            gates: { sha: false, diff: false, digest: false },
+            gates: {
+              sha: false,
+              diff: false,
+              digest: false,
+              majorRuntime: false,
+            },
             difference: null,
             environment: {},
             infrastructure: [],
@@ -88,8 +93,17 @@ jobs:
           metadata.difference = execFileSync('git', [
             'diff', '--name-only', '-z', process.env.OLD_SOURCE_SHA, metadata.headSha,
           ], { encoding: 'utf8' }).split('\0').filter(Boolean)
+          const allowed = new Set([
+            '.github/workflows/tmp-base-image-memory.yml',
+            'scripts/ci/tmp-memory/fixtures.ts',
+            'scripts/ci/tmp-memory/load.mjs',
+            'scripts/ci/tmp-memory/summarize.mjs',
+            'app/api/crop-title-block/route.ts',
+            'lib/concurrency/serialized-in-flight.ts',
+            'lib/concurrency/serialized-in-flight.test.ts',
+          ])
           metadata.gates.diff = metadata.difference.every(path =>
-            /^(Dockerfile$|\.devcontainer\/|\.github\/|scripts\/ci\/|docs\/)/.test(path))
+            path.startsWith('docs/') || allowed.has(path))
           const clean = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
             encoding: 'utf8',
           }) === ''
@@ -141,11 +155,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Record host and image environments
+      - name: Verify 主要ランタイムの版一致 and record environments
         run: |
           node --input-type=module <<'NODE'
           import { spawnSync } from 'node:child_process'
           import { readFileSync, writeFileSync } from 'node:fs'
+          import { isDeepStrictEqual } from 'node:util'
           const path = `${process.env.MEMORY_ROOT}/metadata.json`
           const metadata = JSON.parse(readFileSync(path, 'utf8'))
           metadata.diagnostics ??= []
@@ -156,23 +171,128 @@ jobs:
           }
           function runtime(name, image) {
             try {
+              const script = `
+                const { createHash } = require('node:crypto')
+                const { createRequire } = require('node:module')
+                const { readFileSync, realpathSync } = require('node:fs')
+                const { dirname, join, parse } = require('node:path')
+                const { spawnSync } = require('node:child_process')
+                function packageAt(file, expectedName) {
+                  let directory = dirname(file)
+                  while (directory !== parse(directory).root) {
+                    const packagePath = join(directory, 'package.json')
+                    try {
+                      const value = JSON.parse(readFileSync(packagePath, 'utf8'))
+                      if (!expectedName || value.name === expectedName) {
+                        return { root: realpathSync(directory), value }
+                      }
+                    } catch {}
+                    directory = dirname(directory)
+                  }
+                  throw new Error('PACKAGE_METADATA_UNAVAILABLE')
+                }
+                function canvasPlatformPackageAt(file) {
+                  let directory = dirname(file)
+                  while (directory !== parse(directory).root) {
+                    const packagePath = join(directory, 'package.json')
+                    try {
+                      const value = JSON.parse(readFileSync(packagePath, 'utf8'))
+                      const root = realpathSync(directory)
+                      if (value.name?.startsWith('@napi-rs/canvas-') &&
+                          file.startsWith(root + '/')) {
+                        return { root, value }
+                      }
+                    } catch {}
+                    directory = dirname(directory)
+                  }
+                  return null
+                }
+                function sha256(file) {
+                  return createHash('sha256').update(readFileSync(file)).digest('hex')
+                }
+                function realpath(file) {
+                  return realpathSync(file)
+                }
+                const sharedObjects = process.report.getReport().sharedObjects
+                const muslCandidates = [...new Set(sharedObjects
+                  .filter(file => /(?:^|\\/)(?:ld-musl-[^/]+|libc\\.musl-[^/]+)\\.so\\.1$/.test(file))
+                  .map(realpath))]
+                if (muslCandidates.length !== 1) throw new Error('MUSL_LOADER_AMBIGUOUS')
+                const muslPath = muslCandidates[0]
+                const muslVersionResult = spawnSync(muslPath, ['--version'], { encoding: 'utf8' })
+                const muslVersionLine = [muslVersionResult.stdout || '', muslVersionResult.stderr || '']
+                  .join(String.fromCharCode(10))
+                  .split(/\\r?\\n/)
+                  .map(line => line.trim())
+                  .find(line => /\\bVersion\\s+\\d+\\.\\d+\\.\\d+\\b/.test(line))
+                if (!muslVersionLine) throw new Error('MUSL_VERSION_UNAVAILABLE')
+
+                const requireFromApp = createRequire('/app/package.json')
+                const canvasEntry = requireFromApp.resolve('@napi-rs/canvas')
+                const canvasPackage = packageAt(canvasEntry, '@napi-rs/canvas')
+                const canvas = requireFromApp('@napi-rs/canvas')
+                canvas.createCanvas(1, 1)
+                const canvasCandidates = [...new Set(process.report.getReport().sharedObjects
+                  .filter(file => file.endsWith('.node'))
+                  .map(realpath)
+                  .filter(file => canvasPlatformPackageAt(file) !== null))]
+                if (canvasCandidates.length !== 1) throw new Error('CANVAS_NATIVE_BINARY_AMBIGUOUS')
+                const canvasNativePath = canvasCandidates[0]
+                const canvasPlatformPackage = canvasPlatformPackageAt(canvasNativePath)
+                process.stdout.write(JSON.stringify({
+                  versions: process.versions,
+                  musl: {
+                    path: muslPath,
+                    version: muslVersionLine,
+                    sha256: sha256(muslPath),
+                  },
+                  canvas: {
+                    packageVersion: canvasPackage.value.version,
+                    nativeBinary: {
+                      path: canvasNativePath,
+                      sha256: sha256(canvasNativePath),
+                    },
+                    platformPackage: {
+                      name: canvasPlatformPackage.value.name,
+                      version: canvasPlatformPackage.value.version,
+                    },
+                  },
+                }))
+              `
               const result = spawnSync('docker', [
                 'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-runtime-${name}`,
                 '--entrypoint', 'node', image, '-e',
-                'process.stdout.write(JSON.stringify({ versions: process.versions, glibcVersionRuntime: process.report.getReport().header.glibcVersionRuntime ?? null }))',
+                script,
               ], { encoding: 'utf8', timeout: 30000 })
               if (result.status !== 0) throw new Error('RUNTIME_UNAVAILABLE')
               const value = JSON.parse(result.stdout)
               if (!value || !value.versions || typeof value.versions !== 'object' ||
                   Array.isArray(value.versions) ||
-                  Object.values(value.versions).some(version => typeof version !== 'string') ||
+                  !Object.keys(value.versions).length ||
+                  Object.values(value.versions).some(version => typeof version !== 'string' || !version) ||
                   ['node', 'v8', 'uv'].some(key => !value.versions[key]) ||
-                  !(value.glibcVersionRuntime === null || typeof value.glibcVersionRuntime === 'string')) {
+                  !value.musl || typeof value.musl.path !== 'string' ||
+                  !value.musl.path.startsWith('/') ||
+                  typeof value.musl.version !== 'string' ||
+                  !/\bVersion\s+\d+\.\d+\.\d+\b/.test(value.musl.version) ||
+                  !/^[a-f0-9]{64}$/.test(value.musl.sha256 || '') ||
+                  !value.canvas || typeof value.canvas.packageVersion !== 'string' ||
+                  !value.canvas.packageVersion ||
+                  !value.canvas.nativeBinary ||
+                  typeof value.canvas.nativeBinary.path !== 'string' ||
+                  !value.canvas.nativeBinary.path.startsWith('/') ||
+                  !/^[a-f0-9]{64}$/.test(value.canvas.nativeBinary.sha256 || '') ||
+                  !value.canvas.platformPackage ||
+                  typeof value.canvas.platformPackage.name !== 'string' ||
+                  !value.canvas.platformPackage.name.startsWith('@napi-rs/canvas-') ||
+                  typeof value.canvas.platformPackage.version !== 'string' ||
+                  !value.canvas.platformPackage.version) {
                 throw new Error('RUNTIME_UNAVAILABLE')
               }
               return value
             } catch {
-              metadata.diagnostics.push(`RUNTIME_VERSIONS_UNAVAILABLE:${name}`)
+              metadata.diagnostics.push(`MAJOR_RUNTIME_UNAVAILABLE:${name}`)
+              metadata.infrastructure.push(`MAJOR_RUNTIME_UNAVAILABLE:${name}`)
               return null
             }
           }
@@ -190,10 +310,57 @@ jobs:
               runtime: runtime(name, image),
             }
           }
+          const oldRuntime = metadata.environment.old.runtime
+          const newRuntime = metadata.environment.new.runtime
+          const runtimeRows = []
+          if (oldRuntime && newRuntime) {
+            const versionKeys = [...new Set([
+              ...Object.keys(oldRuntime.versions),
+              ...Object.keys(newRuntime.versions),
+            ])].sort()
+            for (const key of versionKeys) {
+              runtimeRows.push({
+                item: `process.versions.${key}`,
+                old: oldRuntime.versions[key] ?? null,
+                new: newRuntime.versions[key] ?? null,
+                matched: oldRuntime.versions[key] === newRuntime.versions[key],
+              })
+            }
+            for (const [item, oldValue, newValue] of [
+              ['musl loader path', oldRuntime.musl.path, newRuntime.musl.path],
+              ['musl version', oldRuntime.musl.version, newRuntime.musl.version],
+              ['musl SHA-256', oldRuntime.musl.sha256, newRuntime.musl.sha256],
+              ['@napi-rs/canvas version', oldRuntime.canvas.packageVersion, newRuntime.canvas.packageVersion],
+              ['canvas native binary path', oldRuntime.canvas.nativeBinary.path, newRuntime.canvas.nativeBinary.path],
+              ['canvas native binary SHA-256', oldRuntime.canvas.nativeBinary.sha256, newRuntime.canvas.nativeBinary.sha256],
+              ['canvas platform package', oldRuntime.canvas.platformPackage.name, newRuntime.canvas.platformPackage.name],
+              ['canvas platform package version', oldRuntime.canvas.platformPackage.version, newRuntime.canvas.platformPackage.version],
+            ]) {
+              runtimeRows.push({ item, old: oldValue, new: newValue, matched: oldValue === newValue })
+            }
+          }
+          metadata.gates.majorRuntime = Boolean(runtimeRows.length && runtimeRows.every(row => row.matched) &&
+            isDeepStrictEqual(oldRuntime.versions, newRuntime.versions) &&
+            isDeepStrictEqual(oldRuntime.musl, newRuntime.musl) &&
+            isDeepStrictEqual(oldRuntime.canvas, newRuntime.canvas))
+          metadata.majorRuntime = {
+            label: '主要ランタイムの版一致',
+            matched: metadata.gates.majorRuntime,
+            rows: runtimeRows,
+          }
+          if (!metadata.gates.majorRuntime) {
+            if (oldRuntime && newRuntime) {
+              metadata.infrastructure.push('MAJOR_RUNTIME_VERSION_MISMATCH')
+              metadata.diagnostics.push('MAJOR_RUNTIME_VERSION_MISMATCH')
+            } else if (!metadata.infrastructure.some(reason => reason.startsWith('MAJOR_RUNTIME_UNAVAILABLE'))) {
+              metadata.infrastructure.push('MAJOR_RUNTIME_UNAVAILABLE')
+            }
+          }
           if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
             metadata.infrastructure.push('CGROUP_V2_REQUIRED')
           }
           writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          process.stdout.write(`主要ランタイムの版一致: ${metadata.gates.majorRuntime ? '一致' : '不成立'}\n`)
           if (metadata.infrastructure.length) process.exitCode = 1
           NODE
 
@@ -339,7 +506,17 @@ jobs:
           const result = { verdict: '中断', label: '中断', exitCode: 2,
             incompleteRecords: ['checkout: summarizer unavailable'] }
           writeFileSync(`${root}/result.json`, JSON.stringify(result) + '\n')
-          const lines = ['# 総合判定: 中断', '', '## fixture ごとの新旧最大値', '',
+          const lines = ['# 修正効果の判定（ADR-6 の採用判定ではない）', '', '## 総合判定: 中断', '',
+            '## 主要ランタイムの版一致', '',
+            '| 項目 | 旧 | 新 | 一致 |', '|---|---|---|---|',
+            '| 取得状態 | — | — | 中断 |', '',
+            '## 旧の既知の基準 2 超過', '', '記録なし', '',
+            '## 旧の不成立（基準2超過を除く）', '', '中断のため集計なし', '',
+            '## 新の不合格', '', '中断のため集計なし', '',
+            '## fixture ごとの1ラウンド完了時間（参考）', '',
+            '| Image | Fixture | 中央値 ms | 最大 ms |', '|---|---|---:|---:|',
+            ...['old', 'new'].flatMap(image => ['F0', 'F1', 'F2', 'F3'].map(f => `| ${image} | ${f} | — | — |`)), '',
+            '## fixture ごとの新旧最大値', '',
             '| Fixture | 旧 最大 MiB | 新 最大 MiB |', '|---|---:|---:|',
             ...['F0', 'F1', 'F2', 'F3'].map(f => `| ${f} | — | — |`), '',
             '## 24 回の詳細', '', '| Image | Fixture | Run | 状態 |', '|---|---|---:|---|']

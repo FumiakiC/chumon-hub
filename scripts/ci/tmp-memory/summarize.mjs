@@ -11,6 +11,15 @@ const expectedConstants = {
   rounds: 10,
   concurrency: 2,
 }
+const allowedDifferencePaths = new Set([
+  '.github/workflows/tmp-base-image-memory.yml',
+  'scripts/ci/tmp-memory/fixtures.ts',
+  'scripts/ci/tmp-memory/load.mjs',
+  'scripts/ci/tmp-memory/summarize.mjs',
+  'app/api/crop-title-block/route.ts',
+  'lib/concurrency/serialized-in-flight.ts',
+  'lib/concurrency/serialized-in-flight.test.ts',
+])
 const mib = 1024 * 1024
 const finiteNonnegative = (value) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -22,6 +31,116 @@ const object = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
 const display = (value) =>
   String(value).replaceAll('|', '\\|').replaceAll('\n', ' ')
+
+function validRuntime(runtime) {
+  return (
+    object(runtime) &&
+    object(runtime.versions) &&
+    Object.keys(runtime.versions).length > 0 &&
+    Object.values(runtime.versions).every(
+      (value) => typeof value === 'string' && value.length > 0
+    ) &&
+    ['node', 'v8', 'uv'].every(
+      (key) =>
+        typeof runtime.versions[key] === 'string' && runtime.versions[key]
+    ) &&
+    object(runtime.musl) &&
+    typeof runtime.musl.path === 'string' &&
+    runtime.musl.path.startsWith('/') &&
+    typeof runtime.musl.version === 'string' &&
+    /\bVersion\s+\d+\.\d+\.\d+\b/.test(runtime.musl.version) &&
+    hash(runtime.musl.sha256) &&
+    object(runtime.canvas) &&
+    typeof runtime.canvas.packageVersion === 'string' &&
+    runtime.canvas.packageVersion.length > 0 &&
+    object(runtime.canvas.nativeBinary) &&
+    typeof runtime.canvas.nativeBinary.path === 'string' &&
+    runtime.canvas.nativeBinary.path.startsWith('/') &&
+    hash(runtime.canvas.nativeBinary.sha256) &&
+    object(runtime.canvas.platformPackage) &&
+    typeof runtime.canvas.platformPackage.name === 'string' &&
+    runtime.canvas.platformPackage.name.startsWith('@napi-rs/canvas-') &&
+    typeof runtime.canvas.platformPackage.version === 'string' &&
+    runtime.canvas.platformPackage.version.length > 0
+  )
+}
+
+function sameRuntime(oldRuntime, newRuntime) {
+  if (!validRuntime(oldRuntime) || !validRuntime(newRuntime)) return false
+  const versionKeys = Object.keys(oldRuntime.versions).sort()
+  return (
+    JSON.stringify(versionKeys) ===
+      JSON.stringify(Object.keys(newRuntime.versions).sort()) &&
+    versionKeys.every(
+      (key) => oldRuntime.versions[key] === newRuntime.versions[key]
+    ) &&
+    ['path', 'version', 'sha256'].every(
+      (key) => oldRuntime.musl[key] === newRuntime.musl[key]
+    ) &&
+    oldRuntime.canvas.packageVersion === newRuntime.canvas.packageVersion &&
+    ['path', 'sha256'].every(
+      (key) =>
+        oldRuntime.canvas.nativeBinary[key] ===
+        newRuntime.canvas.nativeBinary[key]
+    ) &&
+    ['name', 'version'].every(
+      (key) =>
+        oldRuntime.canvas.platformPackage[key] ===
+        newRuntime.canvas.platformPackage[key]
+    )
+  )
+}
+
+function majorRuntimeRows(metadata) {
+  const oldRuntime = metadata?.environment?.old?.runtime
+  const newRuntime = metadata?.environment?.new?.runtime
+  const rows = []
+  if (object(oldRuntime?.versions) || object(newRuntime?.versions)) {
+    const keys = [
+      ...new Set([
+        ...Object.keys(oldRuntime?.versions ?? {}),
+        ...Object.keys(newRuntime?.versions ?? {}),
+      ]),
+    ].sort()
+    for (const key of keys) {
+      rows.push({
+        item: `process.versions.${key}`,
+        old: oldRuntime?.versions?.[key] ?? null,
+        new: newRuntime?.versions?.[key] ?? null,
+      })
+    }
+  }
+  const fields = [
+    ['musl loader path', (runtime) => runtime?.musl?.path],
+    ['musl version', (runtime) => runtime?.musl?.version],
+    ['musl SHA-256', (runtime) => runtime?.musl?.sha256],
+    ['@napi-rs/canvas version', (runtime) => runtime?.canvas?.packageVersion],
+    [
+      'canvas native binary path',
+      (runtime) => runtime?.canvas?.nativeBinary?.path,
+    ],
+    [
+      'canvas native binary SHA-256',
+      (runtime) => runtime?.canvas?.nativeBinary?.sha256,
+    ],
+    [
+      'canvas platform package',
+      (runtime) => runtime?.canvas?.platformPackage?.name,
+    ],
+    [
+      'canvas platform package version',
+      (runtime) => runtime?.canvas?.platformPackage?.version,
+    ],
+  ]
+  for (const [item, value] of fields) {
+    rows.push({
+      item,
+      old: value(oldRuntime) ?? null,
+      new: value(newRuntime) ?? null,
+    })
+  }
+  return rows
+}
 
 function median(values) {
   if (values.length === 0) return null
@@ -79,26 +198,10 @@ async function diagnosticsFor(root, metadata, measurements) {
     }
   }
   recordedIssues('metadata', metadata?.diagnostics)
-  const runtimes = images.map((image) => {
-    const runtime = metadata?.environment?.[image]?.runtime
-    const versions = runtime?.versions
-    if (
-      !object(runtime) ||
-      !object(versions) ||
-      Object.values(versions).some((value) => typeof value !== 'string') ||
-      ['node', 'v8', 'uv'].some(
-        (key) => typeof versions[key] !== 'string' || !versions[key]
-      ) ||
-      !(
-        runtime.glibcVersionRuntime === null ||
-        typeof runtime.glibcVersionRuntime === 'string'
-      )
-    ) {
-      issue(image, 'RUNTIME_MISSING_OR_INVALID')
-      return { image, runtime: null }
-    }
-    return { image, runtime }
-  })
+  const runtimes = images.map((image) => ({
+    image,
+    runtime: metadata?.environment?.[image]?.runtime ?? null,
+  }))
   const rows = []
   for (const image of images) {
     for (const fixture of fixtures) {
@@ -200,13 +303,6 @@ function diagnosticMarkdown(diagnostics) {
     '',
     '## 診断（判定には使わない）',
     '',
-    '| Image | Node | V8 | uv | glibcVersionRuntime |',
-    '|---|---|---|---|---|',
-    ...diagnostics.runtimes.map(
-      ({ image, runtime }) =>
-        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} |`
-    ),
-    '',
     '### memory.current が最大だったサンプルの内訳。各項目の個別の最大値ではない。1 秒ごとの採取のため、ピークの瞬間を外しうる。ピークの総量は memory.peak',
     '',
     'メモリの値はバイト、経過時間・最大間隔はミリ秒。',
@@ -229,6 +325,7 @@ function diagnosticMarkdown(diagnostics) {
 async function summarize(root) {
   const issues = []
   const oldFailures = []
+  const oldKnownPeakExceedances = []
   const criteriaFailures = []
   function invalid(id, reason) {
     issues.push(`${id}: ${reason}`)
@@ -271,18 +368,48 @@ async function summarize(root) {
     }
     if (
       !object(metadata.gates) ||
-      ['sha', 'diff', 'digest'].some((key) => metadata.gates[key] !== true)
+      ['sha', 'diff', 'digest', 'majorRuntime'].some(
+        (key) => metadata.gates[key] !== true
+      )
     ) {
       invalid('metadata', 'pre-measurement gate failed or incomplete')
+    }
+    const oldRuntime = metadata.environment?.old?.runtime
+    const newRuntime = metadata.environment?.new?.runtime
+    const runtimeMatches = sameRuntime(oldRuntime, newRuntime)
+    const expectedRuntimeRows = majorRuntimeRows(metadata).map((row) => ({
+      ...row,
+      matched: row.old !== null && row.old === row.new,
+    }))
+    if (
+      !object(metadata.majorRuntime) ||
+      metadata.majorRuntime.label !== '主要ランタイムの版一致' ||
+      metadata.majorRuntime.matched !== runtimeMatches ||
+      !Array.isArray(metadata.majorRuntime.rows) ||
+      metadata.majorRuntime.rows.length !== expectedRuntimeRows.length ||
+      expectedRuntimeRows.some((row, index) => {
+        const recorded = metadata.majorRuntime.rows[index]
+        return (
+          !object(recorded) ||
+          recorded.item !== row.item ||
+          recorded.old !== row.old ||
+          recorded.new !== row.new ||
+          recorded.matched !== row.matched
+        )
+      }) ||
+      metadata.gates?.majorRuntime !== runtimeMatches
+    ) {
+      invalid(
+        'metadata',
+        '主要ランタイムの版一致 missing, failed, or inconsistent'
+      )
     }
     if (
       !Array.isArray(metadata.difference) ||
       metadata.difference.some(
         (path) =>
           typeof path !== 'string' ||
-          !/^(Dockerfile$|\.devcontainer\/|\.github\/|scripts\/ci\/|docs\/)/.test(
-            path
-          )
+          !(path.startsWith('docs/') || allowedDifferencePaths.has(path))
       )
     ) {
       invalid('metadata', 'changed-file allowlist missing or violated')
@@ -313,7 +440,8 @@ async function summarize(root) {
           !object(environment[image]) ||
           !/^sha256:[a-f0-9]{64}$/.test(environment[image].id ?? '') ||
           typeof environment[image].user !== 'string' ||
-          !environment[image].user.trim()
+          !environment[image].user.trim() ||
+          !validRuntime(environment[image].runtime)
       )
     ) {
       invalid(
@@ -556,9 +684,9 @@ async function summarize(root) {
         record.memoryPeakBytes !== null &&
         record.memoryPeakBytes > 435 * mib
       ) {
-        failures.push(
-          `${record.id}: criterion 2 (peak ${record.memoryPeakBytes} bytes exceeds 435 MiB)`
-        )
+        const exceedance = `${record.id}: peak ${record.memoryPeakBytes} bytes exceeds 435 MiB`
+        if (record.image === 'old') oldKnownPeakExceedances.push(exceedance)
+        else criteriaFailures.push(`${record.id}: criterion 2 (${exceedance})`)
       }
     }
     for (const fixture of fixtures) {
@@ -581,6 +709,35 @@ async function summarize(root) {
       }
     }
   }
+
+  const roundCompletions = images.flatMap((image) =>
+    fixtures.map((fixture) => {
+      const durations = []
+      for (const record of measurements.filter(
+        (measurement) =>
+          measurement.image === image && measurement.fixture === fixture
+      )) {
+        for (let round = 1; round <= 10; round += 1) {
+          const pair = record.requests.filter(
+            (request) => request?.round === round && request.number !== 0
+          )
+          if (
+            pair.length === 2 &&
+            pair.every((request) => finiteNonnegative(request.durationMs))
+          ) {
+            durations.push(Math.max(pair[0].durationMs, pair[1].durationMs))
+          }
+        }
+      }
+      return {
+        image,
+        fixture,
+        roundCount: durations.length,
+        medianMs: median(durations),
+        maximumMs: durations.length ? Math.max(...durations) : null,
+      }
+    })
+  )
 
   const maxima = fixtures.map((fixture) => {
     const maximum = (image) => {
@@ -628,19 +785,47 @@ async function summarize(root) {
     positiveInteger(bytes) ? (bytes / mib).toFixed(3) : '—'
   const time = (value) => (finiteNonnegative(value) ? value.toFixed(1) : '—')
   const markdown = [
-    `# 総合判定: ${label}`,
+    '# 修正効果の判定（ADR-6 の採用判定ではない）',
     '',
-    '## 旧の不成立',
+    `## 総合判定: ${label}`,
+    '',
+    '## 主要ランタイムの版一致',
+    '',
+    `結果: ${metadata?.majorRuntime?.matched === true ? '一致' : '中断または不一致'}`,
+    '',
+    '| 項目 | 旧 | 新 | 一致 |',
+    '|---|---|---|---|',
+    ...majorRuntimeRows(metadata).map(
+      ({ item, old, new: current }) =>
+        `| ${display(item)} | ${display(old ?? '—')} | ${display(current ?? '—')} | ${old !== null && old === current ? 'はい' : 'いいえ'} |`
+    ),
+    '',
+    '## 旧の既知の基準 2 超過',
+    '',
+    ...(oldKnownPeakExceedances.length
+      ? oldKnownPeakExceedances.map((failure) => `- ${display(failure)}`)
+      : ['なし']),
+    '',
+    '## 旧の不成立（基準2超過を除く）',
     '',
     ...(oldFailures.length
       ? oldFailures.map((failure) => `- ${display(failure)}`)
       : ['なし']),
     '',
-    '## 新の不合格（旧の不成立時は参考）',
+    '## 新の不合格',
     '',
     ...(criteriaFailures.length
       ? criteriaFailures.map((failure) => `- ${display(failure)}`)
       : ['なし']),
+    '',
+    '## fixture ごとの1ラウンド完了時間（参考・判定には不使用）',
+    '',
+    '| Image | Fixture | ラウンド数 | 中央値 ms | 最大 ms |',
+    '|---|---|---:|---:|---:|',
+    ...roundCompletions.map(
+      (entry) =>
+        `| ${entry.image} | ${entry.fixture} | ${entry.roundCount} | ${time(entry.medianMs)} | ${time(entry.maximumMs)} |`
+    ),
     '',
     '## fixture ごとの新旧最大値',
     '',
@@ -708,6 +893,7 @@ async function summarize(root) {
     label,
     exitCode,
     oldFailures,
+    oldKnownPeakExceedances,
     criteriaFailures,
     incompleteRecords: issues,
     diagnosticIssues: diagnostics.issues,
@@ -715,6 +901,7 @@ async function summarize(root) {
       runtimes: diagnostics.runtimes,
       measurements: diagnostics.rows,
     },
+    roundCompletions,
     metadata,
     maxima,
     measurements,
@@ -725,7 +912,7 @@ async function summarize(root) {
   )
   await writeFile(join(root, 'summary.md'), markdown.join('\n'))
   process.stdout.write(
-    `${JSON.stringify({ verdict: label, exitCode, incompleteRecords: issues })}\n`
+    `主要ランタイムの版一致: ${metadata?.majorRuntime?.matched === true ? '一致' : '不成立'}\n${JSON.stringify({ verdict: label, exitCode, incompleteRecords: issues })}\n`
   )
   return exitCode
 }
@@ -740,6 +927,7 @@ try {
     label: '中断',
     exitCode: 2,
     oldFailures: [],
+    oldKnownPeakExceedances: [],
     criteriaFailures: [],
     diagnosticIssues: [],
     incompleteRecords: ['summarize: unexpected I/O or aggregation failure'],
