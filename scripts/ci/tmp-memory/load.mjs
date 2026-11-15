@@ -470,6 +470,7 @@ async function measureOne(context, run, fixture, image) {
     infrastructure: null,
     diagnostics: [],
     targetGlibcTunables: null,
+    targetImageId: null,
   }
   let loaderStarted = false
   let peakError = null
@@ -502,9 +503,6 @@ async function measureOne(context, run, fixture, image) {
       'NODE_EXTRA_CA_CERTS=/smoke-materials/ca.crt',
       '-v',
       `${materials}/tls/ca.crt:/smoke-materials/ca.crt:ro`,
-      ...(image === 'new'
-        ? ['-e', `GLIBC_TUNABLES=${context.newTargetGlibcTunables}`]
-        : []),
       image === 'old' ? required('OLD_IMAGE') : newImage,
     ])
     const targetStarted = Date.now()
@@ -518,14 +516,19 @@ async function measureOne(context, run, fixture, image) {
       : []
     record.targetGlibcTunables =
       tunables[0]?.slice('GLIBC_TUNABLES='.length) ?? null
+    record.targetImageId = typeof info?.Image === 'string' ? info.Image : null
+    // The harness injects no GLIBC_TUNABLES; the container must carry exactly
+    // the image's own setting. Stop before sending any load otherwise.
     if (
       !Array.isArray(environment) ||
       environment.some((value) => typeof value !== 'string') ||
       tunables.length > 1 ||
-      record.targetGlibcTunables !==
-        (image === 'new' ? context.newTargetGlibcTunables : null)
+      record.targetGlibcTunables !== context.expected[image].glibcTunables
     ) {
-      record.diagnostics.push('TARGET_SETTING:MISMATCH')
+      infrastructure('TARGET_ENV_MISMATCH')
+    }
+    if (record.targetImageId !== context.expected[image].id) {
+      infrastructure('TARGET_IMAGE_MISMATCH')
     }
     observer = memoryObserver(directory, record, targetStarted, info?.State)
     const binding = info?.NetworkSettings?.Ports?.['3000/tcp']?.[0]?.HostPort
@@ -787,13 +790,26 @@ async function measure() {
   const { chmod, chown } = await import('node:fs/promises')
   const finishBy = metadata.startedAtMs + 115 * 60_000
   try {
-    if (
-      process.env.NEW_TARGET_GLIBC_TUNABLES !==
-      'glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072'
-    ) {
-      infrastructure('INVALID_NEW_TARGET_GLIBC_TUNABLES')
+    // Expected values were recorded from the images themselves before measuring.
+    context.expected = {}
+    for (const image of ['old', 'new']) {
+      const recorded = metadata.environment?.[image]
+      if (
+        !recorded ||
+        !Object.hasOwn(recorded, 'imageGlibcTunables') ||
+        !(
+          recorded.imageGlibcTunables === null ||
+          typeof recorded.imageGlibcTunables === 'string'
+        ) ||
+        !/^sha256:[a-f0-9]{64}$/.test(recorded.id ?? '')
+      ) {
+        infrastructure('IMAGE_SETTINGS_UNRECORDED')
+      }
+      context.expected[image] = {
+        glibcTunables: recorded.imageGlibcTunables,
+        id: recorded.id,
+      }
     }
-    context.newTargetGlibcTunables = process.env.NEW_TARGET_GLIBC_TUNABLES
     for (let run = 1; run <= runs; run += 1) {
       for (const fixture of ['F0', 'F1', 'F2', 'F3']) {
         for (const image of run % 2 === 1 ? ['old', 'new'] : ['new', 'old']) {

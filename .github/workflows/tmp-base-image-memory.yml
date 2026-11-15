@@ -1,5 +1,7 @@
 # Temporary measurement only: remove this workflow and scripts/ci/tmp-memory
-# before merging this PR. No production deployment or image push.
+# before merging this PR. No production deployment. The measured image is pushed
+# only as ghcr.io/fumiakic/chumon-hub:tmp-pr399-<head SHA> after a pass; :latest is never changed.
+# Re-running a run for the same head can overwrite that tag with a different (rebuilt) image.
 name: Temporary base image memory comparison
 
 on:
@@ -9,23 +11,25 @@ on:
 permissions: {}
 
 env:
-  OLD_IMAGE: ghcr.io/fumiakic/chumon-hub@sha256:62110fdcb824aa2d53cbf24322a10fa1974a17ce3df8c25067b02699b96bd115
-  OLD_SOURCE_SHA: e0d6a9f533c0e207d6da8c93f14edb961b1347b9
+  OLD_IMAGE: ghcr.io/fumiakic/chumon-hub@sha256:fe1501549950c0f0b2e32de29547af4a379bbb29f891bdb618d4afd5f071f2a5
+  OLD_SOURCE_SHA: 09446ba140df74c45af47c12e4a208c3feb0e7d2
   PEAK_LIMIT_MIB: 435
   RELATIVE_LIMIT: 1.15
   RUNS: 3
   ROUNDS: 10
   CONCURRENCY: 2
-  NEW_TARGET_GLIBC_TUNABLES: glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072
 
 jobs:
   compare:
     if: github.head_ref == 'chore/base-image-trixie'
     runs-on: ubuntu-26.04
     timeout-minutes: 120
+    # packages: write is needed only by the final push of a passing image. The
+    # job token keeps this permission until the job ends, even while the runner
+    # holds no stored GHCR credentials (see the logout steps).
     permissions:
       contents: read
-      packages: read
+      packages: write
     env:
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       NEW_IMAGE: chumon-hub:tmp-memory
@@ -55,9 +59,6 @@ jobs:
             oldSourceSha: env.OLD_SOURCE_SHA,
             oldImage: env.OLD_IMAGE,
             newImage: env.NEW_IMAGE,
-            diagnosticSettings: {
-              newTargetGlibcTunables: env.NEW_TARGET_GLIBC_TUNABLES ?? null,
-            },
             constants: {
               peakLimitMiB: Number(env.PEAK_LIMIT_MIB),
               relativeLimit: Number(env.RELATIVE_LIMIT),
@@ -65,7 +66,9 @@ jobs:
               rounds: Number(env.ROUNDS),
               concurrency: Number(env.CONCURRENCY),
             },
-            gates: { sha: false, diff: false, digest: false },
+            gates: { sha: false, diff: false, digest: false, versions: false },
+            versionGate: null,
+            smallMemoryStartup: null,
             difference: null,
             environment: {},
             infrastructure: [],
@@ -104,7 +107,8 @@ jobs:
           if (!metadata.gates.sha || !metadata.gates.diff || !clean) process.exitCode = 1
           NODE
 
-      - name: Log in to GHCR (read-only token)
+      # The job token can write packages; it is used here only to pull the old image.
+      - name: Log in to GHCR (pull of the old image)
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -128,6 +132,13 @@ jobs:
           writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
           if (!metadata.gates.digest) process.exitCode = 1
           NODE
+
+      # Removes only the credentials stored on the runner. The job token and its
+      # packages: write permission stay valid until the job ends; the build,
+      # measurement, and aggregation steps never receive the token.
+      - name: Log out of GHCR before building and measuring
+        if: always()
+        run: docker logout ghcr.io
 
       - uses: docker/setup-buildx-action@v4
 
@@ -159,11 +170,31 @@ jobs:
             return (result.stdout || '') + (result.stderr || '')
           }
           function runtime(name, image) {
+            // canvas: version from its own package.json; platform packages are recorded only.
+            const script = `
+              const fs = require('fs')
+              const path = require('path')
+              let canvasVersion = null
+              let canvasPlatformPackages = null
+              try {
+                const dir = fs.realpathSync('/app/node_modules/@napi-rs/canvas')
+                const value = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version
+                if (typeof value === 'string' && value) canvasVersion = value
+                canvasPlatformPackages = fs.readdirSync(path.dirname(dir))
+                  .filter(entry => entry.startsWith('canvas-')).sort()
+                  .map(entry => '@napi-rs/' + entry)
+              } catch {}
+              process.stdout.write(JSON.stringify({
+                versions: process.versions,
+                glibcVersionRuntime: process.report.getReport().header.glibcVersionRuntime ?? null,
+                canvasVersion,
+                canvasPlatformPackages,
+              }))
+            `
             try {
               const result = spawnSync('docker', [
                 'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-runtime-${name}`,
-                '--entrypoint', 'node', image, '-e',
-                'process.stdout.write(JSON.stringify({ versions: process.versions, glibcVersionRuntime: process.report.getReport().header.glibcVersionRuntime ?? null }))',
+                '--entrypoint', 'node', image, '-e', script,
               ], { encoding: 'utf8', timeout: 30000 })
               if (result.status !== 0) throw new Error('RUNTIME_UNAVAILABLE')
               const value = JSON.parse(result.stdout)
@@ -171,7 +202,11 @@ jobs:
                   Array.isArray(value.versions) ||
                   Object.values(value.versions).some(version => typeof version !== 'string') ||
                   ['node', 'v8', 'uv'].some(key => !value.versions[key]) ||
-                  !(value.glibcVersionRuntime === null || typeof value.glibcVersionRuntime === 'string')) {
+                  !(value.glibcVersionRuntime === null || typeof value.glibcVersionRuntime === 'string') ||
+                  !(value.canvasVersion === null || typeof value.canvasVersion === 'string') ||
+                  !(value.canvasPlatformPackages === null ||
+                    (Array.isArray(value.canvasPlatformPackages) &&
+                      value.canvasPlatformPackages.every(entry => typeof entry === 'string')))) {
                 throw new Error('RUNTIME_UNAVAILABLE')
               }
               return value
@@ -180,12 +215,31 @@ jobs:
               return null
             }
           }
+          function imageGlibcTunables(image) {
+            const result = spawnSync('docker', [
+              'image', 'inspect', '--format', '{{json .Config.Env}}', image,
+            ], { encoding: 'utf8', timeout: 30000 })
+            try {
+              if (result.status !== 0) throw new Error('IMAGE_ENV_UNAVAILABLE')
+              const environment = JSON.parse(result.stdout) ?? []
+              if (!Array.isArray(environment) ||
+                  environment.some(value => typeof value !== 'string')) {
+                throw new Error('IMAGE_ENV_UNAVAILABLE')
+              }
+              const values = environment.filter(value => value.startsWith('GLIBC_TUNABLES='))
+              if (values.length > 1) throw new Error('IMAGE_ENV_UNAVAILABLE')
+              return values[0]?.slice('GLIBC_TUNABLES='.length) ?? null
+            } catch {
+              metadata.infrastructure.push('IMAGE_ENV_UNAVAILABLE')
+              return null
+            }
+          }
+          // Records the dynamic loader's view with the image's own settings (nothing injected).
           function tunables() {
             const values = { arenaMax: null, mmapThreshold: null }
             try {
               const result = spawnSync('docker', [
                 'run', '--rm', '--name', `${process.env.MEMORY_PREFIX}-tunables-new`,
-                '-e', `GLIBC_TUNABLES=${process.env.NEW_TARGET_GLIBC_TUNABLES}`,
                 '--entrypoint', '/lib64/ld-linux-x86-64.so.2',
                 process.env.NEW_IMAGE, '--list-tunables',
               ], { encoding: 'utf8', timeout: 30000 })
@@ -247,15 +301,131 @@ jobs:
                 '-c', 'id; echo "$HOME"; ls -ld "$HOME"',
               ]),
               runtime: runtime(name, image),
+              imageGlibcTunables: imageGlibcTunables(image),
             }
           }
           Object.assign(metadata.environment.new, tunables())
           Object.assign(metadata.environment, hostCpu())
+          // Version gate: a mismatch or a missing value aborts before any measurement.
+          // libc and the canvas platform package names are recorded only.
+          const pick = {
+            node: runtime => runtime?.versions?.node,
+            v8: runtime => runtime?.versions?.v8,
+            uv: runtime => runtime?.versions?.uv,
+            canvas: runtime => runtime?.canvasVersion,
+          }
+          const fields = Object.entries(pick).map(([field, read]) => {
+            const value = image => {
+              const found = read(metadata.environment[image].runtime)
+              return typeof found === 'string' && found ? found : null
+            }
+            const old = value('old')
+            const current = value('new')
+            return { field, old, new: current, match: old !== null && old === current }
+          })
+          const unavailable = fields.some(entry => entry.old === null || entry.new === null)
+          metadata.versionGate = { fields }
+          metadata.gates.versions = fields.every(entry => entry.match)
+          if (unavailable) metadata.infrastructure.push('VERSION_GATE_UNAVAILABLE')
+          else if (!metadata.gates.versions) metadata.infrastructure.push('VERSION_GATE_MISMATCH')
           if (metadata.environment.cgroupFilesystem !== 'cgroup2fs') {
             metadata.infrastructure.push('CGROUP_V2_REQUIRED')
           }
           writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
           if (metadata.infrastructure.length) process.exitCode = 1
+          NODE
+
+      # The image store decides what docker's image ID means: with the classic
+      # store it is the config digest; with the containerd snapshotter it is the
+      # index/manifest digest. The config digest from `docker save` means the same
+      # in both, so the post-push identity check compares config digests.
+      - name: Record the image store and the new image config digest
+        run: |
+          scratch="$RUNNER_TEMP/chumon-tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/save-manifest.json"
+          set +e
+          docker save "$NEW_IMAGE" | tar -xOf - manifest.json > "$scratch"
+          statuses=("${PIPESTATUS[@]}")
+          set -e
+          SAVE_STATUS="${statuses[0]}" TAR_STATUS="${statuses[1]}" SAVE_MANIFEST="$scratch" \
+            node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          const fail = code => {
+            if (!metadata.infrastructure.includes(code)) metadata.infrastructure.push(code)
+          }
+          const info = spawnSync('docker', ['info', '--format', '{{json .DriverStatus}}'], {
+            encoding: 'utf8', timeout: 30000,
+          })
+          let imageStore = null
+          try {
+            if (info.status !== 0) throw new Error('DOCKER_INFO_FAILED')
+            const status = JSON.parse(info.stdout) ?? []
+            if (!Array.isArray(status)) throw new Error('DOCKER_INFO_FAILED')
+            imageStore = status.some(entry => Array.isArray(entry) &&
+              entry.includes('io.containerd.snapshotter.v1')) ? 'containerd' : 'classic'
+          } catch {
+            fail('IMAGE_STORE_UNAVAILABLE')
+          }
+          metadata.environment.imageStore = imageStore
+          let configDigest = null
+          try {
+            if (process.env.SAVE_STATUS !== '0' || process.env.TAR_STATUS !== '0') {
+              throw new Error('PIPELINE_FAILED')
+            }
+            const manifest = JSON.parse(readFileSync(process.env.SAVE_MANIFEST, 'utf8'))
+            const config = Array.isArray(manifest) && manifest.length === 1 &&
+              typeof manifest[0]?.Config === 'string' ? manifest[0].Config : ''
+            const match = /^(?:blobs\/sha256\/([a-f0-9]{64})|([a-f0-9]{64})\.json)$/.exec(config)
+            if (!match) throw new Error('UNEXPECTED_MANIFEST')
+            configDigest = `sha256:${match[1] ?? match[2]}`
+          } catch {
+            fail('NEW_IMAGE_CONFIG_DIGEST_UNAVAILABLE')
+          } finally {
+            rmSync(process.env.SAVE_MANIFEST, { force: true })
+          }
+          metadata.environment.new.configDigest = configDigest
+          if (imageStore === 'classic' && configDigest !== null &&
+              metadata.environment.new.id !== configDigest) {
+            fail('NEW_IMAGE_ID_CONFIG_MISMATCH')
+          }
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          if (metadata.infrastructure.length) process.exitCode = 1
+          NODE
+
+      # Same check as ci.yml: deploy.yml's pull check runs node --version in a
+      # 32Mi-limited Pod on the production node. A failure stops before measuring.
+      - name: Check startup of the measured image under 32MiB
+        run: |
+          name="$MEMORY_PREFIX-32mi"
+          set +e
+          docker run --name "$name" --memory=32m --memory-swap=32m \
+            --entrypoint node "$NEW_IMAGE" --version
+          status=$?
+          set -e
+          oom=$(docker inspect -f '{{.State.OOMKilled}}' "$name" || echo unknown)
+          docker rm -f "$name" >/dev/null 2>&1 || true
+          STARTUP_STATUS="$status" STARTUP_OOM="$oom" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/metadata.json`
+          const metadata = JSON.parse(readFileSync(path, 'utf8'))
+          const exitCode = Number(process.env.STARTUP_STATUS)
+          const oomKilled = process.env.STARTUP_OOM === 'true' ? true
+            : process.env.STARTUP_OOM === 'false' ? false : null
+          const success = exitCode === 0 && oomKilled === false
+          metadata.smallMemoryStartup = {
+            result: success ? 'success' : 'failure',
+            memoryLimit: '32m',
+            exitCode: Number.isSafeInteger(exitCode) ? exitCode : null,
+            oomKilled,
+          }
+          if (!success) metadata.infrastructure.push('NEW_IMAGE_32MI_STARTUP_FAILED')
+          writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n')
+          if (!success) {
+            process.stdout.write('::error::32MiB で node --version が失敗しました\n')
+            process.exitCode = 1
+          }
           NODE
 
       - name: Install pnpm
@@ -360,7 +530,6 @@ jobs:
             MEMORY_PREFIX="$MEMORY_PREFIX" MEMORY_NETWORK="$MEMORY_NETWORK" \
             NEW_IMAGE="$NEW_IMAGE" OLD_IMAGE="$OLD_IMAGE" RUNS="$RUNS" \
             CONCURRENCY="$CONCURRENCY" ROUNDS="$ROUNDS" \
-            NEW_TARGET_GLIBC_TUNABLES="$NEW_TARGET_GLIBC_TUNABLES" \
             CLOUDFLARE_TEAM_DOMAIN="$CLOUDFLARE_TEAM_DOMAIN" \
             CLOUDFLARE_AUDIENCE="$CLOUDFLARE_AUDIENCE" \
             "$(command -v node)" scripts/ci/tmp-memory/load.mjs measure
@@ -415,9 +584,255 @@ jobs:
           NODE
           fi
 
+      # Push gate. not-applicable (exit 0): a previous step failed, the PR head is
+      # not a branch of this repository, or the verdict is not pass. anomaly (exit 1):
+      # a normal passing measurement whose records or local image do not hold.
+      # Writes push.json and push=false before exiting in both cases.
+      - name: Decide whether to push the measured image
+        id: push-gate
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          SAME_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+          const root = process.env.MEMORY_ROOT
+          const read = file => {
+            try {
+              return JSON.parse(readFileSync(`${root}/${file}`, 'utf8'))
+            } catch {
+              return null
+            }
+          }
+          const metadata = read('metadata.json')
+          const result = read('result.json')
+          const headSha = process.env.EXPECTED_HEAD_SHA ?? ''
+          const validSha = /^[a-f0-9]{40}$/.test(headSha)
+          const digest = value => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value)
+          const record = {
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            headSha: validSha ? headSha : null,
+            ref: validSha ? `ghcr.io/fumiakic/chumon-hub:tmp-pr399-${headSha}` : null,
+            imageStore: metadata?.environment?.imageStore ?? null,
+            measuredImageId: metadata?.environment?.new?.id ?? null,
+            measuredConfigDigest: metadata?.environment?.new?.configDigest ?? null,
+            outcome: 'not-applicable',
+            reasons: [],
+            pushed: false,
+            verification: 'not-run',
+            failure: null,
+            checks: {},
+            digests: { index: null, manifest: null, config: null, pushOutput: null },
+            tagReference: { digest: null, matchesPushed: null, failure: null },
+          }
+          const reason = code => record.reasons.push(code)
+          if (process.env.JOB_STATUS !== 'success') reason('PREVIOUS_STEP_FAILED')
+          if (process.env.SAME_REPOSITORY !== 'true') reason('NOT_SAME_REPOSITORY')
+          // An unreadable result.json leaves the verdict unknown; it is judged below as an anomaly.
+          if (result && (result.verdict !== '合格' || result.exitCode !== 0)) reason('VERDICT_NOT_PASS')
+          if (record.reasons.length === 0) {
+            record.outcome = 'anomaly'
+            if (!result) reason('RESULT_UNREADABLE')
+            if (!metadata) reason('METADATA_UNREADABLE')
+            if (!validSha || metadata?.headSha !== headSha) reason('HEAD_SHA_MISMATCH')
+            if (metadata?.smallMemoryStartup?.result !== 'success') {
+              reason('SMALL_MEMORY_STARTUP_NOT_SUCCESS')
+            }
+            if (!digest(record.measuredImageId)) reason('MEASURED_IMAGE_ID_MISSING')
+            if (!digest(record.measuredConfigDigest)) reason('MEASURED_CONFIG_DIGEST_MISSING')
+            const current = spawnSync('docker', [
+              'image', 'inspect', '--format', '{{.Id}}', process.env.NEW_IMAGE,
+            ], { encoding: 'utf8', timeout: 30000 })
+            record.checks.prePushImageId = current.status === 0 ? current.stdout.trim() : null
+            if (!digest(record.checks.prePushImageId) ||
+              record.checks.prePushImageId !== record.measuredImageId) {
+              reason('IMAGE_ID_CHANGED_SINCE_MEASUREMENT')
+            }
+            const measured = Array.isArray(result?.measurements)
+              ? result.measurements.filter(entry => entry?.image === 'new') : []
+            record.checks.measuredContainersMatchingImage =
+              measured.filter(entry => entry.targetImageId === record.measuredImageId).length
+            if (measured.length !== 12 || record.checks.measuredContainersMatchingImage !== 12) {
+              reason('MEASURED_CONTAINER_IMAGE_MISMATCH')
+            }
+            if (record.reasons.length === 0) record.outcome = 'eligible'
+          }
+          const push = record.outcome === 'eligible'
+          writeFileSync(`${root}/push.json`, JSON.stringify(record, null, 2) + '\n')
+          appendFileSync(process.env.GITHUB_OUTPUT, `push=${push}\n`)
+          if (record.outcome === 'anomaly') {
+            process.stdout.write(`::error::push の判定が異常: ${record.reasons.join(', ')}\n`)
+            process.exitCode = 1
+          }
+          NODE
+
+      # Stored credentials exist only between this login and the logout below.
+      - name: Log in to GHCR for the push only
+        if: steps.push-gate.outputs.push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # Pushes the local image used for the measurement (no rebuild, no artifact).
+      # A failed post-push check fails the job but keeps the tag; push.json keeps the ref and digests.
+      - name: Push the measured image and verify its identity
+        if: steps.push-gate.outputs.push == 'true'
+        run: |
+          node --input-type=module <<'NODE'
+          import { spawnSync } from 'node:child_process'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const path = `${process.env.MEMORY_ROOT}/push.json`
+          const record = JSON.parse(readFileSync(path, 'utf8'))
+          const save = () => writeFileSync(path, JSON.stringify(record, null, 2) + '\n')
+          const repository = 'ghcr.io/fumiakic/chumon-hub'
+          const digest = value => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value)
+          class PushError extends Error {
+            constructor(code) {
+              super(code)
+              this.code = code
+            }
+          }
+          function docker(args, code) {
+            const result = spawnSync('docker', args, {
+              encoding: 'utf8', timeout: 600000, maxBuffer: 64 * 1024 * 1024,
+            })
+            if (result.status !== 0) throw new PushError(code)
+            return result.stdout
+          }
+          function raw(reference) {
+            try {
+              return JSON.parse(docker(['buildx', 'imagetools', 'inspect', reference, '--raw'],
+                'REMOTE_INSPECT_FAILED'))
+            } catch (error) {
+              throw error instanceof PushError ? error : new PushError('REMOTE_INSPECT_INVALID')
+            }
+          }
+          try {
+            docker(['tag', process.env.NEW_IMAGE, record.ref], 'TAG_FAILED')
+            record.checks.taggedImageId =
+              docker(['image', 'inspect', '--format', '{{.Id}}', record.ref], 'TAG_INSPECT_FAILED').trim()
+            if (record.checks.taggedImageId !== record.measuredImageId) {
+              throw new PushError('TAGGED_IMAGE_ID_MISMATCH')
+            }
+            const output = docker(['push', record.ref], 'PUSH_FAILED')
+            record.pushed = true
+            save()
+            const pushed = [...new Set([...output.matchAll(/digest: (sha256:[a-f0-9]{64})/g)]
+              .map(match => match[1]))]
+            if (pushed.length === 0) throw new PushError('PUSH_OUTPUT_DIGEST_MISSING')
+            if (pushed.length !== 1) throw new PushError('PUSH_OUTPUT_DIGEST_AMBIGUOUS')
+            record.digests.pushOutput = pushed[0]
+            save()
+            // Every fetch that decides the result is pinned to the pushed digest, never the tag.
+            const body = raw(`${repository}@${record.digests.pushOutput}`)
+            let manifest
+            if (Array.isArray(body?.manifests)) {
+              record.digests.index = record.digests.pushOutput
+              const platforms = body.manifests.filter(entry =>
+                entry?.platform?.os === 'linux' && entry?.platform?.architecture === 'amd64' &&
+                !entry?.annotations?.['vnd.docker.reference.type'])
+              if (platforms.length !== 1 || !digest(platforms[0].digest)) {
+                throw new PushError('AMD64_MANIFEST_NOT_UNIQUE')
+              }
+              record.digests.manifest = platforms[0].digest
+              manifest = raw(`${repository}@${platforms[0].digest}`)
+            } else if (body?.config) {
+              record.digests.manifest = record.digests.pushOutput
+              manifest = body
+            } else {
+              throw new PushError('REMOTE_BODY_UNRECOGNIZED')
+            }
+            if (!digest(manifest?.config?.digest)) throw new PushError('REMOTE_CONFIG_DIGEST_MISSING')
+            record.digests.config = manifest.config.digest
+            record.checks.configMatchesMeasured = record.digests.config === record.measuredConfigDigest
+            // Reference only: with the containerd store the local ID is the pushed top-level digest.
+            record.checks.pushedDigestEqualsLocalImageId =
+              record.digests.pushOutput === record.measuredImageId
+            record.verification = record.checks.configMatchesMeasured ? 'passed' : 'failed'
+            if (!record.checks.configMatchesMeasured) record.failure = 'CONFIG_DIGEST_MISMATCH'
+          } catch (error) {
+            record.verification = 'failed'
+            record.failure = error instanceof PushError ? error.code : 'PUSH_STEP_FAILED'
+          }
+          // Reference only (not used for the result): what the tag points to at this moment.
+          if (record.pushed) {
+            try {
+              const tag = JSON.parse(docker(['buildx', 'imagetools', 'inspect', record.ref,
+                '--format', '{{json .Manifest}}'], 'TAG_INSPECT_FAILED'))
+              record.tagReference.digest = digest(tag?.digest) ? tag.digest : null
+              if (!record.tagReference.digest) record.tagReference.failure = 'TAG_DIGEST_MISSING'
+            } catch (error) {
+              record.tagReference.failure = error instanceof PushError ? error.code : 'TAG_INSPECT_INVALID'
+            }
+            if (record.tagReference.digest && record.digests.pushOutput) {
+              record.tagReference.matchesPushed =
+                record.tagReference.digest === record.digests.pushOutput
+            }
+          }
+          save()
+          if (record.verification !== 'passed') {
+            process.stdout.write(`::error::push の同一性の検査が不成立: ${record.failure}\n`)
+            process.exitCode = 1
+          }
+          NODE
+
+      - name: Log out of GHCR after the push
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Write the complete job summary once
         if: always()
-        run: cat "$MEMORY_ROOT/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            cat "$MEMORY_ROOT/summary.md"
+            node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const text = value => value === null || value === undefined ? '—'
+            : String(value).replaceAll('|', '\\|').replaceAll('\n', ' ')
+          let record = null
+          try {
+            record = JSON.parse(readFileSync(`${process.env.MEMORY_ROOT}/push.json`, 'utf8'))
+          } catch {
+            // Reported below as missing.
+          }
+          const lines = ['', '## 合格した成果物の push', '']
+          if (!record) {
+            lines.push('push の記録なし（push していない）')
+          } else {
+            const outcome = {
+              eligible: '対象（push の条件が成立）',
+              'not-applicable': '対象外（push しない）',
+              anomaly: '異常（合格した測定なのに push の前提が不成立。push しない）',
+            }[record.outcome] ?? record.outcome
+            const tag = record.tagReference ?? {}
+            lines.push(
+              `- run: ${text(record.runId)} (attempt ${text(record.runAttempt)})`,
+              `- PR head SHA: ${text(record.headSha)}`,
+              `- push 先: ${text(record.ref)}（:latest は変更しない）`,
+              `- push の判定: ${text(outcome)}${record.reasons?.length ? `（${text(record.reasons.join(', '))}）` : ''}`,
+              `- push: ${record.pushed ? '実施' : '未実施'}`,
+              `- イメージストア: ${text(record.imageStore)}`,
+              `- 測定したイメージの ID: ${text(record.measuredImageId)}`,
+              `- 測定したイメージの config: ${text(record.measuredConfigDigest)}`,
+              `- push の出力の digest（以後の取得はこの digest に固定）: ${text(record.digests?.pushOutput)}`,
+              `- index digest: ${text(record.digests?.index)}`,
+              `- manifest digest (linux/amd64): ${text(record.digests?.manifest)}`,
+              `- config digest (push 後): ${text(record.digests?.config)}`,
+              `- 同一性の検査: ${text(record.verification)}${record.failure ? `（${text(record.failure)}）` : ''}`,
+              `- 参考: 検査の時点でタグが指す digest: ${text(tag.digest)}${tag.failure ? `（${text(tag.failure)}）` : ''}`,
+            )
+            if (tag.matchesPushed === false) {
+              lines.push('- 参考: タグが push した digest と異なる digest を指していた（合否は push した digest で判定）')
+            }
+          }
+          process.stdout.write(lines.join('\n') + '\n')
+          NODE
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve results, per-measurement evidence, and fixtures
         if: always()
@@ -440,7 +855,7 @@ jobs:
       - name: Clean up only this job's temporary resources
         if: always()
         run: |
-          for suffix in load target idp prepare user-old user-new runtime-old runtime-new tunables-new; do
+          for suffix in load target idp prepare user-old user-new runtime-old runtime-new tunables-new 32mi; do
             name="tmp-memory-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$suffix"
             if docker container inspect "$name" >/dev/null 2>&1; then
               docker rm -f "$name"

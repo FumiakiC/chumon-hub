@@ -52,9 +52,14 @@ const diagnosticStatKeys = [
   'file_mapped',
 ]
 const diagnosticEventKeys = ['low', 'high', 'max', 'oom', 'oom_kill']
-const expectedDiagnosticSettings = {
-  newTargetGlibcTunables:
-    'glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072',
+const imageTunables = (metadata, image) => {
+  const recorded = metadata?.environment?.[image]
+  return object(recorded) &&
+    Object.hasOwn(recorded, 'imageGlibcTunables') &&
+    (recorded.imageGlibcTunables === null ||
+      typeof recorded.imageGlibcTunables === 'string')
+    ? { value: recorded.imageGlibcTunables }
+    : null
 }
 
 async function diagnosticsFor(root, metadata, measurements) {
@@ -84,25 +89,15 @@ async function diagnosticsFor(root, metadata, measurements) {
   }
   recordedIssues('metadata', metadata?.diagnostics)
   const settings = {
-    newTargetGlibcTunables:
-      metadata?.diagnosticSettings?.newTargetGlibcTunables ?? null,
+    imageGlibcTunables: {
+      old: imageTunables(metadata, 'old')?.value ?? null,
+      new: imageTunables(metadata, 'new')?.value ?? null,
+    },
     arenaMax: metadata?.environment?.new?.arenaMax ?? null,
     mmapThreshold: metadata?.environment?.new?.mmapThreshold ?? null,
     cpuModel: metadata?.environment?.cpuModel ?? null,
     nproc: metadata?.environment?.nproc ?? null,
     matchingMeasurements: { old: 0, new: 0 },
-  }
-  if (
-    settings.newTargetGlibcTunables !==
-    expectedDiagnosticSettings.newTargetGlibcTunables
-  ) {
-    issue('metadata', 'DIAGNOSTIC_SETTINGS_MISSING_OR_MISMATCHED')
-  }
-  if (settings.arenaMax !== '0x2') {
-    issue('new', 'ARENA_MAX_MISSING_OR_MISMATCHED')
-  }
-  if (settings.mmapThreshold !== '0x20000') {
-    issue('new', 'MMAP_THRESHOLD_MISSING_OR_MISMATCHED')
   }
   if (
     typeof settings.cpuModel !== 'string' ||
@@ -154,6 +149,17 @@ async function diagnosticsFor(root, metadata, measurements) {
       !(
         runtime.glibcVersionRuntime === null ||
         typeof runtime.glibcVersionRuntime === 'string'
+      ) ||
+      !(
+        runtime.canvasVersion === null ||
+        typeof runtime.canvasVersion === 'string'
+      ) ||
+      !(
+        runtime.canvasPlatformPackages === null ||
+        (Array.isArray(runtime.canvasPlatformPackages) &&
+          runtime.canvasPlatformPackages.every(
+            (entry) => typeof entry === 'string'
+          ))
       )
     ) {
       issue(image, 'RUNTIME_MISSING_OR_INVALID')
@@ -177,11 +183,12 @@ async function diagnosticsFor(root, metadata, measurements) {
         const record = measurements.find((entry) => entry.id === id)
         recordedIssues(id, record?.diagnostics)
         const targetGlibcTunables = record?.targetGlibcTunables
+        const expected = imageTunables(metadata, image)
         if (
-          targetGlibcTunables ===
-          (image === 'new'
-            ? expectedDiagnosticSettings.newTargetGlibcTunables
-            : null)
+          expected !== null &&
+          (targetGlibcTunables === null ||
+            typeof targetGlibcTunables === 'string') &&
+          targetGlibcTunables === expected.value
         ) {
           settings.matchingMeasurements[image] += 1
         } else {
@@ -284,21 +291,25 @@ function diagnosticMarkdown(diagnostics) {
     '',
     '### 診断の設定',
     '',
-    `新targetの GLIBC_TUNABLES: ${display(diagnostics.settings.newTargetGlibcTunables ?? '—')}`,
+    'ハーネスは GLIBC_TUNABLES を注入しない。各回のコンテナの値は、イメージ自身の設定（Config.Env）と一致することを前提のゲートで検査する。',
     '',
-    `新イメージの glibc.malloc.arena_max: ${display(diagnostics.settings.arenaMax ?? '—')}`,
+    `旧イメージ自身の GLIBC_TUNABLES: ${display(diagnostics.settings.imageGlibcTunables.old ?? 'null')}`,
     '',
-    `新イメージの glibc.malloc.mmap_threshold: ${display(diagnostics.settings.mmapThreshold ?? '—')}`,
+    `新イメージ自身の GLIBC_TUNABLES: ${display(diagnostics.settings.imageGlibcTunables.new ?? 'null')}`,
+    '',
+    `新イメージの glibc.malloc.arena_max（--list-tunables、記録のみ）: ${display(diagnostics.settings.arenaMax ?? '—')}`,
+    '',
+    `新イメージの glibc.malloc.mmap_threshold（--list-tunables、記録のみ）: ${display(diagnostics.settings.mmapThreshold ?? '—')}`,
     '',
     `ランナーの CPU: ${display(diagnostics.settings.cpuModel ?? '—')}・nproc: ${number(diagnostics.settings.nproc)}`,
     '',
-    `対象設定の一致: 旧 ${diagnostics.settings.matchingMeasurements.old}/12・新 ${diagnostics.settings.matchingMeasurements.new}/12`,
+    `イメージ設定との一致: 旧 ${diagnostics.settings.matchingMeasurements.old}/12・新 ${diagnostics.settings.matchingMeasurements.new}/12`,
     '',
-    '| Image | Node | V8 | uv | glibcVersionRuntime | イメージ ID |',
-    '|---|---|---|---|---|---|',
+    '| Image | Node | V8 | uv | canvas | canvas のプラットフォーム別パッケージ | glibcVersionRuntime | イメージ ID |',
+    '|---|---|---|---|---|---|---|---|',
     ...diagnostics.runtimes.map(
       ({ image, runtime, imageId }) =>
-        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} | ${display(imageId ?? '—')} |`
+        `| ${image} | ${display(runtime?.versions.node ?? '—')} | ${display(runtime?.versions.v8 ?? '—')} | ${display(runtime?.versions.uv ?? '—')} | ${display(runtime?.canvasVersion ?? '—')} | ${display(runtime?.canvasPlatformPackages?.join(', ') || '—')} | ${display(runtime ? (runtime.glibcVersionRuntime ?? 'null') : '—')} | ${display(imageId ?? '—')} |`
     ),
     '',
     '### fixture',
@@ -327,7 +338,7 @@ function diagnosticMarkdown(diagnostics) {
         maxIntervalMs,
         targetGlibcTunables,
       }) =>
-        `| ${image} | ${fixture} | ${run} | ${number(maximum?.elapsedMs)} | ${maximum?.phase ?? '—'} | ${number(maximum?.memoryCurrent)} | ${number(maximum?.stat.anon)} | ${number(maximum?.stat.file)} | ${number(maximum?.stat.kernel)} | ${number(maximum?.stat.shmem)} | ${number(maximum?.stat.slab)} | ${number(events?.max)} | ${number(events?.oom)} | ${number(events?.oom_kill)} | ${sampleCount} | ${number(maxIntervalMs)} | ${display(targetGlibcTunables ?? '—')} |`
+        `| ${image} | ${fixture} | ${run} | ${number(maximum?.elapsedMs)} | ${maximum?.phase ?? '—'} | ${number(maximum?.memoryCurrent)} | ${number(maximum?.stat.anon)} | ${number(maximum?.stat.file)} | ${number(maximum?.stat.kernel)} | ${number(maximum?.stat.shmem)} | ${number(maximum?.stat.slab)} | ${number(events?.max)} | ${number(events?.oom)} | ${number(events?.oom_kill)} | ${sampleCount} | ${number(maxIntervalMs)} | ${display(targetGlibcTunables ?? 'null')} |`
     ),
     '',
     '### 診断データの不備',
@@ -367,9 +378,9 @@ async function summarize(root) {
       invalid('metadata', 'checkout SHA missing or mismatched')
     }
     if (
-      metadata.oldSourceSha !== 'e0d6a9f533c0e207d6da8c93f14edb961b1347b9' ||
+      metadata.oldSourceSha !== '09446ba140df74c45af47c12e4a208c3feb0e7d2' ||
       metadata.oldImage !==
-        'ghcr.io/fumiakic/chumon-hub@sha256:62110fdcb824aa2d53cbf24322a10fa1974a17ce3df8c25067b02699b96bd115'
+        'ghcr.io/fumiakic/chumon-hub@sha256:fe1501549950c0f0b2e32de29547af4a379bbb29f891bdb618d4afd5f071f2a5'
     ) {
       invalid('metadata', 'old source/image mismatch')
     }
@@ -383,9 +394,14 @@ async function summarize(root) {
     }
     if (
       !object(metadata.gates) ||
-      ['sha', 'diff', 'digest'].some((key) => metadata.gates[key] !== true)
+      ['sha', 'diff', 'digest', 'versions'].some(
+        (key) => metadata.gates[key] !== true
+      )
     ) {
       invalid('metadata', 'pre-measurement gate failed or incomplete')
+    }
+    if (metadata.smallMemoryStartup?.result !== 'success') {
+      invalid('metadata', '32MiB startup check failed or missing')
     }
     if (
       !Array.isArray(metadata.difference) ||
@@ -432,6 +448,12 @@ async function summarize(root) {
         'metadata',
         'environment/image ID/runtime user missing or invalid'
       )
+    }
+    if (
+      images.some((image) => imageTunables(metadata, image) === null) ||
+      !/^sha256:[a-f0-9]{64}$/.test(environment?.new?.configDigest ?? '')
+    ) {
+      invalid('metadata', 'image GLIBC_TUNABLES or config digest unrecorded')
     }
   }
 
@@ -507,6 +529,21 @@ async function summarize(root) {
     }
     if (record.infrastructure !== null) {
       invalid(id, `infrastructure ${display(record.infrastructure)}`)
+    }
+    // Precondition gate: the container ran the recorded image with its own GLIBC_TUNABLES.
+    const expectedTunables = imageTunables(metadata, record.image)
+    if (
+      expectedTunables === null ||
+      !Object.hasOwn(record, 'targetGlibcTunables') ||
+      record.targetGlibcTunables !== expectedTunables.value
+    ) {
+      invalid(id, 'target GLIBC_TUNABLES differs from the image setting')
+    }
+    if (
+      typeof record.targetImageId !== 'string' ||
+      record.targetImageId !== metadata?.environment?.[record.image]?.id
+    ) {
+      invalid(id, 'target image ID differs from the recorded image')
     }
     const completion = await readJson(
       join(directory, 'completion.json'),
@@ -786,6 +823,23 @@ async function summarize(root) {
     }
   }
   markdown.push(
+    '',
+    '## 32MiB での起動確認（メモリの判定とは別。deploy.yml の取得の確認と同じ上限）',
+    '',
+    metadata?.smallMemoryStartup
+      ? `結果: ${display(metadata.smallMemoryStartup.result)}・終了コード: ${display(metadata.smallMemoryStartup.exitCode ?? '—')}・OOMKilled: ${display(metadata.smallMemoryStartup.oomKilled ?? '—')}`
+      : '未実施',
+    '',
+    '## 版のゲート（不一致・取得不能は中断）',
+    '',
+    '| 項目 | 旧 | 新 | 一致 |',
+    '|---|---|---|---|',
+    ...(Array.isArray(metadata?.versionGate?.fields)
+      ? metadata.versionGate.fields.map(
+          (entry) =>
+            `| ${display(entry?.field)} | ${display(entry?.old ?? '—')} | ${display(entry?.new ?? '—')} | ${entry?.match === true} |`
+        )
+      : ['| — | — | — | 未実施 |']),
     ...diagnosticMarkdown(diagnostics),
     '',
     '## 環境・SHA・差分・実行ユーザー',
