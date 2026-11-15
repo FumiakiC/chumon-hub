@@ -41,6 +41,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# glibc の malloc の設定（ADR-6 条件 6）。設定なしの測定で、A1 ベクタの入力のメモリが
+# 旧（alpine）の 1.15 倍を超えたため、arena の数を 2 までにし、mmap の閾値を初期値の
+# 131072 に固定する（固定すると、閾値の動的な調整が止まる）。
+# 値を変える、または外すときは、メモリの比較を測り直すこと。
+ENV GLIBC_TUNABLES=glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072
+
 # セキュリティのため非ルートユーザーを作成
 # uid 1001 を維持し、主グループは nodejs（gid 1001）にする（ADR-6 条件 2）。
 # ホームは alpine の adduser --system と同じく作成する。
