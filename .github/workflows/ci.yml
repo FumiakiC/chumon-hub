@@ -42,6 +42,22 @@ jobs:
 
           cache-to: type=gha,mode=max
 
+      # deploy.yml の取得の確認は、本番ノードで limits.memory: 32Mi の Pod として node --version を実行する.
+      # ここで同じ上限（スワップなし）で起動できないイメージは、本番の切り替え前に必ず止まるため、PR の段階で検知する.
+      - name: Check startup under 32MiB (same limit as the deploy pull check)
+        run: |
+          name=chumon-hub-32mi
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          status=0
+          docker run --name "$name" --memory=32m --memory-swap=32m \
+            --entrypoint node chumon-hub:ci --version || status=$?
+          oom=$(docker inspect -f '{{.State.OOMKilled}}' "$name")
+          if [ "$status" -ne 0 ] || [ "$oom" != 'false' ]; then
+            echo "::error::32MiB で node --version が失敗しました (exit=$status, OOMKilled=$oom)"
+            exit 1
+          fi
+          echo "32MiB startup: ok"
+
       - name: Check production image (raster dependencies, runtime user, temp directory)
         run: |
           docker run --rm --entrypoint node -v "$PWD/scripts/ci:/smoke-scripts:ro" chumon-hub:ci /smoke-scripts/image-checks.mjs

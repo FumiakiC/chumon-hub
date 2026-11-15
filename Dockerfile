@@ -4,7 +4,7 @@
 # digest 再取得例: docker buildx imagetools inspect node:26-trixie-slim --format '{{json .Manifest.Digest}}'
 
 # ステージ 1: 依存関係のインストール (Deps)
-FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS deps
+FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS deps
 WORKDIR /app
 
 # パッケージ定義ファイルをコピー
@@ -19,7 +19,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN npm install -g pnpm@10.33.0 && pnpm i --frozen-lockfile
 
 # ステージ 2: ビルダー (Builder)
-FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS builder
+FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -34,7 +34,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install -g pnpm@10.33.0 && pnpm run build
 
 # ステージ 3: ランナー (Runner)
-FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runner
+FROM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS runner
 WORKDIR /app
 
 # 修正: ENV key=value 形式に変更
