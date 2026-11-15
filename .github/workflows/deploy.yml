@@ -36,6 +36,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # deploy ジョブが、この run で push したイメージの取得を確かめるために使う。
+    outputs:
+      image_name: ${{ steps.meta.outputs.image_name }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       # 起動した SHA（github.sha）ではなく、checkout の時点の main をビルドする。
       # 待機中に置き換えられた run や re-run が、古いコードを :latest にしないため。
@@ -97,19 +101,306 @@ jobs:
             echo "| digest | \`${IMAGE_DIGEST}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # 本番の Deployment は replicas: 1 / maxSurge: 0 で、rollout restart は旧 Pod を先に止める。
+  # イメージを取得できない状態で restart すると本番が止まるため、次の 3 ステップで行う。
+  #   1. Verify image pull on node: この run が push した digest を、本番と同じノードと ghcr-secret で
+  #      取得できることを、使い捨ての Pod で確かめる。Deployment が :latest を参照していなければ止める。
+  #   2. Restart K8s Pod: Deployment の参照を読み直してから restart し、完了を待つ。
+  #   3. Record running image: 稼働中の Pod の imageID と、この run が push した参照をログに残す（比較はしない）。
+  # どのステップにも if: を付けないため、既定の条件 success() により、1 が失敗すれば 2 と 3 は実行されない。
+  # これが「取得を確かめられなければ restart しない」の保証になる。if: や continue-on-error を足さないこと。
+  # スクリプトは本文を取り出して IMAGE_NAME / IMAGE_DIGEST を与え、bash で単体実行しても同じ動作になるように書く。
+  # そのため script: の中に ${{ }} を書かず、値はステップの env と ssh-action の envs で渡す。
+  # script_stop は複数行の if を壊すため使わず、失敗は各スクリプトで明示的に 0 以外で終える。
   deploy:
     needs: build-push
     runs-on: ubuntu-26.04
     steps:
+      - name: Verify image pull on node
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_NAME: ${{ needs.build-push.outputs.image_name }}
+          IMAGE_DIGEST: ${{ needs.build-push.outputs.digest }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: IMAGE_NAME,IMAGE_DIGEST
+          command_timeout: 10m
+          script: |
+            # 取得の確認だけを行う。Deployment には触れない（単体で実行しても restart しない）。
+            # 新しく呼ぶ kubectl の出力はログに出さない。ログには固定の文言と、形式を検証した値だけを出す。
+            # 終了コード: 10 入力 / 11 digest 固定中 / 12 Deployment の参照 / 13 ディスク /
+            #   14 前の Pod の削除 / 15 Pod の作成 / 16 Succeeded にならない / 17 成功後の削除と確認
+            set -u
+            set -o pipefail
+
+            # 取得と展開に見込む容量の予算（1.5GiB）
+            IMAGE_PULL_BUDGET_BYTES=1610612736
+            EXPECTED_IMAGE_NAME='ghcr.io/fumiakic/chumon-hub'
+            LATEST_REF='ghcr.io/fumiakic/chumon-hub:latest'
+            DIGEST_RE='^sha256:[0-9a-f]{64}$'
+            PINNED_REF_RE='^ghcr\.io/fumiakic/chumon-hub@sha256:[0-9a-f]{64}$'
+            POD_RE='^chumon-hub-pull-check(-[a-z0-9]{1,16})?$'
+            NODE_RE='^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$'
+            # 15 桁までに限り、bash の 64 ビット整数の計算があふれないようにする
+            IMAGE_FS_OUT_RE='^([0-9]{1,15}) ([0-9]{1,15})$'
+            # 試験用の上書き（ワークフローからは渡さない）
+            POD="${PULL_CHECK_POD:-chumon-hub-pull-check}"
+            # stats/summary の JSON を標準入力で受け、imageFs の容量と空きを出す。真偽値と負の値は不可
+            IMAGE_FS_PY='
+            import json, sys
+            fs = json.load(sys.stdin)["node"]["runtime"]["imageFs"]
+            values = (fs["capacityBytes"], fs["availableBytes"])
+            if any(type(v) is not int or v < 0 for v in values):
+                sys.exit(1)
+            print(values[0], values[1])
+            '
+
+            # 1. 入力の検証（kubectl を呼ぶ前に行う）
+            if [[ ! "${IMAGE_DIGEST:-}" =~ $DIGEST_RE ]]; then
+              echo 'IMAGE_DIGEST の形式が想定外のため停止した。'
+              exit 10
+            fi
+            if [[ "${IMAGE_NAME:-}" != "$EXPECTED_IMAGE_NAME" ]]; then
+              echo 'IMAGE_NAME が想定外のため停止した。'
+              exit 10
+            fi
+            if [[ ! "$POD" =~ $POD_RE ]]; then
+              echo '確認用の Pod 名の形式が想定外のため停止した。'
+              exit 10
+            fi
+            IMAGE_REF="${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+            # 2. モードの判定（Deployment が :latest を参照しているときだけ続ける）
+            if ! deploy_image="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get deployment chumon-hub -o 'jsonpath={.spec.template.spec.containers[?(@.name=="chumon-hub")].image}' 2>/dev/null)"; then
+              echo 'Deployment の image を読めないため停止した。'
+              exit 12
+            fi
+            if [[ "$deploy_image" == "$LATEST_REF" ]]; then
+              :
+            elif [[ "$deploy_image" =~ $PINNED_REF_RE ]]; then
+              echo 'Deployment が digest 固定中のため、自動デプロイを停止した。稼働状態はこのステップでは検証していない。'
+              exit 11
+            else
+              echo 'Deployment の image が想定外のため停止した。'
+              exit 12
+            fi
+
+            # 3. ディスクのガード
+            if ! node_names_raw="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --request-timeout=15s get nodes -o 'jsonpath={.items[*].metadata.name}' 2>/dev/null)"; then
+              echo 'ディスクのガード: ノードの一覧を読めないため停止した。'
+              exit 13
+            fi
+            set -f
+            node_names=($node_names_raw)
+            set +f
+            if (( ${#node_names[@]} != 1 )) || [[ ! "${node_names[0]}" =~ $NODE_RE ]]; then
+              echo 'ディスクのガード: ノードがちょうど 1 台でない、または名前の形式が想定外のため停止した。'
+              exit 13
+            fi
+            if ! image_fs="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --request-timeout=15s get --raw "/api/v1/nodes/${node_names[0]}/proxy/stats/summary" 2>/dev/null | python3 -I -c "$IMAGE_FS_PY" 2>/dev/null)"; then
+              echo 'ディスクのガード: イメージ用の容量を取得できないため停止した。'
+              exit 13
+            fi
+            if [[ ! "$image_fs" =~ $IMAGE_FS_OUT_RE ]]; then
+              echo 'ディスクのガード: イメージ用の容量の値が想定外のため停止した。'
+              exit 13
+            fi
+            capacity_bytes=$((10#${BASH_REMATCH[1]}))
+            available_bytes=$((10#${BASH_REMATCH[2]}))
+            if (( capacity_bytes == 0 )); then
+              echo 'ディスクのガード: イメージ用の容量が 0 のため評価できず停止した。'
+              exit 13
+            fi
+            if (( available_bytes > capacity_bytes )); then
+              echo 'ディスクのガード: イメージ用の空きが容量を超えているため評価できず停止した。'
+              exit 13
+            fi
+            used_percent=$(( (capacity_bytes - available_bytes) * 100 / capacity_bytes ))
+            # 予算を差し引いた空きが、容量の 20% 以上残ること（両辺を 100 倍して整数で比べる）
+            if (( (available_bytes - IMAGE_PULL_BUDGET_BYTES) * 100 < capacity_bytes * 20 )); then
+              echo "ディスクのガード: 不合格（使用率 ${used_percent}%）。取得の予算を差し引くと空きが 20% を下回るため停止した。"
+              exit 13
+            fi
+            echo "ディスクのガード: 合格（使用率 ${used_percent}%）"
+
+            # 4. 前の run が残した確認用の Pod を削除する（無ければ何もしない）
+            if ! timeout -k 5 50 kubectl --kubeconfig "$HOME/.kube/config" --namespace default delete pod "$POD" --wait=true --timeout=40s --ignore-not-found >/dev/null 2>&1; then
+              echo '前の run の確認用 Pod を削除できないため停止した。'
+              exit 14
+            fi
+
+            # 5. 終了時の後片付け。元の終了コードを保存し、削除を試み、元の終了コードで終える。
+            # 手順 8 で削除を確かめた後は削除を繰り返さない。
+            pod_cleanup_done=0
+            cleanup() {
+              local rc=$?
+              trap - EXIT
+              # 後片付けの途中のシグナルで削除を中断しない（kubectl は timeout で打ち切られる）
+              trap '' HUP INT TERM
+              if (( pod_cleanup_done == 0 )); then
+                if ! timeout -k 5 50 kubectl --kubeconfig "$HOME/.kube/config" --namespace default delete pod "$POD" --wait=true --timeout=40s --ignore-not-found >/dev/null 2>&1; then
+                  echo '後片付け: 確認用 Pod を削除できなかった。次の run の開始時に削除を試みる。'
+                fi
+              fi
+              exit "$rc"
+            }
+            trap cleanup EXIT
+            trap 'exit 129' HUP
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+
+            # 6. 確認用の Pod を作る。マニフェストは標準入力で渡し、ノードにファイルを作らない。
+            # app: chumon-hub のラベルを付けない: 付けると Deployment の ReplicaSet に取り込まれ、
+            #   Service の転送先にもなるため。
+            # imagePullPolicy: Always を明示する: digest 指定で省くと IfNotPresent になり、
+            #   ノードのキャッシュで成功して、ghcr-secret による認証を確かめられないため。
+            # env と chumon-hub-secret は渡さない（node --version だけを実行する）。
+            pull_check_manifest="apiVersion: v1
+            kind: Pod
+            metadata:
+              name: ${POD}
+              namespace: default
+              labels:
+                app.kubernetes.io/name: chumon-hub-pull-check
+            spec:
+              restartPolicy: Never
+              activeDeadlineSeconds: 300
+              automountServiceAccountToken: false
+              enableServiceLinks: false
+              imagePullSecrets:
+                - name: ghcr-secret
+              containers:
+                - name: pull-check
+                  image: ${IMAGE_REF}
+                  imagePullPolicy: Always
+                  command: ['node', '--version']
+                  resources:
+                    requests:
+                      cpu: 10m
+                      memory: 32Mi
+                    limits:
+                      memory: 32Mi"
+            if ! printf '%s\n' "$pull_check_manifest" | timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s create -f - >/dev/null 2>&1; then
+              echo '確認用の Pod を作成できないため停止した。'
+              exit 15
+            fi
+
+            # 7. phase が Succeeded になるのを最大 180 秒待つ
+            wait_started=$SECONDS
+            if ! timeout -k 5 190 kubectl --kubeconfig "$HOME/.kube/config" --namespace default wait pod "$POD" --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s >/dev/null 2>&1; then
+              diag="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get pod "$POD" -o 'jsonpath={.status.phase}{" "}{.status.containerStatuses[?(@.name=="pull-check")].state.waiting.reason}{.status.containerStatuses[?(@.name=="pull-check")].state.terminated.reason}' 2>/dev/null)" || diag=''
+              phase="${diag%% *}"
+              reason="${diag#* }"
+              # 許可リストにある値だけを出す
+              case "$phase" in
+                Pending | Running | Succeeded | Failed | Unknown) ;;
+                *) phase='その他' ;;
+              esac
+              case "$reason" in
+                ErrImagePull | ImagePullBackOff | InvalidImageName | ContainerCreating | CreateContainerConfigError | CreateContainerError | OOMKilled | Error | DeadlineExceeded) ;;
+                *) reason='その他' ;;
+              esac
+              echo "確認用の Pod が 180 秒以内に Succeeded にならなかった（phase: ${phase} / reason: ${reason}）。"
+              exit 16
+            fi
+            elapsed=$((SECONDS - wait_started))
+            pulled_image_id="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get pod "$POD" -o 'jsonpath={.status.containerStatuses[?(@.name=="pull-check")].imageID}' 2>/dev/null)" || pulled_image_id=''
+            if [[ "$pulled_image_id" =~ $PINNED_REF_RE ]]; then
+              echo "確認用の Pod が ${elapsed} 秒で Succeeded になった。imageID: ${pulled_image_id}"
+            else
+              echo "確認用の Pod が ${elapsed} 秒で Succeeded になった。imageID は形式を確かめられないため記録しない。"
+            fi
+
+            # 8. Pod を削除し、消えたことを確かめる
+            if ! timeout -k 5 50 kubectl --kubeconfig "$HOME/.kube/config" --namespace default delete pod "$POD" --wait=true --timeout=40s --ignore-not-found >/dev/null 2>&1; then
+              echo '確認用の Pod を削除できないため失敗とした。'
+              exit 17
+            fi
+            if ! remaining="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get pod "$POD" --ignore-not-found -o name 2>/dev/null)"; then
+              echo '確認用の Pod が消えたことを確かめられないため失敗とした。'
+              exit 17
+            fi
+            if [[ -n "$remaining" ]]; then
+              echo '確認用の Pod が残っているため失敗とした。'
+              exit 17
+            fi
+            pod_cleanup_done=1
+
+            # 9. 成功
+            echo "ノードが ${IMAGE_REF} を取得できることを確かめた。"
+            exit 0
+
       - name: Restart K8s Pod
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
           script: |
-            # 最新の画像をプルして再起動
-            export KUBECONFIG=~/.kube/config
-            kubectl rollout restart deployment/chumon-hub
+            # 取得の確認（前のステップ）の後に Deployment を再起動する。
+            # imagePullPolicy: Always のため、新しい Pod は :latest を取り直して起動する。
+            set -u
+            LATEST_REF='ghcr.io/fumiakic/chumon-hub:latest'
+            # restart の直前に、Deployment が :latest を参照していることを読み直す（値はログに出さない）
+            if ! deploy_image="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get deployment chumon-hub -o 'jsonpath={.spec.template.spec.containers[?(@.name=="chumon-hub")].image}' 2>/dev/null)"; then
+              echo 'Deployment の image を読めないため、restart しなかった。'
+              exit 1
+            fi
+            if [[ "$deploy_image" != "$LATEST_REF" ]]; then
+              echo 'Deployment の image が :latest でないため、restart しなかった。'
+              exit 1
+            fi
+            if ! kubectl --kubeconfig "$HOME/.kube/config" --namespace default rollout restart deployment/chumon-hub; then
+              echo 'rollout restart に失敗した。'
+              exit 1
+            fi
             # 追加: デプロイが完了するまで最大3分間（180秒）待機し、失敗したらエラーにする
-            kubectl rollout status deployment/chumon-hub --timeout=180s
+            kubectl --kubeconfig "$HOME/.kube/config" --namespace default rollout status deployment/chumon-hub --timeout=180s
+
+      - name: Record running image
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_NAME: ${{ needs.build-push.outputs.image_name }}
+          IMAGE_DIGEST: ${{ needs.build-push.outputs.digest }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: IMAGE_NAME,IMAGE_DIGEST
+          command_timeout: 10m
+          script: |
+            # 稼働中の imageID と、この run が push した参照を記録する（記録だけで、一致は判定しない）。
+            set -u
+            set -o pipefail
+            EXPECTED_IMAGE_NAME='ghcr.io/fumiakic/chumon-hub'
+            DIGEST_RE='^sha256:[0-9a-f]{64}$'
+            PINNED_REF_RE='^ghcr\.io/fumiakic/chumon-hub@sha256:[0-9a-f]{64}$'
+            # Pod 一覧の JSON を標準入力で受け、削除中でない Pod がちょうど 1 つのとき、その chumon-hub コンテナの imageID を出す
+            RUNNING_IMAGE_PY='
+            import json, sys
+            pods = [p for p in json.load(sys.stdin)["items"] if p["metadata"].get("deletionTimestamp") is None]
+            if len(pods) != 1:
+                sys.exit(1)
+            ids = [c.get("imageID") for c in pods[0].get("status", {}).get("containerStatuses", []) if c.get("name") == "chumon-hub"]
+            if len(ids) != 1 or not isinstance(ids[0], str):
+                sys.exit(1)
+            print(ids[0])
+            '
+
+            if [[ ! "${IMAGE_DIGEST:-}" =~ $DIGEST_RE ]] || [[ "${IMAGE_NAME:-}" != "$EXPECTED_IMAGE_NAME" ]]; then
+              echo 'IMAGE_NAME または IMAGE_DIGEST が想定外のため、記録しなかった。'
+              exit 1
+            fi
+            if ! running_image_id="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --namespace default --request-timeout=15s get pods -l app=chumon-hub -o json 2>/dev/null | python3 -I -c "$RUNNING_IMAGE_PY" 2>/dev/null)"; then
+              echo '稼働中の Pod がちょうど 1 つでない、または imageID を読めないため、記録しなかった。'
+              exit 1
+            fi
+            if [[ ! "$running_image_id" =~ $PINNED_REF_RE ]]; then
+              echo '稼働中の imageID の形式が想定外のため、記録しなかった。'
+              exit 1
+            fi
+            echo "稼働中の imageID: ${running_image_id}"
+            echo "この run が push した参照: ${IMAGE_NAME}@${IMAGE_DIGEST}"

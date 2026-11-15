@@ -29,6 +29,8 @@ Pod の `limits` はその Pod の上限にすぎず、OS とコントロール�
 
 無制限の system pods の使用量が残余に収まる保証はない。適用前後の実測と継続監視が必要。
 
+デプロイのたびに、[`deploy.yml`](../../.github/workflows/deploy.yml) の取得の確認が、確認用の Pod（`chumon-hub-pull-check`。memory の requests と limits は 32Mi）を、旧 Pod が稼働している間に作る（[`branch-and-deploy.md`](branch-and-deploy.md) §2.1）。確認用の Pod の requests は、配置の時点で考慮される。その Pod がある間、limits の合計は 512Mi + 170Mi + 32Mi = 714Mi になり、上の表の「残り」は約 160Mi に減る。32Mi の limit はコンテナのメモリの使用を制限するが、containerd によるイメージの取得と展開の負荷は制限しない。以前は旧 Pod を止めた後に起きていたこの負荷が、旧 Pod の稼働中に起きるようになった。2026-11-15 に、ノードが取得していなかった過去のビルドのイメージで観測した結果と、その限界は、同書 §2.1 にある。
+
 更新中の Pod 数についても予算を守る。`replicas: 1` に既定の RollingUpdate を適用すると `maxSurge: 25%` は 1 に切り上げられ（`maxUnavailable: 25%` は 0 に切り捨てられる）、更新のたびに一時的に 2 Pod が並ぶ。memory limit の合計は 1024Mi となり上記予算を超えるため、`maxSurge: 0` / `maxUnavailable: 1` を明示して surge を禁止する。**代償として、デプロイのたびに旧 Pod の停止から新 Pod の Ready までの数十秒、サービスが停止する。** 単一ノード・`replicas: 1` の構成では無停止更新と予算遵守を両立できないため、予算側を優先する。
 
 ## 適用前の記録
@@ -116,7 +118,7 @@ kubectl get pods -l app=chumon-hub -o wide
 
 **`kubectl apply` が `configured` を返しても、反映された証拠にはならない。** Pod template に差分が無ければアノテーションだけが更新され、rollout も起きずに `successfully rolled out` が即座に返る。**Pod 名が変わったことを必ず確認する。** 2026-09-19 の適用作業では、ホスト上に 8 か月前の `~/k8s/deployment.yaml` が残っており、それを apply して「成功したのに何も変わらない」状態になった。
 
-**現行の [deploy.yml](../../.github/workflows/deploy.yml) は `kubectl rollout restart` と状態確認だけを行い、マニフェストを apply しない。この `kubectl apply` は手動でしか行われない。** ノード設定の配置・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
+**現行の [deploy.yml](../../.github/workflows/deploy.yml) は、イメージの取得の確認・`kubectl rollout restart`・状態確認・稼働中のイメージの記録を行い、マニフェストを apply しない。この `kubectl apply` は手動でしか行われない。** ノード設定の配置・k3s 再起動も自動化されていない。`k8s/` 全体を再帰的に apply するとホスト用設定まで対象になるため、ファイルを明示する。
 
 **この非自動化の帰結として、repo のマニフェストと本番の実体は乖離しうる。** 2026-09-19 時点で `env` の 2 項目（Cloudflare の team domain / audience）が repo では `secretKeyRef`、本番では平文の `value` になっており、`apply` が型不整合で拒否された。**repo のマニフェストをレビューしても本番を検証したことにはならない。** 2026-10-10 に `fix/manifest-drift` ① として照合と是正を行い、差分が無いことを確かめた（[k3s-live-state.md](k3s-live-state.md)）。適用前には、同文書の手順で本番と repo を照合すること。`kubectl get deploy chumon-hub -o yaml` の全文は平文の秘匿値を含みうるため、差分の確認には使わない。
 
@@ -146,7 +148,7 @@ curl --fail --include http://127.0.0.1:18080/healthz
 - `evictionHard` に `memory.available: 200Mi`、`nodefs.available: 5%`、`imagefs.available: 5%` が反映されている。
 - 既存 Pod に新たな Evicted / Pending がなく、アプリが Running / Ready。OOMKilled や再起動の増加、Node の MemoryPressure がない。
 - アプリの memory limit が 512Mi、3つの probe が `/healthz`、startup 5秒/3秒/24回、liveness 30秒/10秒/5回、readiness 10秒/5秒/3回になっている。
-- Deployment の `strategy` が `maxSurge: 0` / `maxUnavailable: 1` で、rollout 中に chumon-hub の Pod が 2 つ並ばない。
+- Deployment の `strategy` が `maxSurge: 0` / `maxUnavailable: 1` で、rollout 中に chumon-hub の Pod が 2 つ並ばない（デプロイの取得の確認が作る `chumon-hub-pull-check` は別の Pod で、restart の前に削除される。「メモリ予算」）。
 - `/healthz` が HTTP 200、本文 `ok`、`cache-control: no-store` を返す。`proxy.ts` は無変更で、このパスは matcher の対象外。
 - `/healthz` はアプリ層では無認証のため、外部からの到達は前段の Cloudflare Access が防いでいることを確認する。Access のポリシーがホスト全体に掛かっていればよく、パス単位の除外があるとこのパスが公開される。
 
