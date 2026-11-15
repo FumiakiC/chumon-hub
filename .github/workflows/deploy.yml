@@ -187,7 +187,14 @@ jobs:
               exit 12
             fi
 
-            # 3. ディスクのガード
+            # 3. 前の run が残した確認用の Pod を削除する（無ければ何もしない）。
+            # ディスクのガードで止まる run でも、残った Pod の削除を試みるように、ガードより先に行う
+            if ! timeout -k 5 50 kubectl --kubeconfig "$HOME/.kube/config" --namespace default delete pod "$POD" --wait=true --timeout=40s --ignore-not-found >/dev/null 2>&1; then
+              echo '前の run の確認用 Pod を削除できないため停止した。'
+              exit 14
+            fi
+
+            # 4. ディスクのガード
             if ! node_names_raw="$(timeout -k 5 20 kubectl --kubeconfig "$HOME/.kube/config" --request-timeout=15s get nodes -o 'jsonpath={.items[*].metadata.name}' 2>/dev/null)"; then
               echo 'ディスクのガード: ノードの一覧を読めないため停止した。'
               exit 13
@@ -224,12 +231,6 @@ jobs:
               exit 13
             fi
             echo "ディスクのガード: 合格（使用率 ${used_percent}%）"
-
-            # 4. 前の run が残した確認用の Pod を削除する（無ければ何もしない）
-            if ! timeout -k 5 50 kubectl --kubeconfig "$HOME/.kube/config" --namespace default delete pod "$POD" --wait=true --timeout=40s --ignore-not-found >/dev/null 2>&1; then
-              echo '前の run の確認用 Pod を削除できないため停止した。'
-              exit 14
-            fi
 
             # 5. 終了時の後片付け。元の終了コードを保存し、削除を試み、元の終了コードで終える。
             # 手順 8 で削除を確かめた後は削除を繰り返さない。

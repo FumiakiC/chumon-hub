@@ -125,7 +125,7 @@ repo の `k8s/service.yaml` には 2026-01-12（`ac7b50c`）に `name: http` が
 | 2026-10-10 22:40 | Service に `ports[0].name: http` を反映した | 本書の「Service のポート名の是正」 |
 | 2026-11-14 | 照合した（比較元 `be3206c`）。比較対象の3オブジェクトで未確認 0・平文 0・相違 0、段階2も差分なし。この後の手動のデプロイの前の確認 | 照合の出力 |
 | 2026-11-15 00:10 頃 | `ghcr-secret` を作り直した（トークンが 2026-11-10 に期限切れになっていたため）。`kubectl create secret docker-registry … --dry-run=client -o yaml` の出力を `kubectl replace` に渡し、続けて ImagePullBackOff の Pod を削除して作り直させた。新しいトークンは classic の Personal access token で、期限は 2027-02-13。この操作の後の照合は未実施 | 操作者の記録、[インシデントレポート](../incidents/2026-11-14-ghcr-pull-secret-expiry.md) |
-| 2026-11-15 13:00〜14:25 頃 | `fix/deploy-pull-check` のマージの前の試験で、確認用の Pod（`chumon-hub-pull-check-t5`・`chumon-hub-pull-check-t4`・`chumon-hub-pull-check-t2`）を作成し、削除した（[`branch-and-deploy.md`](branch-and-deploy.md) §2.1）。取得の負荷を観測するために、過去のビルドのイメージ 3 件を対象に、取得の試験を行った。1 回目と 3 回目は、確認用の Pod の成功を確かめた。2 回目は、メモリの記録と content store の使用量の増加が残るが、取得・展開・起動の完了は確認できない。試験で取得したデータは削除せず、kubelet の GC に任せる。Deployment・Service・Secret は変更していない。本番の Pod は、試験の前後で同じだった（名前・再起動 0 回・開始の時刻）。確認用の Pod は残っていない。この操作の後の照合は未実施 | 操作者の記録 |
+| 2026-11-15 13:00〜14:25 頃 | #408（`fix/deploy-pull-check`）のマージの前の試験で、確認用の Pod（`chumon-hub-pull-check-t5`・`chumon-hub-pull-check-t4`・`chumon-hub-pull-check-t2`）を作成し、削除した（[`branch-and-deploy.md`](branch-and-deploy.md) §2.1）。取得の負荷を観測するために、過去のビルドのイメージ 3 件を対象に、取得の試験を行った。1 回目と 3 回目は、確認用の Pod の成功を確かめた。2 回目は、メモリの記録と content store の使用量の増加が残るが、取得・展開・起動の完了は確認できない。試験で取得したデータは削除せず、kubelet の GC に任せる。Deployment・Service・Secret は変更していない。本番の Pod は、試験の前後で同じだった（名前・再起動 0 回・開始の時刻）。確認用の Pod は残っていない。この操作の後の照合は未実施 | 操作者の記録 |
 
 未確認: 2026-09-19 より前に、`API_SECRET` がアプリにどう渡っていたか。アプリは `API_SECRET` が無いとトークンの暗号化で失敗する作り（`lib/crypto.ts`）。現在は Secret 経由で渡っていることを確認済み。
 
@@ -136,7 +136,7 @@ repo のマニフェストに無く本番にだけある項目は、2026-10-10 �
 - API の既定値: `revisionHistoryLimit`、`terminationGracePeriodSeconds`、`dnsPolicy`、`restartPolicy`、`schedulerName`、`securityContext`、probe の `scheme` と `successThreshold`、ポートの `protocol`、`terminationMessagePath` と `terminationMessagePolicy`、cloudflared の `imagePullPolicy`・`strategy`・`progressDeadlineSeconds`、Service の `clusterIP`・`ipFamilies`・`ipFamilyPolicy`・`sessionAffinity`・`internalTrafficPolicy`・`type`
 - 自動で付く値: `deployment.kubernetes.io/revision` 注釈、`kubectl rollout restart` が付ける `restartedAt` 注釈、last-applied 注釈
 
-2026-11-15 以降は、デプロイの間だけ、[`deploy.yml`](../../.github/workflows/deploy.yml) が作る確認用の Pod（`default` namespace の `chumon-hub-pull-check`。ラベルは `app.kubernetes.io/name: chumon-hub-pull-check`）がある（[`branch-and-deploy.md`](branch-and-deploy.md) §2.1）。restart の前に削除される。デプロイが動いていないのに残っている場合は、後片付けが届かなかったもので、次の run が開始時に削除する。手動で削除してもよい。`app: chumon-hub` のラベルを持たないので、Service の転送先と、照合スクリプトの Pod の選択（`-l app=chumon-hub`）には入らない。
+2026-11-15 以降は、デプロイの間だけ、[`deploy.yml`](../../.github/workflows/deploy.yml) が作る確認用の Pod（`default` namespace の `chumon-hub-pull-check`。ラベルは `app.kubernetes.io/name: chumon-hub-pull-check`）がある（[`branch-and-deploy.md`](branch-and-deploy.md) §2.1）。restart の前に削除される。デプロイが動いていないのに残っている場合は、後片付けが届かなかったものである（run の中断や API の障害では、Pending や Running のまま残ることもある）。通常の `:latest` の参照を確認できた run は、ディスクのガードの前に、残った Pod の削除を試みる。Deployment が digest に固定されている間など、そこまで進まない run は、自動では削除しない。手動で削除してもよい。`app: chumon-hub` のラベルを持たないので、Service の転送先と、照合スクリプトの Pod の選択（`-l app=chumon-hub`）には入らない。
 
 ## 確認の範囲
 
