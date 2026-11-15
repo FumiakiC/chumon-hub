@@ -38,11 +38,62 @@
 
 移行エポックで §3 に置き換える。
 
-- main への push（`docs/**` と `**.md` だけの変更を除く）で [`deploy.yml`](../../.github/workflows/deploy.yml) が起動し、イメージをビルドして GHCR の `:latest` に push し、k3s の Deployment を `rollout restart` する。STG は無く、本番への反映に承認は無い。
+- main への push（`docs/**` と `**.md` だけの変更を除く）で [`deploy.yml`](../../.github/workflows/deploy.yml) が起動し、イメージをビルドして GHCR の `:latest` に push する。続けて、ノードがそのイメージを取得できることを確かめ（§2.1）、k3s の Deployment を `rollout restart` し、稼働中のイメージを記録する。STG は無く、本番への反映に承認は無い。
 - ビルドするのは、起動した SHA ではなく、checkout の時点の main である（#374）。待機中に置き換えられた run や re-run が、古いコードを `:latest` にしないため。ジョブサマリに、起動した SHA・ビルドした SHA・digest を記録する。
 - 手動の再デプロイは main からの `workflow_dispatch` で行い、run の Re-run は使わない（手順と理由は [`dependabot-automerge.md`](dependabot-automerge.md) の「障害時の切り分けと巻き戻し」）。
 - 巻き戻しは main の revert で行う（計画書 エポック表 1c の②③）。
 - Dependabot の自動マージの分も、マージでそのまま本番にデプロイされる。
+
+### 2.1 restart の前の、取得の確認（#408 / 2026-11-15）
+
+本番の Deployment は `maxSurge: 0` / `replicas: 1` で、`rollout restart` は旧 Pod を先に止める。ノードが新しいイメージを取得できない状態で restart すると、本番が止まる（[2026-11-14 のインシデント](../incidents/2026-11-14-ghcr-pull-secret-expiry.md)）。そのため、restart の前に取得を確かめ、確かめられなければデプロイを失敗させて restart しない。
+
+deploy ジョブは、次の 3 ステップで動く。手順と終了コードの正は [`deploy.yml`](../../.github/workflows/deploy.yml) である。
+
+1. **取得の確認**: この run が push した digest を、本番と同じノード・同じ `ghcr-secret` で取得できることを、使い捨ての Pod（`chumon-hub-pull-check`）で確かめる。Pod は `imagePullPolicy: Always` を明示し、`node --version` だけを実行して終わる。メモリの上限は 32Mi（[`k3s-node-config.md`](k3s-node-config.md) の「メモリ予算」）。
+2. **restart**: Deployment が `:latest` を参照していることを読み直してから `rollout restart` し、完了を待つ。
+3. **記録**: 稼働中の Pod の `imageID` と、この run が push した参照を、ログに出す。
+
+- どのステップにも `if:` を付けていない。既定の条件により、1 が失敗すれば 2 と 3 は実行されない。これが「確かめられなければ restart しない」の保証なので、`if:` や `continue-on-error` を足さない。
+- **ディスクのガード**: 1 は、取得の前に、ノードのイメージ用の領域（kubelet の stats の `imageFs`）の空きを読む。空きから取得の予算（1.5GiB）を引いた残りが、容量の 20% に満たなければ、取得せずに失敗する。値を読めない場合も失敗する。予算は実測値ではなく、余裕を含めて決めた見積もりで、必要な容量の上限を保証しない（2026-11-15 のイメージは、圧縮後が約 129MiB、展開後が約 312MiB）。ベースイメージを変えるとき、ノードのディスクを変えるとき、大きな依存を足すときに見直す。
+- **Deployment が digest に固定されている間**（退避の間。§2.2）は、1 が「digest 固定中」の文言で失敗し、restart しない。このとき run は失敗と表示されるが、build-push ジョブが成功していれば、イメージは `:latest` に push されている。Deployment の参照が `:latest` でも digest だけの形でもない場合（タグと digest の併記を含む）も、1 が失敗する。
+- **稼働中のイメージの一致は、自動では確かめない。** 3 は記録だけで、2 つの値が違っていても失敗しない。通常のワークフローどうしは `concurrency` で直列化されるが、手動の操作との競合や、取得を確かめた後の状態の変化は残る。2026-11-15 の時点で、このノードの `imageID` は image index の digest で、build-push の `digest` 出力と同じ形だった。
+
+この確認が塞がないもの:
+
+- 確認の後から restart の取得までの間に、認証情報・レジストリ・ネットワーク・`:latest` が変わる場合。restart の取得でも、`Always` のため、レジストリへの問い合わせと認証が要る。
+- デプロイを伴わないコンテナの再起動と、取得できたイメージが起動に失敗する場合（同インシデントの §6.3）。確認用の Pod は `node --version` を実行するだけで、アプリの起動は確かめない。
+- 確認の取得と展開は、旧 Pod が稼働している間に、ノードのメモリとディスクを使う。
+
+マージの前に確かめた範囲（2026-11-15。ノードで、ステップ 1 と 3 のスクリプトを単体で実行した）: 今の本番の digest での成功（5 回）、存在しない digest と存在しない Secret での失敗、kubectl が応答しない場合の打ち切り、digest 固定中の停止。GitHub Actions から SSH を経由した 3 ステップの通しは、マージ後の最初の run が初めてになる。
+
+まだノードに無いレイヤーを取得するときの負荷は、同じ日に、ノードが取得していなかった過去のビルドのイメージで、ステップ 1 のスクリプトを実行して観測した。本番の Pod が稼働している状態での観測である。記録が揃っているのは 3 回目で、1 回目と 2 回目は補助の記録として扱う。各回の image index の digest・採取の件数・前後の値は、[#408](https://github.com/FumiakiC/chumon-hub/pull/408) の本文にある。
+
+| 回 | イメージ（ビルドの時期） | 未取得のレイヤー（圧縮後） | メモリの空きの、観測できた最小値（開始前） | 記録 |
+|---|---|---|---|---|
+| 1 | `sha256:83034d19…`（2026-06-28） | 2 個・約 12MB | 794MiB（866〜888MiB） | ステップ 1 は終了コード 0 と表示。測定のスクリプト自体の終了コードは未記録 |
+| 2 | `sha256:8ce8bc96…`（2026-04-15） | 9 個・約 77MB | 820MiB（927〜929MiB） | メモリの記録だけが残る。取得・展開・起動の完了と終了コードは、この記録だけでは確認できない |
+| 3 | `sha256:ced68b86…`（2026-04-11） | 9 個・約 70MB | 884MiB（918〜981MiB） | 終了コード 0（ステップ 1 も、測定のスクリプトも） |
+
+- メモリの空きは、kubelet の退避の判定と同じ求め方（ノードの容量 − working set）で、退避のしきい値は 200Mi である。値は、kubelet の summary API を約 1.2 秒ごとに取得した観測値で、各採取が新しい統計値とは限らない。表は観測できた最小値で、採取の間や、統計の更新の間の短い落ち込みは捕捉できない。
+- 2 回目と 3 回目の後で、本番の Pod が試験の前と同じ名前のままで、再起動が 0 回であることを確かめた。1 回目と 3 回目では、退避された Pod は無く、MemoryPressure・DiskPressure は False だった。
+- ディスクの前後の値が残る 1 回目と 3 回目では、イメージ用の領域の空きの減少は、未取得のレイヤーの圧縮後の大きさの約 4.1〜4.5 倍だった。この 2 例の比率を今のイメージの全体（圧縮後 約 129MiB）に当てはめると、約 0.6GiB になる。イメージ用の領域はノードのルートと同じファイルシステムで、他の書き込みも含みうる参考の値であり、必要な容量の上限ではない。
+- 測ったのは Alpine の過去のイメージである。今のイメージそのものと、ベースを変えるイメージ（ADR-6 の trixie-slim）は測っていない。後者は、その実装の PR で同じ方法で測る。
+
+### 2.2 退避（digest への固定）の前に、デプロイを止める手順
+
+新しいイメージに問題があって、Deployment を前の digest に固定して退避するとき（手順の本体は、ADR-6 の実装の PR で定める）は、実行中のデプロイと競合させない。ステップ 2 は restart の直前に参照を読み直すが、読み直しと restart の間の隙間は塞いでいない。この手順は、2026-11-15 の時点で、実地では行っていない。
+
+1. Build and Deploy のワークフローを無効化する（新しい run を起動させない）。
+2. 待機中・キュー中の run を取り消す。無効化しても、既にある run は取り消されない。
+3. 実行中の run を取り消す。ビルドの完了は待たない。run の画面で、どのステップまで進んだかを確かめる。
+4. Deployment を前の digest に固定する。参照は `ghcr.io/fumiakic/chumon-hub@sha256:…` の、digest だけの形にする。失敗している rollout の完了は待たず、この切り替えで置き換える。
+5. 取り消した run の、ノードの側の処理が終わったことを確かめる。GitHub での取り消しは runner の側のプロセスを止めるもので、ノードの側の処理が止まったことは保証しない。その run の SSH セッション（端末が無く、開始の時刻が run のステップと合い、子孫にこのワークフローの `kubectl` があるもの）だけを特定し、残っていれば終わらせる。特定できない場合は、推測で他のセッションを終わらせない。
+6. Deployment の image が固定のままで、前の digest の Pod が Ready であり、Cloudflare 経由でアクセスできることを確かめる。
+7. ワークフローを有効にする。固定している間、以後の run は §2.1 のステップ 1 で止まる。
+
+- 取り消した run の `rollout restart` が、4 の後に届くことがある。`rollout restart` は Deployment の image を書き換えないので、固定は解けないが、固定した digest の Pod の再起動がもう 1 回起き、その再起動でも取得や起動に失敗しうる。
+- 固定を解いて通常のデプロイに戻すときは、切り戻しの PR の build-push が成功したことを確かめ、そのイメージを検査してから、Deployment を repo のマニフェストどおり（`:latest`）に戻す。固定している間の run は失敗と表示されるので、deploy ジョブの成功を、戻す条件にしない。
 
 ## 3. デプロイの流れ（移行エポックで導入。Cloud Run）
 
@@ -134,4 +185,5 @@ hotfix 用のブランチは作らない。`fix/` のブランチから同じ流
 - Google Cloud: [Manage revisions](https://docs.cloud.google.com/run/docs/managing/revisions)（サービスあたり 1,000 の上限と自動の削除、手動の削除と削除できない条件）
 - Google Cloud: [Deploying container images](https://docs.cloud.google.com/run/docs/deploying)（タグの digest への解決、使えるレジストリ）
 - Google Cloud: [Restrict network ingress](https://docs.cloud.google.com/run/docs/securing/ingress)（ingress はサービスの設定）
+- §2.1 と §2.2 の根拠（2026-11-15 に確認）: Kubernetes: [Images](https://kubernetes.io/docs/concepts/containers/images/)（`Always` はコンテナを起動するたびにレジストリに問い合わせる、digest を指定して `imagePullPolicy` を省くと `IfNotPresent` になる）、[ReplicaSet](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/)（セレクタに合うラベルの Pod は ReplicaSet に取り込まれる）、[Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)（rollout の途中の更新は新しい ReplicaSet に切り替わる）。GitHub Docs: [Expressions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions)（ステップの既定の条件 `success()`）、[Workflow cancellation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)、[Disabling and enabling a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)（無効化は既存の run を取り消さない）
 - Google Cloud SDK 570.0.0 の `gcloud run deploy --help` / `gcloud run services update-traffic --help`（`SERVICE` は引数か対話の入力で与える）。資格情報の無い環境での実行で、非対話のとき、`SERVICE` を省いた `gcloud run deploy` と、リージョンの設定（`run/region`）が無い状態で `--region` を省いた `update-traffic` が失敗することを確認した（2026-10-12）
