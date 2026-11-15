@@ -94,7 +94,7 @@ docker run -p 3000:3000 -e GOOGLE_API_KEY=your_api_key chumon-hub
 ### CI/CD パイプライン概要
 
 - **Build & Push**: main ブランチへのプッシュをトリガーに Docker イメージをビルドし、GHCR (GitHub Container Registry) へプッシュします
-- **Deploy**: SSH 経由で K3s ホストに接続し、`kubectl rollout restart` を実行して最新のイメージを反映させます
+- **Deploy**: SSH 経由で K3s ホストに接続し、ノードが新しいイメージを取得できることを確かめてから、`kubectl rollout restart` を実行して最新のイメージを反映させます
 
 ### マニフェストの適用（初期セットアップ時）
 
