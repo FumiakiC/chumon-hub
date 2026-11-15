@@ -1,6 +1,6 @@
 # ADR-6: 本番と開発のコンテナを glibc（Debian trixie-slim）に揃える
 
-- 状態: 決定 2026-10-17（揃える方向と、ベースイメージを digest で固定する方針を決めた。実装と検証は別の PR で行う）。2026-10-18 に次アクションの条件 2 を訂正（実行ユーザーの主グループ）
+- 状態: 決定 2026-10-17（揃える方向と、ベースイメージを digest で固定する方針を決めた。実装と検証は別の PR で行う）。2026-10-18 に次アクションの条件 2 を訂正（実行ユーザーの主グループ）。2026-11-15 に、実装の PR（#399）の測定の結果により、runner の `GLIBC_TUNABLES` の追加と、条件 9 で読む値を追記。2026-11-16 に、条件 3 の確認の時点を訂正（マージの前は設定の検査、マージの後は実際の検知）
 - 関連: [ADR-4](ADR-4-base-image.md)（本 ADR で置換）／[ADR-1](ADR-1-runtime.md)（ADR-4 の再検討トリガ 1 の発火元）／計画書 基本設計 §4「移行エポック詳細計画」の順序 1／本番 `Dockerfile`／開発 `.devcontainer/Dockerfile.dev`／`.github/dependabot.yml`／`.github/workflows/dependabot-auto-merge.yml`／`.github/workflows/deploy.yml`／[`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md)／[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md)
 
 ## 背景 / 課題
@@ -53,14 +53,14 @@
 
 ## 受容するリスク（eyes open）
 
-- **メモリの出方**: glibc と musl はメモリアロケータが違い、ネイティブ依存（`@napi-rs/canvas`）を並行して動かしたときの RSS の出方が変わりうる。k3s の本番はアプリのメモリ上限が 512Mi で、[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md)と同じ系統の問題になりうる。実装の PR で、マージの前に旧・新のイメージのメモリを比べ、適用の後にも本番で確かめる（下記「次アクション」）。
+- **メモリの出方**: glibc と musl はメモリアロケータが違い、ネイティブ依存（`@napi-rs/canvas`）を並行して動かしたときの RSS の出方が変わりうる。k3s の本番はアプリのメモリ上限が 512Mi で、[2026-09-19 インシデント](../incidents/2026-09-19-crop-concurrency-node-exhaustion.md)と同じ系統の問題になりうる。実装の PR で、マージの前に旧・新のイメージのメモリを比べ、適用の後にも本番で確かめる（下記「次アクション」）。 2026-11-15 追記: 実装の PR（#399）の測定（CI の合成入力。本番の入力での実測ではない）で、設定なしの trixie-slim は、A1 ベクタの入力の `memory.peak` が旧の 1.15 倍を超えた（run 43714693914）。runner に `GLIBC_TUNABLES=glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=131072` を足した測定は、承認済みの基準をすべて満たした（run 43717123101）。この設定を外す、または変えるときは、メモリの比較を測り直す。
 - **イメージのサイズ**: Debian の slim は alpine より大きい。Cloud Run の起動時間には影響しないが、レジストリの容量と、k3s で pull する時間は増える。
 - **攻撃面**: slim でも、alpine より含まれるパッケージが多い。(B2) の distroless は Phase 4.5 の脅威モデルで再評価する。
 - **実行環境のカーネル**: glibc でも、Cloud Run のどちらの世代のカーネルが Tier 1 の条件に合うかは、文書に無い。STG で診断情報として記録するが、それで条件に合うことを証明したことにはしない。
 
 ## 影響範囲 / 依存
 
-- 実装の PR で変えるもの: 本番 `Dockerfile`（3 ステージのベース、`apk add --no-cache libc6-compat` の削除、非 root のユーザーの作成のコマンド）、開発 `.devcontainer/Dockerfile.dev`（ベースと、本番を alpine と説明しているコメント）、`.github/dependabot.yml`（docker のエコシステムを `/` と `/.devcontainer` に追加）、`.github/workflows/deploy.yml` の `paths-ignore` のコメント、[`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md) の「ベースイメージを可変のタグで参照している」という記述。
+- 実装の PR で変えるもの: 本番 `Dockerfile`（3 ステージのベース、`apk add --no-cache libc6-compat` の削除、非 root のユーザーの作成のコマンド、runner の `GLIBC_TUNABLES`。最後の項目は 2026-11-15 追記）、開発 `.devcontainer/Dockerfile.dev`（ベースと、本番を alpine と説明しているコメント）、`.github/dependabot.yml`（docker のエコシステムを `/` と `/.devcontainer` に追加）、`.github/workflows/deploy.yml` の `paths-ignore` のコメント、[`../ops/branch-and-deploy.md`](../ops/branch-and-deploy.md) の「ベースイメージを可変のタグで参照している」という記述。
 - 実装の PR は、現行の `deploy.yml` では main へのマージで k3s の本番へデプロイされる。Cloud Run の準備だけでは済まない。
 - 計画書 基本設計 §4「移行エポック詳細計画」の順序 1: 実装と検証は、STG の試行の前に終える。
 
@@ -72,7 +72,7 @@
 
 1. CI の品質ゲート・Docker のビルド・本番イメージ内のラスタ依存のチェック・起動スモーク・クロップのスモークが通る。
 2. 完成した runner のイメージで、`@napi-rs/canvas` の読み込み、PDF のクロップ、非 root のユーザーによる一時ディレクトリへの書き込みができる。非 root の実行ユーザーの uid（1001）は維持し、主グループは nodejs（gid 1001）に統一する。旧イメージの実測の gid と変更の理由は、実装の PR に記録する（2026-10-18 訂正。BusyBox の `adduser --system` はグループの指定が無いと主グループを nogroup にするため、旧イメージの gid は 1001 ではない可能性が高い）。
-3. Dependabot が、`/` と `/.devcontainer` の両方のベースイメージの更新を検知する。
+3. Dependabot が、`/` と `/.devcontainer` の両方のベースイメージの更新を検知する。2026-11-16 訂正: Dependabot は既定のブランチの `.github/dependabot.yml` を読むため、実際の検知は、マージの前には確かめられない。マージの前は、設定を検査する（docker のエコシステムが 2 つのディレクトリを対象にしていること、使っているキーが GitHub の公式の文書にあること、ベースが両方の Dockerfile の FROM の行に直接書かれていること）。実際の検知と、設定のエラーが無いことは、マージの後に確かめる。
 4. `dependabot-auto-merge.yml` の許可リストを変えていない。
 5. Dev Container を作り直し、品質ゲートとスモークテストが通る。
 6. **メモリの比較**: 旧・新の runner のイメージを、同じ入力・同じ並列度（クロップを in-flight 上限の 2 まで同時に流す）・同じメモリの上限（512Mi）で比べる。入力は機密を含まない fixture とし、展開の負荷が高い PDF を含める（CI のクロップのスモークの PDF は 1 ページの小さな合成 PDF なので、それだけでは足りない）。採用の基準（新しいイメージのメモリの最大値の許容範囲など）は、測定の前に PR に書いて owner が承認する。測定の結果に合わせて基準を緩めない。
@@ -84,7 +84,7 @@
 
 **適用の後**（k3s の本番）:
 
-9. 本番で、切り替えの前後のメモリを比べる（クロップを in-flight 上限まで同時に流したときの、Pod のメモリの最大値）。これは適用後の確認で、6. の比較の代わりではない。8. の条件に当たったら、7. の手順で切り戻す。
+9. 本番で、切り替えの前後のメモリを比べる（クロップを in-flight 上限まで同時に流したときの、Pod のメモリの最大値）。これは適用後の確認で、6. の比較の代わりではない。8. の条件に当たったら、7. の手順で切り戻す。 2026-11-15 訂正: 読む値は、アプリのコンテナの cgroup の `memory.peak` とする（Pod 全体の値ではない）。測定のための本番の再起動は行わず、同じ入力を流す直前と直後の値を記録する。旧と新では稼働の時間が違うため、本番の結果から新旧の厳密な比は判定しない。新旧の比較は 6. で行い、本番では 8. の条件と、機能・安定性を確かめる。
 
 あわせて、STG の試行では、実行環境の世代と、実行環境が報告する `uname -r` の値を、診断情報として記録する。この値だけで、Node のサポート条件に合うことの証明にはしない。第 1 世代はシステムコールをエミュレーションするため、報告される版の番号だけでは互換性を判断できない。
 
