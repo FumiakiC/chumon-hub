@@ -20,6 +20,7 @@ auto-merge を有効化するのは、次の両方を満たす PR だけであ�
 - グループ除外依存（`@google/genai` / `pdfjs-dist` / `@napi-rs/canvas` / `zod`）の更新。patch を含む。マージ前の確認は「グループ除外依存の更新をマージする前の確認」の節。
 - セキュリティ更新。グループ化されているかどうかを問わない。
 - minor / major の更新。
+- docker（ベースイメージ）の更新。グループ `docker-base-image` は許可リストに無く、許可リストを docker に広げない（[ADR-6](../architecture/ADR-6-base-image-glibc.md)）。マージすると本番にデプロイされる。
 
 許可リストは [dependabot.yml](../../.github/dependabot.yml) のグループ名の写しである。自動マージ対象のグループを追加・改名する場合は、同じ PR で許可リストも更新する。写し漏れは、自動マージされない側に倒れる。
 
