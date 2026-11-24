@@ -12,7 +12,7 @@
 | [ADR-3](ADR-3-sequencing.md) | インフラ・認証・DB の移行順序 | 検討中 |
 | [ADR-4](ADR-4-base-image.md) | 本番コンテナのベースイメージ（glibc/Debian vs musl/Alpine） | 置換 2026-10-17（ADR-6） |
 | [ADR-5](ADR-5-database.md) | DB 選定 | 検討中 |
-| [ADR-6](ADR-6-base-image-glibc.md) | 本番と開発のコンテナを glibc（Debian trixie-slim）に揃える | 決定 2026-10-17（実装 #399。2026-11-16 に本番へ適用。適用の後の確認の一部は未実施） |
+| [ADR-6](ADR-6-base-image-glibc.md) | 本番と開発のコンテナを glibc（Debian trixie-slim）に揃える | 決定 2026-10-17（実装 #399。2026-11-16 に本番へ適用。適用の後の 7 日後までの確認は実施済み。残る確認は ADR-6 の状態の行） |
 
 ## 運用ルール
 
