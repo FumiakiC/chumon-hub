@@ -24,7 +24,7 @@
 | 運用手順 | [`SETUP_DEVCONTAINER.md`](SETUP_DEVCONTAINER.md) | Dev Container と 1Password の初回セットアップ、main への直接 push を防ぐ pre-push フック |
 | インシデント | [`incidents/2026-08-20-next-16.3.1-standalone.md`](incidents/2026-08-20-next-16.3.1-standalone.md) | Next.js 16.3.1 の standalone 起動不全による本番デプロイ失敗 |
 | インシデント | [`incidents/2026-09-19-crop-concurrency-node-exhaustion.md`](incidents/2026-09-19-crop-concurrency-node-exhaustion.md) | クロップの同時実行によるノード資源枯渇。§5 に未対応の欠陥が残る |
-| インシデント | [`incidents/2026-11-14-ghcr-pull-secret-expiry.md`](incidents/2026-11-14-ghcr-pull-secret-expiry.md) | イメージ取得用トークンの期限切れによる、デプロイ時の本番停止。§7 に未着手の対策が残る |
+| インシデント | [`incidents/2026-11-14-ghcr-pull-secret-expiry.md`](incidents/2026-11-14-ghcr-pull-secret-expiry.md) | イメージ取得用トークンの期限切れによる、デプロイ時の本番停止。§7 のアクションアイテムは完了した。§6.3 に残るリスクがある |
 | 評価 | [`eval/GOLDEN_SET.md`](eval/GOLDEN_SET.md) | golden set の置き場所とラベル形式（実データは private repo） |
 | 履歴 | [`refactoring/REFACTORING_PLAN.md`](refactoring/REFACTORING_PLAN.md) | リファクタ Phase 0〜3（PR-01〜12、2026-07 完了）の計画と完了記録 |
 | 履歴 | [`refactoring/CLAUDE_HANDOFF.md`](refactoring/CLAUDE_HANDOFF.md) | リファクタ期の申し送り（2026-09-24 凍結） |
